@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF296FE529060A6A0086D838 /* AddTransactionFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CF296FE429060A6A0086D838 /* AddTransactionFeature */; };
 		CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CFE0A6FD2905BFA4009F1853 /* AppFeature */; };
 		CFFF4E7A2905BE200033F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E752905BE200033F168 /* Assets.xcassets */; };
 		CFFF4E7B2905BE200033F168 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E772905BE200033F168 /* Preview Assets.xcassets */; };
@@ -17,7 +18,7 @@
 		CF5CA85E2905BC6100156961 /* MoneyTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoneyTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFFF4E752905BE200033F168 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CFFF4E772905BE200033F168 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		CFFF4E782905BE200033F168 /* MoneyTrackerApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MoneyTrackerApp.swift; sourceTree = "<group>"; };
+		CFFF4E782905BE200033F168 /* MoneyTrackerApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = MoneyTrackerApp.swift; sourceTree = "<group>"; tabWidth = 2; };
 		CFFF4E7E2905BE280033F168 /* MoneyTracker */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = MoneyTracker; path = ..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -26,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF296FE529060A6A0086D838 /* AddTransactionFeature in Frameworks */,
 				CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,6 +96,7 @@
 			name = MoneyTracker;
 			packageProductDependencies = (
 				CFE0A6FD2905BFA4009F1853 /* AppFeature */,
+				CF296FE429060A6A0086D838 /* AddTransactionFeature */,
 			);
 			productName = MoneyTracker;
 			productReference = CF5CA85E2905BC6100156961 /* MoneyTracker.app */;
@@ -356,6 +359,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CF296FE429060A6A0086D838 /* AddTransactionFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AddTransactionFeature;
+		};
 		CFE0A6FD2905BFA4009F1853 /* AppFeature */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppFeature;
