@@ -1,19 +1,25 @@
 import ComposableArchitecture
+import SharedModels
 import SwiftUI
+
+public typealias Transaction = SharedModels.Transaction
 
 public struct AddTransaction: ReducerProtocol {
   public struct State: Equatable {
-    public var value: Int?
+    public var transaction: Transaction?
+    public var description: String
 
     public init(
-      value: Int? = nil
+      value: Transaction? = nil
     ) {
-      self.value = value
+      self.description = value?.description ?? ""
+      self.transaction = value
     }
   }
 
   public enum Action: Equatable {
     case saveButtonTapped
+    case setDescription(String)
     case setValue(String)
   }
 
@@ -24,14 +30,30 @@ public struct AddTransaction: ReducerProtocol {
     case .saveButtonTapped:
       return .none
 
+    case let .setDescription(description):
+      state.description = description
+      state.transaction?.description = description
+      return .none
+
     case let .setValue(value):
-      if value.isEmpty {
-        state.value = nil
-      } else if let value = Int(value) {
-        state.value = value
-      } else {
-        // TODO: show error
+      // Reset state
+      guard !value.isEmpty else {
+        state.transaction = nil
+        return .none
       }
+
+      guard let value = Int(value) else {
+        // TODO: show error
+        return .none
+      }
+
+      if var transaction = state.transaction {
+        transaction.value = value
+        state.transaction = transaction
+      } else {
+        state.transaction = .init(description: state.description, value: value)
+      }
+
       return .none
     }
   }
@@ -41,18 +63,18 @@ public struct AddTransactionView: View {
 
   @FocusState private var valueInFocus: Bool
   @State private var pickerSelection = 0
-  @State private var description: String = ""
   @State private var date: String = "Today"
-  @Environment(\.dismiss) private var dismiss
 
   private let store: StoreOf<AddTransaction>
   @ObservedObject private var viewStore: ViewStore<ViewState, AddTransaction.Action>
 
   private struct ViewState: Equatable {
     let value: String
+    let description: String
 
     init(state: AddTransaction.State) {
-        self.value = state.value?.description ?? ""
+      self.value = state.transaction?.value.description ?? ""
+      self.description = state.description
     }
   }
 
@@ -88,17 +110,17 @@ public struct AddTransactionView: View {
 
       Divider()
 
-      TextField("Description", text: $description)
+      TextField("Description", text: viewStore.binding(get: \.description, send: AddTransaction.Action.setDescription))
         .font(.system(size: 30))
         .submitLabel(.done)
         .onSubmit {
-          dismiss()
+          viewStore.send(.saveButtonTapped)
         }
 
       Spacer()
 
       Button("Save") {
-        dismiss()
+        viewStore.send(.saveButtonTapped)
       }
       .frame(height: 50)
     }
@@ -112,16 +134,16 @@ public struct AddTransactionView: View {
 
 struct AddTransactionView_Previews: PreviewProvider {
   static var previews: some View {
-      Color.black
-          .ignoresSafeArea()
-          .sheet(isPresented: .constant(true)) {
-              AddTransactionView(
-                store: .init(
-                    initialState: .init(),
-                    reducer: AddTransaction()
-                )
-              )
-              .tint(.purple)
-          }
+    Color.black
+      .ignoresSafeArea()
+      .sheet(isPresented: .constant(true)) {
+        AddTransactionView(
+          store: .init(
+            initialState: .init(),
+            reducer: AddTransaction()
+          )
+        )
+        .tint(.purple)
+      }
   }
 }

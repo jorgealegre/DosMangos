@@ -10,12 +10,14 @@ let package = Package(
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
+        .library(name: "SharedModels", targets: ["SharedModels"]),
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.45.0"),
     ],
     targets: [
-        .target(name: "AppFeature", dependencies: [tca, "AddTransactionFeature"]),
-        .target(name: "AddTransactionFeature", dependencies: [tca]),
+        .target(name: "AppFeature", dependencies: [tca, "AddTransactionFeature", "SharedModels"]),
+        .target(name: "AddTransactionFeature", dependencies: [tca, "SharedModels"]),
+        .target(name: "SharedModels", dependencies: []),
     ]
 )

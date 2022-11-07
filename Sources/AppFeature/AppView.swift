@@ -1,10 +1,9 @@
 import AddTransactionFeature
 import ComposableArchitecture
+import SharedModels
 import SwiftUI
 
-public struct Transaction: Equatable {
-  public let value: Int
-}
+public typealias Transaction = SharedModels.Transaction
 
 public struct AppFeature: ReducerProtocol {
   public struct State: Equatable {
@@ -31,6 +30,12 @@ public struct AppFeature: ReducerProtocol {
   public var body: some ReducerProtocol<State, Action> {
     Reduce { state, action in
       switch action {
+      case .addTransaction(.saveButtonTapped):
+        defer { state.addTransaction = nil }
+        guard let transaction = state.addTransaction?.transaction else { return .none }
+        state.transactions.insert(transaction, at: 0)
+        return .none
+
       case .addTransaction:
         return .none
 
@@ -54,15 +59,15 @@ public struct AppFeature: ReducerProtocol {
 
 public struct AppView: View {
 
-  @State private var transactions = ["Subscription", "Internet"]
-
   private struct ViewState: Equatable {
     let addTransaction: AddTransaction.State?
     let isAddingTransaction: Bool
+    let transactions: [Transaction]
 
     init(state: AppFeature.State) {
       self.addTransaction = state.addTransaction
       self.isAddingTransaction = state.addTransaction != nil
+      self.transactions = state.transactions
     }
   }
 
@@ -105,13 +110,16 @@ public struct AppView: View {
             .font(.largeTitle.bold().lowercaseSmallCaps())
 
           List {
-            ForEach(transactions, id: \.self) { transaction in
-              Text(transaction)
+            ForEach(viewStore.transactions) { transaction in
+              HStack {
+                Text("\(transaction.description)")
+                Spacer()
+                Text("\(transaction.value)")
+              }
             }
             .listRowSeparator(.hidden)
           }
           .listStyle(.plain)
-
         }
 
         Button {
