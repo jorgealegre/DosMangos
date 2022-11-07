@@ -11,15 +11,15 @@
 		CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CFE0A6FD2905BFA4009F1853 /* AppFeature */; };
 		CFFF4E7A2905BE200033F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E752905BE200033F168 /* Assets.xcassets */; };
 		CFFF4E7B2905BE200033F168 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E772905BE200033F168 /* Preview Assets.xcassets */; };
-		CFFF4E7C2905BE200033F168 /* MoneyTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFF4E782905BE200033F168 /* MoneyTrackerApp.swift */; };
+		CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFF4E782905BE200033F168 /* DosMangosApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		CF5CA85E2905BC6100156961 /* MoneyTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoneyTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CF9EC3CA29188E6A00B7CCAE /* DosMangos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = DosMangos; path = ..; sourceTree = "<group>"; };
 		CFFF4E752905BE200033F168 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CFFF4E772905BE200033F168 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		CFFF4E782905BE200033F168 /* MoneyTrackerApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = MoneyTrackerApp.swift; sourceTree = "<group>"; tabWidth = 2; };
-		CFFF4E7E2905BE280033F168 /* MoneyTracker */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = MoneyTracker; path = ..; sourceTree = "<group>"; };
+		CFFF4E782905BE200033F168 /* DosMangosApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = DosMangosApp.swift; sourceTree = "<group>"; tabWidth = 2; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -38,8 +38,8 @@
 		CF5CA8552905BC6100156961 = {
 			isa = PBXGroup;
 			children = (
-				CFFF4E742905BE200033F168 /* MoneyTracker */,
-				CFFF4E7E2905BE280033F168 /* MoneyTracker */,
+				CFFF4E742905BE200033F168 /* DosMangos */,
+				CF9EC3CA29188E6A00B7CCAE /* DosMangos */,
 				CF5CA85F2905BC6100156961 /* Products */,
 				CFE0A6FC2905BFA4009F1853 /* Frameworks */,
 			);
@@ -48,7 +48,7 @@
 		CF5CA85F2905BC6100156961 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CF5CA85E2905BC6100156961 /* MoneyTracker.app */,
+				CF5CA85E2905BC6100156961 /* DosMangos.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -60,14 +60,14 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		CFFF4E742905BE200033F168 /* MoneyTracker */ = {
+		CFFF4E742905BE200033F168 /* DosMangos */ = {
 			isa = PBXGroup;
 			children = (
 				CFFF4E752905BE200033F168 /* Assets.xcassets */,
 				CFFF4E762905BE200033F168 /* Preview Content */,
-				CFFF4E782905BE200033F168 /* MoneyTrackerApp.swift */,
+				CFFF4E782905BE200033F168 /* DosMangosApp.swift */,
 			);
-			path = MoneyTracker;
+			path = DosMangos;
 			sourceTree = "<group>";
 		};
 		CFFF4E762905BE200033F168 /* Preview Content */ = {
@@ -81,9 +81,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		CF5CA85D2905BC6100156961 /* MoneyTracker */ = {
+		CF5CA85D2905BC6100156961 /* DosMangos */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = CF5CA86C2905BC6300156961 /* Build configuration list for PBXNativeTarget "MoneyTracker" */;
+			buildConfigurationList = CF5CA86C2905BC6300156961 /* Build configuration list for PBXNativeTarget "DosMangos" */;
 			buildPhases = (
 				CF5CA85A2905BC6100156961 /* Sources */,
 				CF5CA85B2905BC6100156961 /* Frameworks */,
@@ -93,13 +93,13 @@
 			);
 			dependencies = (
 			);
-			name = MoneyTracker;
+			name = DosMangos;
 			packageProductDependencies = (
 				CFE0A6FD2905BFA4009F1853 /* AppFeature */,
 				CF296FE429060A6A0086D838 /* AddTransactionFeature */,
 			);
 			productName = MoneyTracker;
-			productReference = CF5CA85E2905BC6100156961 /* MoneyTracker.app */;
+			productReference = CF5CA85E2905BC6100156961 /* DosMangos.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -117,7 +117,7 @@
 					};
 				};
 			};
-			buildConfigurationList = CF5CA8592905BC6100156961 /* Build configuration list for PBXProject "MoneyTracker" */;
+			buildConfigurationList = CF5CA8592905BC6100156961 /* Build configuration list for PBXProject "DosMangos" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -130,7 +130,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				CF5CA85D2905BC6100156961 /* MoneyTracker */,
+				CF5CA85D2905BC6100156961 /* DosMangos */,
 			);
 		};
 /* End PBXProject section */
@@ -152,7 +152,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CFFF4E7C2905BE200033F168 /* MoneyTrackerApp.swift in Sources */,
+				CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,7 +284,7 @@
 				DEVELOPMENT_TEAM = MCQUU65FS6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = MoneyTracker;
+				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -296,7 +296,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.MoneyTracker;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -315,7 +315,7 @@
 				DEVELOPMENT_TEAM = MCQUU65FS6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = MoneyTracker;
+				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -327,7 +327,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.MoneyTracker;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -338,7 +338,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		CF5CA8592905BC6100156961 /* Build configuration list for PBXProject "MoneyTracker" */ = {
+		CF5CA8592905BC6100156961 /* Build configuration list for PBXProject "DosMangos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CF5CA86A2905BC6300156961 /* Debug */,
@@ -347,7 +347,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		CF5CA86C2905BC6300156961 /* Build configuration list for PBXNativeTarget "MoneyTracker" */ = {
+		CF5CA86C2905BC6300156961 /* Build configuration list for PBXNativeTarget "DosMangos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CF5CA86D2905BC6300156961 /* Debug */,

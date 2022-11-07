@@ -2,7 +2,7 @@ import AppFeature
 import SwiftUI
 
 @main
-struct MoneyTrackerApp: App {
+struct DosMangosApp: App {
   var body: some Scene {
     WindowGroup {
       AppView(

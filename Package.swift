@@ -5,7 +5,7 @@ import PackageDescription
 let tca = Target.Dependency.product(name: "ComposableArchitecture", package: "swift-composable-architecture")
 
 let package = Package(
-    name: "MoneyTracker",
+    name: "DosMangos",
     platforms: [.iOS(.v16)],
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
