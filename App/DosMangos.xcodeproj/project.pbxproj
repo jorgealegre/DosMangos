@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CF296FE529060A6A0086D838 /* AddTransactionFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CF296FE429060A6A0086D838 /* AddTransactionFeature */; };
 		CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CFE0A6FD2905BFA4009F1853 /* AppFeature */; };
 		CFFF4E7A2905BE200033F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E752905BE200033F168 /* Assets.xcassets */; };
 		CFFF4E7B2905BE200033F168 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E772905BE200033F168 /* Preview Assets.xcassets */; };
@@ -17,6 +16,7 @@
 /* Begin PBXFileReference section */
 		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CF9EC3CA29188E6A00B7CCAE /* DosMangos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = DosMangos; path = ..; sourceTree = "<group>"; };
+		CFC631A72918933B00F33785 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CFFF4E752905BE200033F168 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CFFF4E772905BE200033F168 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		CFFF4E782905BE200033F168 /* DosMangosApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = DosMangosApp.swift; sourceTree = "<group>"; tabWidth = 2; };
@@ -27,7 +27,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CF296FE529060A6A0086D838 /* AddTransactionFeature in Frameworks */,
 				CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -63,6 +62,7 @@
 		CFFF4E742905BE200033F168 /* DosMangos */ = {
 			isa = PBXGroup;
 			children = (
+				CFC631A72918933B00F33785 /* Info.plist */,
 				CFFF4E752905BE200033F168 /* Assets.xcassets */,
 				CFFF4E762905BE200033F168 /* Preview Content */,
 				CFFF4E782905BE200033F168 /* DosMangosApp.swift */,
@@ -96,7 +96,6 @@
 			name = DosMangos;
 			packageProductDependencies = (
 				CFE0A6FD2905BFA4009F1853 /* AppFeature */,
-				CF296FE429060A6A0086D838 /* AddTransactionFeature */,
 			);
 			productName = MoneyTracker;
 			productReference = CF5CA85E2905BC6100156961 /* DosMangos.app */;
@@ -280,22 +279,23 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"MoneyTracker/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"DosMangos/Preview Content\"";
 				DEVELOPMENT_TEAM = MCQUU65FS6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DosMangos/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -311,22 +311,23 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"MoneyTracker/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"DosMangos/Preview Content\"";
 				DEVELOPMENT_TEAM = MCQUU65FS6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DosMangos/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -359,10 +360,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		CF296FE429060A6A0086D838 /* AddTransactionFeature */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AddTransactionFeature;
-		};
 		CFE0A6FD2905BFA4009F1853 /* AppFeature */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppFeature;
