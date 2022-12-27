@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "SharedModels", targets: ["SharedModels"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.45.0"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.47.2"),
     ],
     targets: [
         .target(
