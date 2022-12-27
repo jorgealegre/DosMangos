@@ -3,16 +3,14 @@ import ComposableArchitecture
 import SharedModels
 import SwiftUI
 
-public typealias Transaction = SharedModels.Transaction
-
 public struct AppFeature: ReducerProtocol {
   public struct State: Equatable {
     public var addTransaction: AddTransaction.State?
-    public var transactions: [Transaction]
+    public var transactions: [SharedModels.Transaction]
 
     public init(
       addTransaction: AddTransaction.State? = nil,
-      transactions: [Transaction] = []
+      transactions: [SharedModels.Transaction] = []
     ) {
       self.addTransaction = addTransaction
       self.transactions = transactions
@@ -62,7 +60,7 @@ public struct AppView: View {
   private struct ViewState: Equatable {
     let addTransaction: AddTransaction.State?
     let isAddingTransaction: Bool
-    let transactions: [Transaction]
+    let transactions: [SharedModels.Transaction]
 
     init(state: AppFeature.State) {
       self.addTransaction = state.addTransaction
@@ -81,7 +79,6 @@ public struct AppView: View {
 
   public var body: some View {
     NavigationStack {
-
       ZStack(alignment: .bottom) {
         VStack {
           Divider()
@@ -93,7 +90,7 @@ public struct AppView: View {
             }
             Spacer()
             HStack {
-              Text("Expensas")
+              Text("Expenses")
               Text("$0")
             }
 
@@ -110,14 +107,11 @@ public struct AppView: View {
             .font(.largeTitle.bold().lowercaseSmallCaps())
 
           List {
-            ForEach(viewStore.transactions) { transaction in
-              HStack {
-                Text("\(transaction.description)")
-                Spacer()
-                Text("\(transaction.value)")
+            ForEach(viewStore.transactions, content: TransactionView.init)
+              .onDelete { indices in
+
               }
-            }
-            .listRowSeparator(.hidden)
+              .listRowSeparator(.hidden)
           }
           .listStyle(.plain)
         }
@@ -156,11 +150,46 @@ public struct AppView: View {
   }
 }
 
+struct TransactionView: View {
+  let transaction: SharedModels.Transaction
+
+  var body: some View {
+    HStack {
+      VStack {
+        HStack {
+          Text("\(transaction.description)")
+            .font(.title)
+          Spacer()
+        }
+
+        HStack {
+          Text("\(transaction.date.formatted())")
+            .font(.caption2)
+          Spacer()
+        }
+      }
+      Spacer()
+
+      Text("$\(transaction.value)")
+        .monospacedDigit()
+        .bold()
+    }
+  }
+}
+
 struct AppView_Previews: PreviewProvider {
   static var previews: some View {
     AppView(
       store: .init(
-        initialState: .init(transactions: []),
+        initialState: .init(
+          transactions: [
+            .init(
+              date: Date(),
+              description: "Cigarettes",
+              value: 12
+            )
+          ]
+        ),
         reducer: AppFeature()
       )
     )

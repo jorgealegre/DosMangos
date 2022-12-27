@@ -51,7 +51,11 @@ public struct AddTransaction: ReducerProtocol {
         transaction.value = value
         state.transaction = transaction
       } else {
-        state.transaction = .init(description: state.description, value: value)
+        state.transaction = .init(
+          date: Date(),
+          description: state.description,
+          value: value
+        )
       }
 
       return .none
@@ -78,9 +82,7 @@ public struct AddTransactionView: View {
     }
   }
 
-  public init(
-    store: StoreOf<AddTransaction>
-  ) {
+  public init(store: StoreOf<AddTransaction>) {
     self.store = store
     self.viewStore = .init(store.scope(state: ViewState.init))
   }
