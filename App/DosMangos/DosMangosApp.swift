@@ -7,7 +7,7 @@ struct DosMangosApp: App {
     WindowGroup {
       AppView(
         store: .init(
-          initialState: .init(transactions: []),
+          initialState: .init(transactions: [.mock]),
           reducer: AppFeature()
         )
       )

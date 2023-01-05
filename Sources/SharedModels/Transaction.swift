@@ -18,3 +18,11 @@ public struct Transaction: Identifiable, Equatable {
     self.value = value
   }
 }
+
+public extension Transaction {
+  static let mock = Self(
+    date: Date().addingTimeInterval(-60*6),
+    description: "Cigarettes",
+    value: 12
+  )
+}

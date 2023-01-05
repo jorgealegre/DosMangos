@@ -8,6 +8,18 @@ public struct AppFeature: ReducerProtocol {
     public var addTransaction: AddTransaction.State?
     public var transactions: [SharedModels.Transaction]
 
+    var monthlySummary: MonthlySummary {
+      let expenses = transactions.map(\.value).map(Double.init).reduce(0.0, +)
+      let income = 0.0
+      let worth = income - expenses
+
+      return MonthlySummary(
+        income: income,
+        expenses: expenses,
+        worth: worth
+      )
+    }
+
     public init(
       addTransaction: AddTransaction.State? = nil,
       transactions: [SharedModels.Transaction] = []
@@ -19,6 +31,7 @@ public struct AppFeature: ReducerProtocol {
 
   public enum Action: Equatable {
     case addTransaction(AddTransaction.Action)
+    case deleteTransactions(IndexSet)
     case newTransactionButtonTapped
     case setAddTransactionSheetPresented(Bool)
   }
@@ -35,6 +48,10 @@ public struct AppFeature: ReducerProtocol {
         return .none
 
       case .addTransaction:
+        return .none
+
+      case let .deleteTransactions(indices):
+        state.transactions.remove(atOffsets: indices)
         return .none
 
       case .newTransactionButtonTapped:
@@ -59,13 +76,18 @@ public struct AppView: View {
 
   private struct ViewState: Equatable {
     let addTransaction: AddTransaction.State?
+    let dates: [Date]
     let isAddingTransaction: Bool
-    let transactions: [SharedModels.Transaction]
+    let monthlySummary: MonthlySummary
+    let transactions: [Date: [SharedModels.Transaction]]
 
     init(state: AppFeature.State) {
       self.addTransaction = state.addTransaction
       self.isAddingTransaction = state.addTransaction != nil
-      self.transactions = state.transactions
+      self.monthlySummary = state.monthlySummary
+      let sortedTransactions = state.transactions.sorted(by: { $0.date < $1.date })
+      self.transactions = Dictionary(grouping: sortedTransactions, by: \.date)
+      self.dates = transactions.keys.sorted(by: { $0 < $1 })
     }
   }
 
@@ -86,18 +108,24 @@ public struct AppView: View {
             Spacer()
             HStack {
               Text("Income")
-              Text("$0")
+              Text("$\(viewStore.monthlySummary.income.formatted())")
+                .monospacedDigit()
+                .bold()
             }
             Spacer()
             HStack {
               Text("Expenses")
-              Text("$0")
+              Text("$\(viewStore.monthlySummary.expenses.formatted())")
+                .monospacedDigit()
+                .bold()
             }
 
             Spacer()
             HStack {
               Text("Worth")
-              Text("$0")
+              Text("$\(viewStore.monthlySummary.worth.formatted())")
+                .monospacedDigit()
+                .bold()
             }
             Spacer()
           }
@@ -107,11 +135,25 @@ public struct AppView: View {
             .font(.largeTitle.bold().lowercaseSmallCaps())
 
           List {
-            ForEach(viewStore.transactions, content: TransactionView.init)
-              .onDelete { indices in
-
+            ForEach(viewStore.dates, id: \.self) { (date: Date) in
+              Section {
+                ForEach(viewStore.transactions[date] ?? [], content: TransactionView.init)
+                  .onDelete { indices in
+                    viewStore.send(.deleteTransactions(indices))
+                  }
+                  .listRowSeparator(.hidden)
+              } header: {
+                HStack {
+                  Text("\(date.formatted(date: .long, time: .omitted))")
+                  Spacer()
+                  HStack {
+                    Text("$\(viewStore.monthlySummary.worth.formatted())")
+                      .monospacedDigit()
+                      .bold()
+                  }
+                }
               }
-              .listRowSeparator(.hidden)
+            }
           }
           .listStyle(.plain)
         }
@@ -161,12 +203,6 @@ struct TransactionView: View {
             .font(.title)
           Spacer()
         }
-
-        HStack {
-          Text("\(transaction.date.formatted())")
-            .font(.caption2)
-          Spacer()
-        }
       }
       Spacer()
 
@@ -182,13 +218,7 @@ struct AppView_Previews: PreviewProvider {
     AppView(
       store: .init(
         initialState: .init(
-          transactions: [
-            .init(
-              date: Date(),
-              description: "Cigarettes",
-              value: 12
-            )
-          ]
+          transactions: [.mock]
         ),
         reducer: AppFeature()
       )
