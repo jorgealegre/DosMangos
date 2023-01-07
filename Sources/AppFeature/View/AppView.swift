@@ -1,11 +1,13 @@
 import AddTransactionFeature
 import ComposableArchitecture
+import FileClient
 import SharedModels
 import SwiftUI
 
 public struct AppFeature: ReducerProtocol {
   public struct State: Equatable {
     public var addTransaction: AddTransaction.State?
+    public var date: Date
     public var transactions: [SharedModels.Transaction]
 
     var monthlySummary: MonthlySummary {
@@ -22,9 +24,11 @@ public struct AppFeature: ReducerProtocol {
 
     public init(
       addTransaction: AddTransaction.State? = nil,
+      date: Date,
       transactions: [SharedModels.Transaction] = []
     ) {
       self.addTransaction = addTransaction
+      self.date = date
       self.transactions = transactions
     }
   }
@@ -33,8 +37,11 @@ public struct AppFeature: ReducerProtocol {
     case addTransaction(AddTransaction.Action)
     case deleteTransactions(IndexSet)
     case newTransactionButtonTapped
+    case onAppear
     case setAddTransactionSheetPresented(Bool)
   }
+
+  @Dependency(\.fileClient) private var fileClient
 
   public init() {}
 
@@ -58,6 +65,15 @@ public struct AppFeature: ReducerProtocol {
         state.addTransaction = .init()
         return .none
 
+      case .onAppear:
+        return .run { send in
+//          await send(
+//            .transactionsLoaded(
+//              TaskResult { try await fileClient.loadTransactions() }
+//            )
+//          )
+        }
+
       case let .setAddTransactionSheetPresented(presented):
         if !presented {
           state.addTransaction = nil
@@ -76,6 +92,7 @@ public struct AppView: View {
 
   private struct ViewState: Equatable {
     let addTransaction: AddTransaction.State?
+    let currentDate: String
     let dates: [Date]
     let isAddingTransaction: Bool
     let monthlySummary: MonthlySummary
@@ -84,6 +101,7 @@ public struct AppView: View {
     init(state: AppFeature.State) {
       self.addTransaction = state.addTransaction
       self.isAddingTransaction = state.addTransaction != nil
+      self.currentDate = state.date.formatted(Date.FormatStyle().month(.wide))
       self.monthlySummary = state.monthlySummary
       let sortedTransactions = state.transactions.sorted(by: { $0.date < $1.date })
       self.transactions = Dictionary(grouping: sortedTransactions, by: \.date)
@@ -102,7 +120,7 @@ public struct AppView: View {
   public var body: some View {
     NavigationStack {
       ZStack(alignment: .bottom) {
-        VStack {
+        VStack(spacing: 0) {
           Divider()
           HStack {
             Spacer()
@@ -129,10 +147,13 @@ public struct AppView: View {
             }
             Spacer()
           }
+          .padding(8)
+
           Divider()
 
-          Text("October")
+          Text(viewStore.currentDate)
             .font(.largeTitle.bold().lowercaseSmallCaps())
+            .padding(8)
 
           List {
             ForEach(viewStore.dates, id: \.self) { (date: Date) in
@@ -142,6 +163,7 @@ public struct AppView: View {
                     viewStore.send(.deleteTransactions(indices))
                   }
                   .listRowSeparator(.hidden)
+                  .listRowBackground(Color.clear)
               } header: {
                 HStack {
                   Text("\(date.formatted(date: .long, time: .omitted))")
@@ -172,6 +194,7 @@ public struct AppView: View {
           .frame(width: 80, height: 80)
         }
       }
+      .onAppear { viewStore.send(.onAppear) }
       .navigationTitle("Overview")
       .sheet(
         isPresented: viewStore.binding(
@@ -218,6 +241,7 @@ struct AppView_Previews: PreviewProvider {
     AppView(
       store: .init(
         initialState: .init(
+          date: .now,
           transactions: [.mock]
         ),
         reducer: AppFeature()

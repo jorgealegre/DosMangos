@@ -3,6 +3,7 @@
 import PackageDescription
 
 let tca = Target.Dependency.product(name: "ComposableArchitecture", package: "swift-composable-architecture")
+let dependencies = Target.Dependency.product(name: "Dependencies", package: "swift-composable-architecture")
 
 let package = Package(
     name: "DosMangos",
@@ -11,9 +12,11 @@ let package = Package(
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
         .library(name: "SharedModels", targets: ["SharedModels"]),
+        .library(name: "FileClient", targets: ["FileClient"])
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.47.2"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.48.0"),
+        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "0.8.0")
     ],
     targets: [
         .target(
@@ -21,6 +24,7 @@ let package = Package(
             dependencies: [
                 tca,
                 "AddTransactionFeature",
+                "FileClient",
                 "SharedModels"
             ]
         ),
@@ -35,6 +39,13 @@ let package = Package(
             name: "SharedModels",
             dependencies: [
             ]
+        ),
+        .target(
+          name: "FileClient",
+          dependencies: [
+            dependencies,
+            .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
+          ]
         )
     ]
 )
