@@ -10,6 +10,7 @@ let package = Package(
     platforms: [.iOS(.v16)],
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
+        .library(name: "TransactionsFeature", targets: ["TransactionsFeature"]),
         .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
         .library(name: "SharedModels", targets: ["SharedModels"]),
         .library(name: "FileClient", targets: ["FileClient"])
@@ -21,6 +22,14 @@ let package = Package(
     targets: [
         .target(
             name: "AppFeature",
+            dependencies: [
+                tca,
+                "TransactionsFeature",
+                "SharedModels"
+            ]
+        ),
+        .target(
+            name: "TransactionsFeature",
             dependencies: [
                 tca,
                 "AddTransactionFeature",
