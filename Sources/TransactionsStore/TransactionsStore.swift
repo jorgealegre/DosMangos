@@ -6,9 +6,10 @@ import Sqlite
 import XCTestDynamicOverlay
 
 public struct TransactionsStore {
-    public var fetchTransactions: @Sendable (_ date: Date) async throws -> [Transaction]
     public var migrate: @Sendable () async throws -> Void
 
+    public var fetchTransactions: @Sendable (_ date: Date) async throws -> [Transaction]
+    public var saveTransaction: @Sendable (Transaction) async throws -> Void
 }
 
 extension DependencyValues {
@@ -22,16 +23,18 @@ extension TransactionsStore: TestDependencyKey {
     public static let previewValue = Self.mock
 
     public static let testValue = Self(
+        migrate: unimplemented("\(Self.self).migrate"),
         fetchTransactions: unimplemented("\(Self.self).fetchTransactions"),
-        migrate: unimplemented("\(Self.self).migrate")
+        saveTransaction: unimplemented("\(Self.self).saveTransaction")
     )
 }
 
 extension TransactionsStore {
     public static var mock: Self {
         Self(
+            migrate: {},
             fetchTransactions: { _ in [.mock] },
-            migrate: {}
+            saveTransaction: { _ in }
         )
     }
 }
@@ -49,8 +52,9 @@ extension TransactionsStore {
             return _db.value.wrappedValue!
         }
         return Self(
+            migrate: { try db().migrate() },
             fetchTransactions: { try db().fetchTransactions(for: $0) },
-            migrate: { try db().migrate() }
+            saveTransaction: { try db().saveTransaction($0) }
         )
     }
 
@@ -78,21 +82,24 @@ extension Sqlite {
         SELECT
             "id", "createdAt", "description", "value"
         FROM
-            "transaction"
+            "transactions"
         ORDER BY "createdAt"
         """
         )
         .compactMap { row -> Transaction? in
             guard
-                let createdAt = (/Sqlite.Datatype.real).extract(from: row[1]).map(Date.init(timeIntervalSince1970:)),
+                let createdAt = (/Sqlite.Datatype.integer).extract(from: row[1]),
                 let description = (/Sqlite.Datatype.text).extract(from: row[2]),
                 let idString = (/Sqlite.Datatype.text).extract(from: row[0]),
-                let id = idString.map(UUID.init(uuidString:)),
+                let id = UUID.init(uuidString: idString),
                 let value = (/Sqlite.Datatype.real).extract(from: row[3])
-            else { return nil }
+            else {
+                // TODO: throw error instead
+                return nil
+            }
 
             return Transaction(
-                date: createdAt,
+                date: Date(timeIntervalSince1970: Double(createdAt)),
                 description: description,
                 id: id,
                 value: Int(value)
@@ -100,11 +107,28 @@ extension Sqlite {
         }
     }
 
+    func saveTransaction(_ transaction: Transaction) throws {
+        try self.run(
+            """
+            INSERT INTO "transactions" (
+                "id", "createdAt", "description", "value"
+            )
+            VALUES (
+                ?, ?, ?, ?
+            );
+            """,
+            .text(transaction.id.uuidString),
+            .integer(Int32(transaction.date.timeIntervalSince1970)),
+            .text(transaction.description),
+            .real(Double(transaction.value))
+        )
+    }
+
     func migrate() throws {
         try self.execute(
         """
-        CREATE TABLE IF NOT EXISTS "transaction" (
-            "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
+        CREATE TABLE IF NOT EXISTS "transactions" (
+            "id" STRING PRIMARY KEY NOT NULL UNIQUE,
             "createdAt" TIMESTAMP NOT NULL,
             "description" TEXT NOT NULL,
             "value" REAL NOT NULL
@@ -114,3 +138,5 @@ extension Sqlite {
     }
 }
 
+// INSERT INTO transactions (id, createdAt, description, value)
+// VALUES ("DEADBEEF-DEAD-BEEF-DEAD-BEEFDEADBEEF", 1673316697, "Description", 12.3);

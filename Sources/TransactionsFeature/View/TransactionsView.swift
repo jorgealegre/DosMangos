@@ -39,6 +39,7 @@ public struct TransactionsFeature: ReducerProtocol {
         case newTransactionButtonTapped
         case onAppear
         case setAddTransactionSheetPresented(Bool)
+        case transactionsLoaded(TaskResult<[SharedModels.Transaction]>)
     }
 
     @Dependency(\.transactionsStore) private var transactionsStore
@@ -52,7 +53,14 @@ public struct TransactionsFeature: ReducerProtocol {
                 defer { state.addTransaction = nil }
                 guard let transaction = state.addTransaction?.transaction else { return .none }
                 state.transactions.insert(transaction, at: 0)
-                return .none
+                return .fireAndForget {
+                    do {
+                        try await transactionsStore.saveTransaction(transaction)
+                    } catch {
+                        print(error)
+                        // TODO: should try to recover
+                    }
+                }
 
             case .addTransaction:
                 return .none
@@ -66,18 +74,26 @@ public struct TransactionsFeature: ReducerProtocol {
                 return .none
 
             case .onAppear:
-                return .run { send in
-                    //          await send(
-                    //            .transactionsLoaded(
-                    //              TaskResult { try await fileClient.loadTransactions() }
-                    //            )
-                    //          )
+                return .run { [date = state.date] send in
+                    await send(
+                        .transactionsLoaded(
+                            TaskResult { try await transactionsStore.fetchTransactions(date) }
+                        )
+                    )
                 }
 
             case let .setAddTransactionSheetPresented(presented):
                 if !presented {
                     state.addTransaction = nil
                 }
+                return .none
+
+            case let .transactionsLoaded(.failure(error)):
+                print(error)
+                return .none
+
+            case let .transactionsLoaded(.success(transactions)):
+                state.transactions = transactions
                 return .none
             }
         }
@@ -104,8 +120,9 @@ public struct TransactionsView: View {
             self.currentDate = state.date.formatted(Date.FormatStyle().month(.wide))
             self.monthlySummary = state.monthlySummary
             let sortedTransactions = state.transactions.sorted(by: { $0.date < $1.date })
+            // TODO: this is wrong, dont take into consideration the time, only the day
             self.transactions = Dictionary(grouping: sortedTransactions, by: \.date)
-            self.dates = transactions.keys.sorted(by: { $0 < $1 })
+            self.dates = transactions.keys.sorted(by: { $0 > $1 })
         }
     }
 

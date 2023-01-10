@@ -2,25 +2,33 @@ import ComposableArchitecture
 import SharedModels
 import TransactionsFeature
 import SwiftUI
+import Sqlite
 
 public struct AppReducer: ReducerProtocol {
     public struct State: Equatable {
+        var migrationCompleted: Bool
         var transactions: TransactionsFeature.State
 
         public init(
+            migrationCompleted: Bool = false,
             transactions: TransactionsFeature.State = .init(date: .now)
         ) {
+            self.migrationCompleted = migrationCompleted
             self.transactions = transactions
         }
     }
 
     public enum Action: Equatable {
+        case migrationComplete
+        case migrationFailed
         case appDelegate(AppDelegateReducer.Action)
         case transactions(TransactionsFeature.Action)
     }
 
     public init() {}
 
+    @Dependency(\.transactionsStore) private var transactionsStore
+    
     public var body: some ReducerProtocol<State, Action> {
         Scope(state: \.transactions, action: /Action.transactions) {
             TransactionsFeature()
@@ -29,10 +37,25 @@ public struct AppReducer: ReducerProtocol {
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
-                state.transactions.transactions = [.mock]
-                return .none
+                return .run { send in
+                    do {
+                        try await self.transactionsStore.migrate()
+                        await send.send(.migrationComplete)
+                    } catch let error as Sqlite.Error {
+                        print(error.description)
+                        await send.send(.migrationFailed)
+                    }
+                }
 
             case .appDelegate:
+                return .none
+
+            case .migrationComplete:
+                state.migrationCompleted = true
+                return .none
+
+            case .migrationFailed:
+                state.migrationCompleted = true
                 return .none
 
             case .transactions:
@@ -47,8 +70,10 @@ public struct AppView: View {
     @ObservedObject var viewStore: ViewStore<ViewState, AppReducer.Action>
 
     struct ViewState: Equatable {
+        var migrationCompleted: Bool
 
         init(state: AppReducer.State) {
+            self.migrationCompleted = state.migrationCompleted
         }
     }
 
@@ -58,22 +83,26 @@ public struct AppView: View {
     }
 
     public var body: some View {
-        TabView {
-            TransactionsView(
-                store: store.scope(
-                    state: \.transactions,
-                    action: AppReducer.Action.transactions
+        if viewStore.migrationCompleted {
+            TabView {
+                TransactionsView(
+                    store: store.scope(
+                        state: \.transactions,
+                        action: AppReducer.Action.transactions
+                    )
                 )
-            )
-            .tabItem {
-                VStack {
-                    Label {
-                        Text("Transactions")
-                    } icon: {
-                        Image(systemName: "list.bullet.rectangle.portrait")
+                .tabItem {
+                    VStack {
+                        Label {
+                            Text("Transactions")
+                        } icon: {
+                            Image(systemName: "list.bullet.rectangle.portrait")
+                        }
                     }
                 }
             }
+        } else {
+            Color.black
         }
     }
 }
