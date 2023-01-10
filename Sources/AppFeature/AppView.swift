@@ -29,6 +29,7 @@ public struct AppReducer: ReducerProtocol {
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
+                state.transactions.transactions = [.mock]
                 return .none
 
             case .appDelegate:
@@ -71,7 +72,6 @@ public struct AppView: View {
                     } icon: {
                         Image(systemName: "list.bullet.rectangle.portrait")
                     }
-
                 }
             }
         }

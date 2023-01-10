@@ -11,8 +11,10 @@ let package = Package(
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "TransactionsFeature", targets: ["TransactionsFeature"]),
+        .library(name: "TransactionsStore", targets: ["TransactionsStore"]),
         .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
         .library(name: "SharedModels", targets: ["SharedModels"]),
+        .library(name: "Sqlite", targets: ["Sqlite"]),
         .library(name: "FileClient", targets: ["FileClient"])
     ],
     dependencies: [
@@ -28,13 +30,29 @@ let package = Package(
                 "SharedModels"
             ]
         ),
+        .systemLibrary(
+            name: "Csqlite3",
+            providers: [
+                .apt(["libsqlite3-dev"]),
+                .brew(["sqlite3"]),
+            ]
+        ),
         .target(
             name: "TransactionsFeature",
             dependencies: [
                 tca,
                 "AddTransactionFeature",
-                "FileClient",
+                "TransactionsStore",
                 "SharedModels"
+            ]
+        ),
+        .target(
+            name: "TransactionsStore",
+            dependencies: [
+                tca,
+                .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+                "SharedModels",
+                "Sqlite"
             ]
         ),
         .target(
@@ -50,11 +68,17 @@ let package = Package(
             ]
         ),
         .target(
-          name: "FileClient",
-          dependencies: [
-            dependencies,
-            .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
-          ]
-        )
+            name: "FileClient",
+            dependencies: [
+                dependencies,
+                .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
+            ]
+        ),
+        .target(
+            name: "Sqlite",
+            dependencies: [
+                .target(name: "Csqlite3")
+            ]
+        ),
     ]
 )

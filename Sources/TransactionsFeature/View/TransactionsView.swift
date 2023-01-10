@@ -1,6 +1,6 @@
 import AddTransactionFeature
 import ComposableArchitecture
-import FileClient
+import TransactionsStore
 import SharedModels
 import SwiftUI
 
@@ -41,7 +41,7 @@ public struct TransactionsFeature: ReducerProtocol {
         case setAddTransactionSheetPresented(Bool)
     }
 
-    @Dependency(\.fileClient) private var fileClient
+    @Dependency(\.transactionsStore) private var transactionsStore
 
     public init() {}
 
