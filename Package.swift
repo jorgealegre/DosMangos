@@ -4,6 +4,7 @@ import PackageDescription
 
 let tca = Target.Dependency.product(name: "ComposableArchitecture", package: "swift-composable-architecture")
 let dependencies = Target.Dependency.product(name: "Dependencies", package: "swift-composable-architecture")
+let xctestDynamicOverlay = Target.Dependency.product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
 
 let package = Package(
     name: "DosMangos",
@@ -13,9 +14,7 @@ let package = Package(
         .library(name: "TransactionsFeature", targets: ["TransactionsFeature"]),
         .library(name: "TransactionsStore", targets: ["TransactionsStore"]),
         .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
-        .library(name: "SharedModels", targets: ["SharedModels"]),
-        .library(name: "Sqlite", targets: ["Sqlite"]),
-        .library(name: "FileClient", targets: ["FileClient"])
+        .library(name: "SharedModels", targets: ["SharedModels"])
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.48.0"),
@@ -30,13 +29,6 @@ let package = Package(
                 "SharedModels"
             ]
         ),
-        .systemLibrary(
-            name: "Csqlite3",
-            providers: [
-                .apt(["libsqlite3-dev"]),
-                .brew(["sqlite3"]),
-            ]
-        ),
         .target(
             name: "TransactionsFeature",
             dependencies: [
@@ -49,10 +41,9 @@ let package = Package(
         .target(
             name: "TransactionsStore",
             dependencies: [
-                tca,
-                .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
-                "SharedModels",
-                "Sqlite"
+                dependencies,
+                xctestDynamicOverlay,
+                "SharedModels"
             ]
         ),
         .target(
@@ -66,19 +57,6 @@ let package = Package(
             name: "SharedModels",
             dependencies: [
             ]
-        ),
-        .target(
-            name: "FileClient",
-            dependencies: [
-                dependencies,
-                .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
-            ]
-        ),
-        .target(
-            name: "Sqlite",
-            dependencies: [
-                .target(name: "Csqlite3")
-            ]
-        ),
+        )
     ]
 )

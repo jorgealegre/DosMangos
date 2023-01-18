@@ -20,15 +20,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let store = Store(
         initialState: AppReducer.State(),
         reducer: AppReducer()
-            .transformDependency(\.self) {
-                $0.transactionsStore = .live(
-                    path: FileManager.default
-                        .urls(for: .documentDirectory, in: .userDomainMask)
-                        .first!
-                        .appendingPathComponent("dev.alegre.DosMangos")
-                        .appendingPathComponent("DosMangos.sqlite3")
-                )
-            }
+//            .transformDependency(\.self) {
+//                $0.transactionsStore = .live(
+//                    path: FileManager.default
+//                        .urls(for: .documentDirectory, in: .userDomainMask)
+//                        .first!
+//                        .appendingPathComponent("dev.alegre.DosMangos")
+//                        .appendingPathComponent("DosMangos.sqlite3")
+//                )
+//            }
     )
 
     var viewStore: ViewStore<Void, AppReducer.Action> {

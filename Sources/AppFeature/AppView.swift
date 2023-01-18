@@ -2,7 +2,6 @@ import ComposableArchitecture
 import SharedModels
 import TransactionsFeature
 import SwiftUI
-import Sqlite
 
 public struct AppReducer: ReducerProtocol {
     public struct State: Equatable {
@@ -41,8 +40,8 @@ public struct AppReducer: ReducerProtocol {
                     do {
                         try await self.transactionsStore.migrate()
                         await send.send(.migrationComplete)
-                    } catch let error as Sqlite.Error {
-                        print(error.description)
+                    } catch {
+                        print(error.localizedDescription)
                         await send.send(.migrationFailed)
                     }
                 }
