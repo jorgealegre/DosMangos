@@ -66,8 +66,16 @@ public struct TransactionsFeature: ReducerProtocol {
                 return .none
 
             case let .deleteTransactions(indices):
+                let transactionIds = indices.map { state.transactions[$0].id }
                 state.transactions.remove(atOffsets: indices)
-                return .none
+                return .fireAndForget {
+                    do {
+                        try await transactionsStore.deleteTransactions(transactionIds)
+                    } catch {
+                        print(error)
+                        // TODO: should try to recover
+                    }
+                }
 
             case .newTransactionButtonTapped:
                 state.addTransaction = .init()
@@ -119,7 +127,7 @@ public struct TransactionsView: View {
             self.isAddingTransaction = state.addTransaction != nil
             self.currentDate = state.date.formatted(Date.FormatStyle().month(.wide))
             self.monthlySummary = state.monthlySummary
-            let sortedTransactions = state.transactions.sorted(by: { $0.date < $1.date })
+            let sortedTransactions = state.transactions
             // TODO: this is wrong, dont take into consideration the time, only the day
             self.transactions = Dictionary(grouping: sortedTransactions, by: \.date)
             self.dates = transactions.keys.sorted(by: { $0 > $1 })

@@ -3,7 +3,7 @@
 import PackageDescription
 
 let tca = Target.Dependency.product(name: "ComposableArchitecture", package: "swift-composable-architecture")
-let dependencies = Target.Dependency.product(name: "Dependencies", package: "swift-composable-architecture")
+let dependencies = Target.Dependency.product(name: "Dependencies", package: "swift-dependencies")
 let xctestDynamicOverlay = Target.Dependency.product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
 
 let package = Package(
@@ -18,6 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "0.48.0"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "0.1.0"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "0.8.0")
     ],
     targets: [

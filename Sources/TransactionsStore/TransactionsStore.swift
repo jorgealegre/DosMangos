@@ -6,6 +6,7 @@ import XCTestDynamicOverlay
 public struct TransactionsStore {
     public var migrate: @Sendable () async throws -> Void
 
+    public var deleteTransactions: @Sendable (_ ids: [UUID]) async throws -> Void
     public var fetchTransactions: @Sendable (_ date: Date) async throws -> [Transaction]
     public var saveTransaction: @Sendable (Transaction) async throws -> Void
 }
@@ -22,6 +23,7 @@ extension TransactionsStore: TestDependencyKey {
 
     public static let testValue = Self(
         migrate: unimplemented("\(Self.self).migrate"),
+        deleteTransactions: unimplemented("\(Self.self).deleteTransactions"),
         fetchTransactions: unimplemented("\(Self.self).fetchTransactions"),
         saveTransaction: unimplemented("\(Self.self).saveTransaction")
     )
@@ -31,6 +33,7 @@ extension TransactionsStore {
     public static var mock: Self {
         Self(
             migrate: {},
+            deleteTransactions: { _ in },
             fetchTransactions: { _ in [.mock] },
             saveTransaction: { _ in }
         )

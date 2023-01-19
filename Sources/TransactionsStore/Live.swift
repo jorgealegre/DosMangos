@@ -26,26 +26,44 @@ private class CoreData {
         }
     }
 
+    func deleteTransactions(_ ids: [UUID]) async throws {
+        let fetchRequest = CDTransaction.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id IN %@", ids)
+        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+        deleteRequest.resultType = .resultTypeObjectIDs
+
+        let result = try container.viewContext.execute(deleteRequest) as? NSBatchDeleteResult
+
+        guard let deleteResult = result?.result as? [NSManagedObjectID] else { return }
+
+        let deletedObjects: [AnyHashable: Any] = [
+            NSDeletedObjectsKey: deleteResult
+        ]
+
+        NSManagedObjectContext.mergeChanges(
+            fromRemoteContextSave: deletedObjects,
+            into: [container.viewContext]
+        )
+    }
+
     func fetchTransactions(date: Date) async throws -> [Transaction] {
-        try container.viewContext.fetch(CDTransaction.fetchRequest()).map {
-            Transaction(
-                date: $0.createdAt,
-                description: $0.name,
-                id: $0.id,
-                value: $0.value
-            )
-        }
+        // TODO: filter by month from date
+        try container.viewContext
+            .fetch(CDTransaction.sortedFetchRequest)
+            .map {
+                Transaction(
+                    date: $0.createdAt,
+                    description: $0.name,
+                    id: $0.id,
+                    value: $0.value
+                )
+            }
     }
 
     func saveTransactions(_ transaction: Transaction) async {
-        let cdTransaction = CDTransaction(entity: NSEntityDescription.entity(forEntityName: "Transaction", in: container.viewContext)!, insertInto: container.viewContext)
-
-        cdTransaction.id = transaction.id
-        cdTransaction.name = transaction.description
-        cdTransaction.createdAt = transaction.date
-        cdTransaction.value = transaction.value
-
-        try! container.viewContext.save()
+        container.viewContext.performChanges {
+            let _ = CDTransaction.insert(into: self.container.viewContext, transaction: transaction)
+        }
     }
 }
 
@@ -58,6 +76,10 @@ extension TransactionsStore: DependencyKey {
                 // TODO: error handling
                 await model.loadPersistentStore()
             },
+            deleteTransactions: { ids in
+                // TODO: error handling
+                return try! await model.deleteTransactions(ids)
+            },
             fetchTransactions: { date in
                 // TODO: error handling
                 return try! await model.fetchTransactions(date: date)
@@ -67,4 +89,30 @@ extension TransactionsStore: DependencyKey {
             }
         )
     }()
+}
+
+extension NSManagedObjectContext {
+
+    func insertObject<A: NSManagedObject>() -> A where A: Managed {
+        guard let obj = NSEntityDescription.insertNewObject(forEntityName: A.entityName, into: self) as? A else { fatalError("Wrong object type")
+        }
+        return obj
+    }
+
+    func saveOrRollback() -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            rollback()
+            return false
+        }
+    }
+
+    func performChanges(block: @escaping () -> ()) {
+        perform {
+            block()
+            _ = self.saveOrRollback()
+        }
+    }
 }
