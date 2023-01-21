@@ -91,14 +91,13 @@ public struct AppView: View {
                     )
                 )
                 .tabItem {
-                    VStack {
-                        Label {
-                            Text("Transactions")
-                        } icon: {
-                            Image(systemName: "list.bullet.rectangle.portrait")
-                        }
-                    }
+                    Label("Transactions", systemImage: "list.bullet.rectangle.portrait")
                 }
+            }
+            .onAppear {
+                let tabBarAppearance = UITabBarAppearance()
+                tabBarAppearance.configureWithDefaultBackground()
+                UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
             }
         } else {
             Color.black

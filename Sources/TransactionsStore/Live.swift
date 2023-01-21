@@ -1,6 +1,7 @@
 import CoreData
 import Dependencies
 import Foundation
+import IdentifiedCollections
 import SharedModels
 
 private class CoreData {
@@ -46,9 +47,9 @@ private class CoreData {
         )
     }
 
-    func fetchTransactions(date: Date) async throws -> [Transaction] {
+    func fetchTransactions(date: Date) async throws -> IdentifiedArrayOf<Transaction> {
         // TODO: filter by month from date
-        try container.viewContext
+        let transactions = try container.viewContext
             .fetch(CDTransaction.sortedFetchRequest)
             .map {
                 Transaction(
@@ -58,6 +59,8 @@ private class CoreData {
                     value: $0.value
                 )
             }
+
+        return IdentifiedArrayOf(uniqueElements: transactions)
     }
 
     func saveTransactions(_ transaction: Transaction) async {
@@ -65,6 +68,25 @@ private class CoreData {
             let _ = CDTransaction.insert(into: self.container.viewContext, transaction: transaction)
         }
     }
+
+    #if DEBUG
+    func loadMocks() async {
+        let now = Date()
+        let transactions = [
+            Transaction.mock(date: now),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -1)),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -1)),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -2)),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -3)),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -4)),
+            .mock(date: now.addingTimeInterval(60 * 60 * 24 * -4)),
+        ]
+
+        for transaction in transactions {
+            await saveTransactions(transaction)
+        }
+    }
+    #endif
 }
 
 extension TransactionsStore: DependencyKey {
@@ -75,6 +97,10 @@ extension TransactionsStore: DependencyKey {
             migrate: {
                 // TODO: error handling
                 await model.loadPersistentStore()
+
+                #if DEBUG
+//                await model.loadMocks()
+                #endif
             },
             deleteTransactions: { ids in
                 // TODO: error handling

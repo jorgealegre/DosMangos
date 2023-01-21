@@ -1,14 +1,32 @@
 import AddTransactionFeature
 import ComposableArchitecture
+import IdentifiedCollections
 import TransactionsStore
 import SharedModels
 import SwiftUI
+
+extension Date {
+    func get(_ components: Calendar.Component..., calendar: Calendar = Calendar.current) -> DateComponents {
+        return calendar.dateComponents(Set(components), from: self)
+    }
+
+    func get(_ component: Calendar.Component, calendar: Calendar = Calendar.current) -> Int {
+        return calendar.component(component, from: self)
+    }
+}
 
 public struct TransactionsFeature: ReducerProtocol {
     public struct State: Equatable {
         public var addTransaction: AddTransaction.State?
         public var date: Date
-        public var transactions: [SharedModels.Transaction]
+        public var transactions: IdentifiedArrayOf<SharedModels.Transaction>
+
+        var transactionsByDay: [Int: [SharedModels.Transaction]] {
+            Dictionary(grouping: transactions) { transaction in
+                // extract the day from the transaction
+                transaction.date.get(.day)
+            }
+        }
 
         var monthlySummary: MonthlySummary {
             let expenses = transactions.map(\.value).map(Double.init).reduce(0.0, +)
@@ -25,7 +43,7 @@ public struct TransactionsFeature: ReducerProtocol {
         public init(
             addTransaction: AddTransaction.State? = nil,
             date: Date,
-            transactions: [SharedModels.Transaction] = []
+            transactions: IdentifiedArrayOf<SharedModels.Transaction> = []
         ) {
             self.addTransaction = addTransaction
             self.date = date
@@ -35,11 +53,11 @@ public struct TransactionsFeature: ReducerProtocol {
 
     public enum Action: Equatable {
         case addTransaction(AddTransaction.Action)
-        case deleteTransactions(IndexSet)
+        case deleteTransactions([UUID])
         case newTransactionButtonTapped
         case onAppear
         case setAddTransactionSheetPresented(Bool)
-        case transactionsLoaded(TaskResult<[SharedModels.Transaction]>)
+        case transactionsLoaded(TaskResult<IdentifiedArrayOf<SharedModels.Transaction>>)
     }
 
     @Dependency(\.transactionsStore) private var transactionsStore
@@ -65,12 +83,11 @@ public struct TransactionsFeature: ReducerProtocol {
             case .addTransaction:
                 return .none
 
-            case let .deleteTransactions(indices):
-                let transactionIds = indices.map { state.transactions[$0].id }
-                state.transactions.remove(atOffsets: indices)
+            case let .deleteTransactions(ids):
+                ids.forEach { state.transactions.remove(id: $0) }
                 return .fireAndForget {
                     do {
-                        try await transactionsStore.deleteTransactions(transactionIds)
+                        try await transactionsStore.deleteTransactions(ids)
                     } catch {
                         print(error)
                         // TODO: should try to recover
@@ -116,21 +133,19 @@ public struct TransactionsView: View {
 
     private struct ViewState: Equatable {
         let addTransaction: AddTransaction.State?
-        let currentDate: String
-        let dates: [Date]
+        let currentDate: Date
         let isAddingTransaction: Bool
         let monthlySummary: MonthlySummary
-        let transactions: [Date: [SharedModels.Transaction]]
+        let transactionsByDay: [Int: [SharedModels.Transaction]]
+        let days: [Int]
 
         init(state: TransactionsFeature.State) {
             self.addTransaction = state.addTransaction
             self.isAddingTransaction = state.addTransaction != nil
-            self.currentDate = state.date.formatted(Date.FormatStyle().month(.wide))
+            self.currentDate = state.date
             self.monthlySummary = state.monthlySummary
-            let sortedTransactions = state.transactions
-            // TODO: this is wrong, dont take into consideration the time, only the day
-            self.transactions = Dictionary(grouping: sortedTransactions, by: \.date)
-            self.dates = transactions.keys.sorted(by: { $0 > $1 })
+            self.transactionsByDay = state.transactionsByDay
+            self.days = Array(state.transactionsByDay.keys.sorted().reversed())
         }
     }
 
@@ -184,17 +199,17 @@ public struct TransactionsView: View {
                     Divider()
 
                     List {
-                        ForEach(viewStore.dates, id: \.self) { (date: Date) in
+                        ForEach(viewStore.days, id: \.self) { day in
                             Section {
-                                ForEach(viewStore.transactions[date] ?? [], content: TransactionView.init)
+                                let transactions = viewStore.transactionsByDay[day] ?? []
+                                ForEach(transactions, content: TransactionView.init)
                                     .onDelete { indices in
-                                        viewStore.send(.deleteTransactions(indices))
+                                        let ids = indices.map { transactions[$0].id }
+                                        viewStore.send(.deleteTransactions(ids))
                                     }
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Color.clear)
                             } header: {
                                 HStack {
-                                    Text("\(date.formatted(date: .long, time: .omitted))")
+                                    Text("\(viewStore.transactionsByDay[day]!.first!.date.formatted(Date.FormatStyle().month().day()))")
                                     Spacer()
                                     HStack {
                                         Text("$\(viewStore.monthlySummary.worth.formatted())")
@@ -224,7 +239,7 @@ public struct TransactionsView: View {
                 .padding()
             }
             .onAppear { viewStore.send(.onAppear) }
-            .navigationTitle(viewStore.currentDate)
+            .navigationTitle(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
             .sheet(
                 isPresented: viewStore.binding(
                     get: \.isAddingTransaction,
@@ -271,7 +286,7 @@ struct TransactionsView_Previews: PreviewProvider {
             store: .init(
                 initialState: .init(
                     date: .now,
-                    transactions: [.mock]
+                    transactions: [.mock()]
                 ),
                 reducer: TransactionsFeature()
             )
