@@ -15,9 +15,7 @@ struct TransactionView: View {
             }
             Spacer()
 
-            Text("$\(transaction.value)")
-                .monospacedDigit()
-                .bold()
+            ValueView(value: transaction.value)
         }
     }
 }

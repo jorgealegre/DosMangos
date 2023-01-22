@@ -69,7 +69,7 @@ public struct AddTransactionView: View {
         var transactionType: Transaction.TransactionType
 
         init(state: AddTransaction.State) {
-            self.value = state.transaction.value == 0 ? "" : state.transaction.value.description
+            self.value = state.transaction.absoluteValue == 0 ? "" : state.transaction.absoluteValue.description
             self.description = state.transaction.description
             self.transactionType = state.transaction.transactionType
         }

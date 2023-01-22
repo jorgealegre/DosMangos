@@ -5,6 +5,28 @@ import TransactionsStore
 import SharedModels
 import SwiftUI
 
+extension Color {
+    init(hex: UInt, alpha: Double = 1) {
+        self.init(
+            .displayP3,
+            red: Double((hex >> 16) & 0xff) / 255,
+            green: Double((hex >> 08) & 0xff) / 255,
+            blue: Double((hex >> 00) & 0xff) / 255,
+            opacity: alpha
+        )
+    }
+}
+
+extension Color {
+    static var income: Color {
+        .init(hex: 0x9BD770)
+    }
+
+    static var expense: Color {
+        .init(hex: 0xFE8176)
+    }
+}
+
 extension Date {
     func get(_ components: Calendar.Component...) -> DateComponents {
         @Dependency(\.calendar) var calendar
@@ -30,26 +52,25 @@ public struct TransactionsFeature: ReducerProtocol {
             }
         }
 
-        var monthlySummary: MonthlySummary {
+        var summary: Summary {
             // TODO: could be simplified
             let expenses = transactions
                 .filter({ $0.transactionType == .expense })
                 .map(\.value)
-                .map(Double.init)
-                .reduce(0.0, +)
+                .reduce(0, +)
 
             let income = transactions
                 .filter({ $0.transactionType == .income })
                 .map(\.value)
-                .map(Double.init)
-                .reduce(0.0, +)
+                .reduce(0, +)
 
-            let worth = income + expenses
+            let monthlyBalance = income + expenses
 
-            return MonthlySummary(
-                income: income,
-                expenses: expenses,
-                worth: worth
+            return Summary(
+                monthlyIncome: income,
+                monthlyExpenses: expenses,
+                monthlyBalance: monthlyBalance,
+                worth: monthlyBalance
             )
         }
 
@@ -142,13 +163,25 @@ public struct TransactionsFeature: ReducerProtocol {
     }
 }
 
+struct ValueView: View {
+    let value: Int
+
+    var body: some View {
+        Text("$\(value.formatted())")
+            .monospacedDigit()
+            .bold()
+            .foregroundColor(value < 0 ? .expense : .income)
+
+    }
+}
+
 public struct TransactionsView: View {
 
     private struct ViewState: Equatable {
         let addTransaction: AddTransaction.State?
         let currentDate: Date
         let isAddingTransaction: Bool
-        let monthlySummary: MonthlySummary
+        let summary: Summary
         let transactionsByDay: [Int: [SharedModels.Transaction]]
         let balanceByDay: [Int: Int]
         let days: [Int]
@@ -157,7 +190,7 @@ public struct TransactionsView: View {
             self.addTransaction = state.addTransaction
             self.isAddingTransaction = state.addTransaction != nil
             self.currentDate = state.date
-            self.monthlySummary = state.monthlySummary
+            self.summary = state.summary
             self.transactionsByDay = state.transactionsByDay
             self.days = Array(state.transactionsByDay.keys.sorted().reversed())
             var balanceByDay: [Int: Int] = [:]
@@ -185,32 +218,22 @@ public struct TransactionsView: View {
                         HStack {
                             Text("In")
                             Spacer()
-                            Text("$\(viewStore.monthlySummary.income.formatted())")
-                                .monospacedDigit()
-                                .bold()
+                            ValueView(value: viewStore.summary.monthlyIncome)
                         }
                         HStack {
                             Text("Out")
                             Spacer()
-                            Text("$\(viewStore.monthlySummary.expenses.formatted())")
-                                .monospacedDigit()
-                                .bold()
-                        }
-                        HStack {
-                            Text("Worth")
-                            Spacer()
-                            Text("$\(abs(viewStore.monthlySummary.worth).formatted())")
-                                .monospacedDigit()
-                                .bold()
-                                .foregroundColor(viewStore.monthlySummary.worth < 0 ? .red : .green)
+                            ValueView(value: viewStore.summary.monthlyExpenses)
                         }
                         HStack {
                             Text("Monthly Balance")
                             Spacer()
-                            Text("$\(abs(viewStore.monthlySummary.worth).formatted())")
-                                .monospacedDigit()
-                                .bold()
-                                .foregroundColor(viewStore.monthlySummary.worth < 0 ? .red : .green)
+                            ValueView(value: viewStore.summary.monthlyBalance)
+                        }
+                        HStack {
+                            Text("Worth")
+                            Spacer()
+                            ValueView(value: viewStore.summary.worth)
                         }
                     }
                     .padding(8)
@@ -253,20 +276,7 @@ public struct TransactionsView: View {
                     .listStyle(.plain)
                 }
 
-                Button {
-                    viewStore.send(.newTransactionButtonTapped)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.purple.gradient)
-
-                        Image(systemName: "plus.square")
-                            .font(.largeTitle)
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 60, height: 60)
-                }
-                .padding()
+                addTransactionButton
             }
             .onAppear { viewStore.send(.onAppear) }
             .navigationTitle(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
@@ -286,6 +296,24 @@ public struct TransactionsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var addTransactionButton: some View {
+        Button {
+            viewStore.send(.newTransactionButtonTapped)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.purple.gradient)
+
+                Image(systemName: "plus.square")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+            }
+            .frame(width: 60, height: 60)
+        }
+        .padding()
     }
 }
 

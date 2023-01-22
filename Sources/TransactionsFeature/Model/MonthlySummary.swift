@@ -1,13 +1,15 @@
 import Foundation
 
-struct MonthlySummary: Equatable {
-  let income: Double
-  let expenses: Double
-  let worth: Double
-
-  init(income: Double, expenses: Double, worth: Double) {
-    self.income = income
-    self.expenses = expenses
-    self.worth = worth
-  }
+struct Summary: Equatable {
+    let monthlyIncome: Int
+    let monthlyExpenses: Int
+    let monthlyBalance: Int
+    let worth: Int
+    
+    init(monthlyIncome: Int, monthlyExpenses: Int, monthlyBalance: Int, worth: Int) {
+        self.monthlyIncome = monthlyIncome
+        self.monthlyExpenses = monthlyExpenses
+        self.monthlyBalance = monthlyBalance
+        self.worth = worth
+    }
 }
