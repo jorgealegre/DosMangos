@@ -4,6 +4,19 @@ import Foundation
 import IdentifiedCollections
 import SharedModels
 
+extension Date {
+    var startOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        let day = calendar.date(from: Calendar.current.dateComponents([.year, .month], from: calendar.startOfDay(for: self)))!
+        return day
+    }
+
+    var endOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        return calendar.date(byAdding: DateComponents(month: 1, second: -1), to: self.startOfMonth)!
+    }
+}
+
 private class CoreData {
 
     let container: NSPersistentContainer
@@ -48,16 +61,25 @@ private class CoreData {
     }
 
     func fetchTransactions(date: Date) async throws -> IdentifiedArrayOf<Transaction> {
-        // TODO: filter by month from date
+        let start = date.startOfMonth
+        let end = date.endOfMonth
+
+        let request = CDTransaction.sortedFetchRequest
+        request.predicate = NSPredicate(
+            format: "createdAt BETWEEN {%@, %@}",
+            start as NSDate,
+            end as NSDate
+        )
+
         let transactions = try container.viewContext
-            .fetch(CDTransaction.sortedFetchRequest)
+            .fetch(request)
             .map {
                 Transaction(
+                    absoluteValue: $0.value,
                     createdAt: $0.createdAt,
                     description: $0.name,
                     id: $0.id,
-                    value: $0.value,
-                    transactionType: Transaction.TransactionType(rawValue: Int($0.transactionType))!
+                    transactionType: Transaction.TransactionType(rawValue: Int($0.transactionType)) ?? .expense
                 )
             }
 

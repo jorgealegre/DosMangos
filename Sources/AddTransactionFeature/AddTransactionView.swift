@@ -11,7 +11,7 @@ public struct AddTransaction: ReducerProtocol {
         public init(
             transaction: Transaction? = nil
         ) {
-            self.transaction = transaction ?? Transaction(createdAt: Date(), description: "", value: 0, transactionType: .expense)
+            self.transaction = transaction ?? Transaction(absoluteValue: 0, createdAt: Date(), description: "", transactionType: .expense)
         }
     }
 
@@ -45,7 +45,7 @@ public struct AddTransaction: ReducerProtocol {
                 return .none
             }
 
-            state.transaction.value = value
+            state.transaction.absoluteValue = value
             return .none
 
         case let .transactionTypeChanged(transactionType):

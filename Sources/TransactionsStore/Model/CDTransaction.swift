@@ -15,7 +15,7 @@ final class CDTransaction: NSManagedObject, Identifiable {
         cdTransaction.id = transaction.id
         cdTransaction.createdAt = transaction.createdAt
         cdTransaction.name = transaction.description
-        cdTransaction.value = transaction.value
+        cdTransaction.value = transaction.absoluteValue
         cdTransaction.transactionType = Int16(transaction.transactionType.rawValue)
         return cdTransaction
     }

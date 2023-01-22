@@ -7,24 +7,33 @@ public struct Transaction: Identifiable, Equatable {
         case income
     }
 
+    public var absoluteValue: Int
     public var createdAt: Date
     public var description: String
     public let id: UUID
-    public var value: Int
     public var transactionType: TransactionType
 
     public init(
+        absoluteValue: Int,
         createdAt: Date,
         description: String,
         id: UUID = .init(),
-        value: Int,
         transactionType: TransactionType
     ) {
+        self.absoluteValue = absoluteValue
         self.createdAt = createdAt
         self.description = description
         self.id = id
-        self.value = value
         self.transactionType = transactionType
+    }
+
+    public var value: Int {
+        switch transactionType {
+        case .expense:
+            return -absoluteValue
+        case .income:
+            return absoluteValue
+        }
     }
 }
 
@@ -34,9 +43,9 @@ public extension Transaction {
         transactionType: TransactionType = .expense
     ) -> Self {
         .init(
+            absoluteValue: 12,
             createdAt: date,
             description: "Cigarettes",
-            value: 12,
             transactionType: transactionType
         )
     }

@@ -6,11 +6,13 @@ import SharedModels
 import SwiftUI
 
 extension Date {
-    func get(_ components: Calendar.Component..., calendar: Calendar = Calendar.current) -> DateComponents {
+    func get(_ components: Calendar.Component...) -> DateComponents {
+        @Dependency(\.calendar) var calendar
         return calendar.dateComponents(Set(components), from: self)
     }
 
-    func get(_ component: Calendar.Component, calendar: Calendar = Calendar.current) -> Int {
+    func get(_ component: Calendar.Component) -> Int {
+        @Dependency(\.calendar) var calendar
         return calendar.component(component, from: self)
     }
 }
@@ -29,9 +31,20 @@ public struct TransactionsFeature: ReducerProtocol {
         }
 
         var monthlySummary: MonthlySummary {
-            let expenses = transactions.map(\.value).map(Double.init).reduce(0.0, +)
-            let income = 0.0
-            let worth = income - expenses
+            // TODO: could be simplified
+            let expenses = transactions
+                .filter({ $0.transactionType == .expense })
+                .map(\.value)
+                .map(Double.init)
+                .reduce(0.0, +)
+
+            let income = transactions
+                .filter({ $0.transactionType == .income })
+                .map(\.value)
+                .map(Double.init)
+                .reduce(0.0, +)
+
+            let worth = income + expenses
 
             return MonthlySummary(
                 income: income,
@@ -137,6 +150,7 @@ public struct TransactionsView: View {
         let isAddingTransaction: Bool
         let monthlySummary: MonthlySummary
         let transactionsByDay: [Int: [SharedModels.Transaction]]
+        let balanceByDay: [Int: Int]
         let days: [Int]
 
         init(state: TransactionsFeature.State) {
@@ -146,6 +160,11 @@ public struct TransactionsView: View {
             self.monthlySummary = state.monthlySummary
             self.transactionsByDay = state.transactionsByDay
             self.days = Array(state.transactionsByDay.keys.sorted().reversed())
+            var balanceByDay: [Int: Int] = [:]
+            for (day, transactions) in state.transactionsByDay {
+                balanceByDay[day] = transactions.map { $0.value }.reduce(0, +)
+            }
+            self.balanceByDay = balanceByDay
         }
     }
 
@@ -159,7 +178,7 @@ public struct TransactionsView: View {
 
     public var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .bottom) {
                 VStack(spacing: 0) {
                     Divider()
                     VStack(alignment: .leading, spacing: 0) {
@@ -202,23 +221,34 @@ public struct TransactionsView: View {
                         ForEach(viewStore.days, id: \.self) { day in
                             Section {
                                 let transactions = viewStore.transactionsByDay[day] ?? []
-                                ForEach(transactions, content: TransactionView.init)
-                                    .onDelete { indices in
-                                        let ids = indices.map { transactions[$0].id }
-                                        viewStore.send(.deleteTransactions(ids))
+                                ForEach(transactions) { transaction in
+                                    VStack(spacing: 0) {
+                                        TransactionView(transaction: transaction)
+                                        Divider()
                                     }
+                                }
+                                .onDelete { indices in
+                                    let ids = indices.map { transactions[$0].id }
+                                    viewStore.send(.deleteTransactions(ids))
+                                }
                             } header: {
                                 HStack {
-                                    Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().month().day()))")
+                                    Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
                                     Spacer()
                                     HStack {
-                                        Text("$\(viewStore.monthlySummary.worth.formatted())")
+                                        Text("$\(viewStore.balanceByDay[day]!.formatted())")
                                             .monospacedDigit()
                                             .bold()
                                     }
                                 }
+                            } footer: {
+                                if day == viewStore.days.last {
+                                    Spacer(minLength: 80)
+                                }
                             }
                         }
+                        .headerProminence(Prominence.standard)
+                        .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
                 }
@@ -255,27 +285,6 @@ public struct TransactionsView: View {
                     AddTransactionView(store: $0)
                 }
             }
-        }
-    }
-}
-
-struct TransactionView: View {
-    let transaction: SharedModels.Transaction
-
-    var body: some View {
-        HStack {
-            VStack {
-                HStack {
-                    Text("\(transaction.description)")
-                        .font(.title)
-                    Spacer()
-                }
-            }
-            Spacer()
-
-            Text("$\(transaction.value)")
-                .monospacedDigit()
-                .bold()
         }
     }
 }
