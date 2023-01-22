@@ -53,10 +53,11 @@ private class CoreData {
             .fetch(CDTransaction.sortedFetchRequest)
             .map {
                 Transaction(
-                    date: $0.createdAt,
+                    createdAt: $0.createdAt,
                     description: $0.name,
                     id: $0.id,
-                    value: $0.value
+                    value: $0.value,
+                    transactionType: Transaction.TransactionType(rawValue: Int($0.transactionType))!
                 )
             }
 

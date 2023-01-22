@@ -1,30 +1,43 @@
 import Foundation
 
 public struct Transaction: Identifiable, Equatable {
-    public var date: Date
+
+    public enum TransactionType: Int {
+        case expense
+        case income
+    }
+
+    public var createdAt: Date
     public var description: String
     public let id: UUID
     public var value: Int
+    public var transactionType: TransactionType
 
     public init(
-        date: Date,
+        createdAt: Date,
         description: String,
         id: UUID = .init(),
-        value: Int
+        value: Int,
+        transactionType: TransactionType
     ) {
-        self.date = date
+        self.createdAt = createdAt
         self.description = description
         self.id = id
         self.value = value
+        self.transactionType = transactionType
     }
 }
 
 public extension Transaction {
-    static func mock(date: Date = Date()) -> Self {
+    static func mock(
+        date: Date = Date(),
+        transactionType: TransactionType = .expense
+    ) -> Self {
         .init(
-            date: date,
+            createdAt: date,
             description: "Cigarettes",
-            value: 12
+            value: 12,
+            transactionType: transactionType
         )
     }
 }

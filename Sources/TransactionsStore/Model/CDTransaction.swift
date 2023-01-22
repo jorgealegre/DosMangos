@@ -8,13 +8,15 @@ final class CDTransaction: NSManagedObject, Identifiable {
     @NSManaged var id: UUID
     @NSManaged var name: String
     @NSManaged var value: Int
+    @NSManaged var transactionType: Int16
 
     static func insert(into context: NSManagedObjectContext, transaction: Transaction) -> CDTransaction {
         let cdTransaction: CDTransaction = context.insertObject()
         cdTransaction.id = transaction.id
-        cdTransaction.createdAt = transaction.date
+        cdTransaction.createdAt = transaction.createdAt
         cdTransaction.name = transaction.description
         cdTransaction.value = transaction.value
+        cdTransaction.transactionType = Int16(transaction.transactionType.rawValue)
         return cdTransaction
     }
 }

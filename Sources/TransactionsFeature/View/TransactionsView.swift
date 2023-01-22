@@ -24,7 +24,7 @@ public struct TransactionsFeature: ReducerProtocol {
         var transactionsByDay: [Int: [SharedModels.Transaction]] {
             Dictionary(grouping: transactions) { transaction in
                 // extract the day from the transaction
-                transaction.date.get(.day)
+                transaction.createdAt.get(.day)
             }
         }
 
@@ -209,7 +209,7 @@ public struct TransactionsView: View {
                                     }
                             } header: {
                                 HStack {
-                                    Text("\(viewStore.transactionsByDay[day]!.first!.date.formatted(Date.FormatStyle().month().day()))")
+                                    Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().month().day()))")
                                     Spacer()
                                     HStack {
                                         Text("$\(viewStore.monthlySummary.worth.formatted())")
