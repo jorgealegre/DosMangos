@@ -10,6 +10,18 @@ public struct TransactionsStore {
     public var deleteTransactions: @Sendable (_ ids: [UUID]) async throws -> Void
     public var fetchTransactions: @Sendable (_ date: Date) async throws -> IdentifiedArrayOf<Transaction>
     public var saveTransaction: @Sendable (Transaction) async throws -> Void
+
+    public init(
+        migrate: @Sendable @escaping () async -> Void,
+        deleteTransactions: @Sendable @escaping (_: [UUID]) async -> Void,
+        fetchTransactions: @Sendable @escaping (_: Date) async -> IdentifiedArrayOf<Transaction>,
+        saveTransaction: @Sendable @escaping (Transaction) async -> Void
+    ) {
+        self.migrate = migrate
+        self.deleteTransactions = deleteTransactions
+        self.fetchTransactions = fetchTransactions
+        self.saveTransaction = saveTransaction
+    }
 }
 
 extension DependencyValues {

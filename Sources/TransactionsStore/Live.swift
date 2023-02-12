@@ -17,9 +17,9 @@ extension Date {
     }
 }
 
-private class CoreData {
+private actor CoreData {
 
-    let container: NSPersistentContainer
+    nonisolated let container: NSPersistentContainer
 
     init() {
         let bundle = Bundle.module

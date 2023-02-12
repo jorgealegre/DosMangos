@@ -88,8 +88,11 @@ public struct TransactionsFeature: ReducerProtocol {
     public enum Action: Equatable {
         case addTransaction(AddTransaction.Action)
         case deleteTransactions([UUID])
+        case loadTransactions
         case newTransactionButtonTapped
+        case nextMonthButtonTapped
         case onAppear
+        case previousMonthButtonTapped
         case setAddTransactionSheetPresented(Bool)
         case transactionsLoaded(TaskResult<IdentifiedArrayOf<SharedModels.Transaction>>)
     }
@@ -132,7 +135,14 @@ public struct TransactionsFeature: ReducerProtocol {
                 state.addTransaction = .init()
                 return .none
 
+            case .nextMonthButtonTapped:
+                state.date = Calendar.current.date(byAdding: .month, value: 1, to: state.date)!
+                return EffectTask.send(.loadTransactions)
+
             case .onAppear:
+                return EffectTask.send(.loadTransactions)
+
+            case .loadTransactions:
                 return .run { [date = state.date] send in
                     await send(
                         .transactionsLoaded(
@@ -140,6 +150,10 @@ public struct TransactionsFeature: ReducerProtocol {
                         )
                     )
                 }
+
+            case .previousMonthButtonTapped:
+                state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
+                return EffectTask.send(.loadTransactions)
 
             case let .setAddTransactionSheetPresented(presented):
                 if !presented {
@@ -212,8 +226,9 @@ public struct TransactionsView: View {
     public var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
+                ScrollView {
                 VStack(spacing: 0) {
-                    Divider()
+//                    Divider()
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
                             Text("In")
@@ -225,61 +240,88 @@ public struct TransactionsView: View {
                             Spacer()
                             ValueView(value: viewStore.summary.monthlyExpenses)
                         }
-                        HStack {
-                            Text("Monthly Balance")
-                            Spacer()
-                            ValueView(value: viewStore.summary.monthlyBalance)
-                        }
-                        HStack {
-                            Text("Worth")
-                            Spacer()
-                            ValueView(value: viewStore.summary.worth)
-                        }
+                        //                        HStack {
+                        //                            Text("Monthly Balance")
+                        //                            Spacer()
+                        //                            ValueView(value: viewStore.summary.monthlyBalance)
+                        //                        }
+                        //                        HStack {
+                        //                            Text("Worth")
+                        //                            Spacer()
+                        //                            ValueView(value: viewStore.summary.worth)
+                        //                        }
                     }
                     .padding(8)
 
                     Divider()
 
-                    List {
-                        ForEach(viewStore.days, id: \.self) { day in
-                            Section {
-                                let transactions = viewStore.transactionsByDay[day] ?? []
-                                ForEach(transactions) { transaction in
+                    HStack {
+                        Button {
+                            viewStore.send(.previousMonthButtonTapped)
+                        } label: {
+                            Image(systemName: "chevron.backward.circle")
+                                .font(.title)
+                        }
+
+                        Spacer()
+
+                        Text(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
+                            .font(.largeTitle.bold().smallCaps())
+
+                        Spacer()
+
+                        Button {
+                            viewStore.send(.nextMonthButtonTapped)
+                        } label: {
+                            Image(systemName: "chevron.forward.circle")
+                                .font(.title)
+                        }
+                    }
+                    .padding(16)
+
+                    Divider()
+
+                        LazyVStack(pinnedViews: [.sectionHeaders]) {
+                            ForEach(viewStore.days, id: \.self) { day in
+                                Section {
+                                    let transactions = viewStore.transactionsByDay[day] ?? []
+                                    ForEach(transactions) { transaction in
+                                        VStack(spacing: 0) {
+                                            TransactionView(transaction: transaction)
+                                                .padding()
+                                            Divider()
+                                        }
+                                    }
+                                } header: {
                                     VStack(spacing: 0) {
-                                        TransactionView(transaction: transaction)
+                                        HStack {
+                                            Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
+                                                .font(.caption.bold())
+                                            Spacer()
+                                            HStack {
+                                                Text("$\(viewStore.balanceByDay[day]!.formatted())")
+                                                    .monospacedDigit()
+                                                    .font(.caption.bold())
+                                            }
+                                        }
+                                        .padding(8)
+                                        .background(.background)
                                         Divider()
                                     }
-                                }
-                                .onDelete { indices in
-                                    let ids = indices.map { transactions[$0].id }
-                                    viewStore.send(.deleteTransactions(ids))
-                                }
-                            } header: {
-                                HStack {
-                                    Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
-                                    Spacer()
-                                    HStack {
-                                        Text("$\(viewStore.balanceByDay[day]!.formatted())")
-                                            .monospacedDigit()
-                                            .bold()
+                                } footer: {
+                                    if day == viewStore.days.last {
+                                        Spacer(minLength: 80)
                                     }
-                                }
-                            } footer: {
-                                if day == viewStore.days.last {
-                                    Spacer(minLength: 80)
                                 }
                             }
                         }
-                        .headerProminence(Prominence.standard)
-                        .listRowSeparator(.hidden)
                     }
-                    .listStyle(.plain)
                 }
 
                 addTransactionButton
             }
             .onAppear { viewStore.send(.onAppear) }
-            .navigationTitle(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
+            .navigationTitle("Transactions")
             .sheet(
                 isPresented: viewStore.binding(
                     get: \.isAddingTransaction,
@@ -318,15 +360,40 @@ public struct TransactionsView: View {
 }
 
 struct TransactionsView_Previews: PreviewProvider {
+
+    static let transactions = IdentifiedArray(uniqueElements: [
+        Transaction.mock(),
+        .mock(),
+        .mock()
+    ]
+    )
+
     static var previews: some View {
-        TransactionsView(
-            store: .init(
-                initialState: .init(
-                    date: .now,
-                    transactions: [.mock()]
-                ),
-                reducer: TransactionsFeature()
+        TabView {
+            TransactionsView(
+                store: .init(
+                    initialState: .init(
+                        date: .now,
+                        transactions: transactions // [.mock()]
+                    ),
+                    reducer: TransactionsFeature()
+                        .dependency(
+                            \.transactionsStore,
+                             TransactionsStore(
+                                migrate: { },
+                                deleteTransactions: { _ in },
+                                fetchTransactions: { date in
+                                    [.mock(), .mock(), .mock(), .mock()]
+                                },
+                                saveTransaction: { _ in }
+                             )
+                        )
+                )
             )
-        )
+            .tabItem {
+                Label.init("Transactions", systemImage: "list.bullet.rectangle.portrait")
+            }
+        }
+        .tint(.purple)
     }
 }

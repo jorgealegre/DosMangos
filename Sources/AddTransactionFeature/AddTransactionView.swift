@@ -57,7 +57,11 @@ public struct AddTransaction: ReducerProtocol {
 
 public struct AddTransactionView: View {
 
-    @FocusState private var valueInFocus: Bool
+    enum Field {
+        case value, description
+    }
+
+    @FocusState private var valueInFocus: Field?
     @State private var date: String = "Today"
 
     private let store: StoreOf<AddTransaction>
@@ -91,7 +95,7 @@ public struct AddTransactionView: View {
                 TextField("0", text: viewStore.binding(get: \.value, send: AddTransaction.Action.setValue))
                     .font(.system(size: 80).bold())
                     .keyboardType(.numberPad)
-                    .focused($valueInFocus)
+                    .focused($valueInFocus, equals: .value)
             }
 
             Picker("Type", selection: viewStore.binding(get: \.transactionType, send: AddTransaction.Action.transactionTypeChanged)) {
@@ -105,12 +109,17 @@ public struct AddTransactionView: View {
 
             Divider()
 
-            TextField("Description", text: viewStore.binding(get: \.description, send: AddTransaction.Action.setDescription))
-                .font(.system(size: 30))
-                .submitLabel(.done)
-                .onSubmit {
-                    viewStore.send(.saveButtonTapped)
-                }
+            TextField(
+                "Description",
+                text: viewStore.binding(
+                    get: \.description,
+                    send: AddTransaction.Action.setDescription
+                )
+            )
+            .font(.system(size: 30))
+            .submitLabel(.done)
+            .focused($valueInFocus, equals: .description)
+            .onSubmit { viewStore.send(.saveButtonTapped) }
 
             Spacer()
 
@@ -122,7 +131,7 @@ public struct AddTransactionView: View {
         .padding(.horizontal)
         .padding(.top)
         .onAppear {
-            valueInFocus = true
+            valueInFocus = .value
         }
     }
 }
