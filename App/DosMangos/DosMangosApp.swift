@@ -17,20 +17,15 @@ struct DosMangosApp: App {
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    let store = Store(
-        initialState: AppReducer.State(),
-        reducer: AppReducer()
-    )
-
-    var viewStore: ViewStore<Void, AppReducer.Action> {
-        ViewStore(store.stateless)
+    let store = Store(initialState: AppReducer.State()) {
+        AppReducer()
     }
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        viewStore.send(.appDelegate(.didFinishLaunching))
+        store.send(.appDelegate(.didFinishLaunching))
 
         return true
     }

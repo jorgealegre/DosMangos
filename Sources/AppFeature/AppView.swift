@@ -3,7 +3,7 @@ import SharedModels
 import TransactionsFeature
 import SwiftUI
 
-public struct AppReducer: ReducerProtocol {
+public struct AppReducer: Reducer {
     public struct State: Equatable {
         var migrationCompleted: Bool
         var transactions: TransactionsFeature.State
@@ -28,7 +28,7 @@ public struct AppReducer: ReducerProtocol {
 
     @Dependency(\.transactionsStore) private var transactionsStore
     
-    public var body: some ReducerProtocol<State, Action> {
+    public var body: some ReducerOf<Self> {
         Scope(state: \.transactions, action: /Action.transactions) {
             TransactionsFeature()
         }
@@ -39,10 +39,10 @@ public struct AppReducer: ReducerProtocol {
                 return .run { send in
                     do {
                         try await self.transactionsStore.migrate()
-                        await send.send(.migrationComplete)
+                        await send(.migrationComplete)
                     } catch {
                         print(error.localizedDescription)
-                        await send.send(.migrationFailed)
+                        await send(.migrationFailed)
                     }
                 }
 
@@ -78,7 +78,7 @@ public struct AppView: View {
 
     public init(store: StoreOf<AppReducer>) {
         self.store = store
-        self.viewStore = ViewStore(self.store.scope(state: ViewState.init))
+        self.viewStore = ViewStore(store, observe: ViewState.init)
     }
 
     public var body: some View {
@@ -109,10 +109,9 @@ public struct AppView: View {
 struct AppView_Previews: PreviewProvider {
     static var previews: some View {
         AppView(
-            store: .init(
-                initialState: .init(),
-                reducer: AppReducer()
-            )
+            store: Store(initialState: AppReducer.State()) {
+                AppReducer()
+            }
         )
         .tint(.purple)
     }

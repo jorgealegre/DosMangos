@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import Foundation
 
-public struct AppDelegateReducer: ReducerProtocol {
+public struct AppDelegateReducer: Reducer {
     public struct State: Equatable {
 
     }
@@ -12,7 +12,7 @@ public struct AppDelegateReducer: ReducerProtocol {
 
     public init() {}
 
-    public func reduce(into state: inout State, action: Action) -> Effect<Action, Never> {
+    public func reduce(into state: inout State, action: Action) -> Effect<Action> {
         switch action {
         case .didFinishLaunching:
             return .none

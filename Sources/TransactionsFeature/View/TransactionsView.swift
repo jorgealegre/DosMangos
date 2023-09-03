@@ -39,7 +39,7 @@ extension Date {
     }
 }
 
-public struct TransactionsFeature: ReducerProtocol {
+public struct TransactionsFeature: Reducer {
     public struct State: Equatable {
         public var addTransaction: AddTransaction.State?
         public var date: Date
@@ -101,14 +101,14 @@ public struct TransactionsFeature: ReducerProtocol {
 
     public init() {}
 
-    public var body: some ReducerProtocol<State, Action> {
+    public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .addTransaction(.saveButtonTapped):
                 defer { state.addTransaction = nil }
                 guard let transaction = state.addTransaction?.transaction else { return .none }
                 state.transactions.insert(transaction, at: 0)
-                return .fireAndForget {
+                return .run { _ in
                     do {
                         try await transactionsStore.saveTransaction(transaction)
                     } catch {
@@ -122,7 +122,7 @@ public struct TransactionsFeature: ReducerProtocol {
 
             case let .deleteTransactions(ids):
                 ids.forEach { state.transactions.remove(id: $0) }
-                return .fireAndForget {
+                return .run { _ in
                     do {
                         try await transactionsStore.deleteTransactions(ids)
                     } catch {
@@ -137,10 +137,10 @@ public struct TransactionsFeature: ReducerProtocol {
 
             case .nextMonthButtonTapped:
                 state.date = Calendar.current.date(byAdding: .month, value: 1, to: state.date)!
-                return EffectTask.send(.loadTransactions)
+                return .send(.loadTransactions)
 
             case .onAppear:
-                return EffectTask.send(.loadTransactions)
+                return .send(.loadTransactions)
 
             case .loadTransactions:
                 return .run { [date = state.date] send in
@@ -153,7 +153,7 @@ public struct TransactionsFeature: ReducerProtocol {
 
             case .previousMonthButtonTapped:
                 state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
-                return EffectTask.send(.loadTransactions)
+                return .send(.loadTransactions)
 
             case let .setAddTransactionSheetPresented(presented):
                 if !presented {
@@ -220,66 +220,44 @@ public struct TransactionsView: View {
 
     public init(store: StoreOf<TransactionsFeature>) {
         self.store = store
-        self.viewStore = .init(store.scope(state: ViewState.init))
+        self.viewStore = .init(store, observe: ViewState.init)
     }
 
     public var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 ScrollView {
-                VStack(spacing: 0) {
-//                    Divider()
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text("In")
-                            Spacer()
-                            ValueView(value: viewStore.summary.monthlyIncome)
+                    VStack(spacing: 0) {
+                        //                    Divider()
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                Text("In")
+                                Spacer()
+                                ValueView(value: viewStore.summary.monthlyIncome)
+                            }
+                            HStack {
+                                Text("Out")
+                                Spacer()
+                                ValueView(value: viewStore.summary.monthlyExpenses)
+                            }
+                            //                        HStack {
+                            //                            Text("Monthly Balance")
+                            //                            Spacer()
+                            //                            ValueView(value: viewStore.summary.monthlyBalance)
+                            //                        }
+                            //                        HStack {
+                            //                            Text("Worth")
+                            //                            Spacer()
+                            //                            ValueView(value: viewStore.summary.worth)
+                            //                        }
                         }
-                        HStack {
-                            Text("Out")
-                            Spacer()
-                            ValueView(value: viewStore.summary.monthlyExpenses)
-                        }
-                        //                        HStack {
-                        //                            Text("Monthly Balance")
-                        //                            Spacer()
-                        //                            ValueView(value: viewStore.summary.monthlyBalance)
-                        //                        }
-                        //                        HStack {
-                        //                            Text("Worth")
-                        //                            Spacer()
-                        //                            ValueView(value: viewStore.summary.worth)
-                        //                        }
-                    }
-                    .padding(8)
+                        .padding(8)
 
-                    Divider()
+                        Divider()
 
-                    HStack {
-                        Button {
-                            viewStore.send(.previousMonthButtonTapped)
-                        } label: {
-                            Image(systemName: "chevron.backward.circle")
-                                .font(.title)
-                        }
+                        headerView()
 
-                        Spacer()
-
-                        Text(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
-                            .font(.largeTitle.bold().smallCaps())
-
-                        Spacer()
-
-                        Button {
-                            viewStore.send(.nextMonthButtonTapped)
-                        } label: {
-                            Image(systemName: "chevron.forward.circle")
-                                .font(.title)
-                        }
-                    }
-                    .padding(16)
-
-                    Divider()
+                        Divider()
 
                         LazyVStack(pinnedViews: [.sectionHeaders]) {
                             ForEach(viewStore.days, id: \.self) { day in
@@ -293,21 +271,7 @@ public struct TransactionsView: View {
                                         }
                                     }
                                 } header: {
-                                    VStack(spacing: 0) {
-                                        HStack {
-                                            Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
-                                                .font(.caption.bold())
-                                            Spacer()
-                                            HStack {
-                                                Text("$\(viewStore.balanceByDay[day]!.formatted())")
-                                                    .monospacedDigit()
-                                                    .font(.caption.bold())
-                                            }
-                                        }
-                                        .padding(8)
-                                        .background(.background)
-                                        Divider()
-                                    }
+                                    sectionHeaderView(day: day)
                                 } footer: {
                                     if day == viewStore.days.last {
                                         Spacer(minLength: 80)
@@ -337,6 +301,70 @@ public struct TransactionsView: View {
                     AddTransactionView(store: $0)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func headerView() -> some View {
+//        GeometryReader { proxy in
+            HStack {
+                Button {
+                    viewStore.send(.previousMonthButtonTapped)
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
+//                        .font(.title)
+                        .padding(16)
+                }
+                .background(
+                    Circle()
+                        .fill(Color.accentColor)
+//                        .frame(width: proxy.size.height, height: proxy.size.height)
+                )
+
+                Spacer()
+
+                Text(viewStore.currentDate.formatted(Date.FormatStyle().month(.wide).year()))
+                    .font(.title.bold().smallCaps())
+
+                Spacer()
+
+                Button {
+                    viewStore.send(.nextMonthButtonTapped)
+                } label: {
+                    Image(systemName: "chevron.forward")
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
+//                        .font(.title)
+                        .padding(16)
+                }
+                .background(
+                    Circle()
+                        .fill(Color.accentColor)
+//                        .frame(width: proxy.size.height, height: proxy.size.height)
+                )
+            }
+            .padding(16)
+//        }
+    }
+
+    @ViewBuilder
+    private func sectionHeaderView(day: Int) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("\(viewStore.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
+                    .font(.caption.bold())
+                Spacer()
+                HStack {
+                    Text("$\(viewStore.balanceByDay[day]!.formatted())")
+                        .monospacedDigit()
+                        .font(.caption.bold())
+                }
+            }
+            .padding(8)
+            .background(.background)
+            Divider()
         }
     }
 
@@ -371,24 +399,24 @@ struct TransactionsView_Previews: PreviewProvider {
     static var previews: some View {
         TabView {
             TransactionsView(
-                store: .init(
-                    initialState: .init(
+                store: Store(
+                    initialState: TransactionsFeature.State(
                         date: .now,
                         transactions: transactions // [.mock()]
-                    ),
-                    reducer: TransactionsFeature()
-                        .dependency(
-                            \.transactionsStore,
-                             TransactionsStore(
-                                migrate: { },
-                                deleteTransactions: { _ in },
-                                fetchTransactions: { date in
-                                    [.mock(), .mock(), .mock(), .mock()]
-                                },
-                                saveTransaction: { _ in }
-                             )
-                        )
-                )
+                    )) {
+                        TransactionsFeature()
+                            .dependency(
+                                \.transactionsStore,
+                                 TransactionsStore(
+                                    migrate: { },
+                                    deleteTransactions: { _ in },
+                                    fetchTransactions: { date in
+                                        [.mock(), .mock(), .mock(), .mock()]
+                                    },
+                                    saveTransaction: { _ in }
+                                 )
+                            )
+                    }
             )
             .tabItem {
                 Label.init("Transactions", systemImage: "list.bullet.rectangle.portrait")
