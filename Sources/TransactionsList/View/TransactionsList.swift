@@ -1,4 +1,3 @@
-import AddTransactionFeature
 import ComposableArchitecture
 import IdentifiedCollections
 import TransactionsStore
@@ -39,9 +38,8 @@ extension Date {
     }
 }
 
-public struct TransactionsFeature: Reducer {
+public struct TransactionsList: Reducer {
     public struct State: Equatable {
-        public var addTransaction: AddTransaction.State?
         public var date: Date
         public var transactions: IdentifiedArrayOf<SharedModels.Transaction>
 
@@ -75,25 +73,20 @@ public struct TransactionsFeature: Reducer {
         }
 
         public init(
-            addTransaction: AddTransaction.State? = nil,
             date: Date,
             transactions: IdentifiedArrayOf<SharedModels.Transaction> = []
         ) {
-            self.addTransaction = addTransaction
             self.date = date
             self.transactions = transactions
         }
     }
 
     public enum Action: Equatable {
-        case addTransaction(AddTransaction.Action)
         case deleteTransactions([UUID])
         case loadTransactions
-        case newTransactionButtonTapped
         case nextMonthButtonTapped
         case onAppear
         case previousMonthButtonTapped
-        case setAddTransactionSheetPresented(Bool)
         case transactionsLoaded(TaskResult<IdentifiedArrayOf<SharedModels.Transaction>>)
     }
 
@@ -104,21 +97,18 @@ public struct TransactionsFeature: Reducer {
     public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
-            case .addTransaction(.saveButtonTapped):
-                defer { state.addTransaction = nil }
-                guard let transaction = state.addTransaction?.transaction else { return .none }
-                state.transactions.insert(transaction, at: 0)
-                return .run { _ in
-                    do {
-                        try await transactionsStore.saveTransaction(transaction)
-                    } catch {
-                        print(error)
-                        // TODO: should try to recover
-                    }
-                }
-
-            case .addTransaction:
-                return .none
+//            case .addTransaction(.saveButtonTapped):
+//                defer { state.addTransaction = nil }
+//                guard let transaction = state.addTransaction?.transaction else { return .none }
+//                state.transactions.insert(transaction, at: 0)
+//                return .run { _ in
+//                    do {
+//                        try await transactionsStore.saveTransaction(transaction)
+//                    } catch {
+//                        print(error)
+//                        // TODO: should try to recover
+//                    }
+//                }
 
             case let .deleteTransactions(ids):
                 ids.forEach { state.transactions.remove(id: $0) }
@@ -130,10 +120,6 @@ public struct TransactionsFeature: Reducer {
                         // TODO: should try to recover
                     }
                 }
-
-            case .newTransactionButtonTapped:
-                state.addTransaction = .init()
-                return .none
 
             case .nextMonthButtonTapped:
                 state.date = Calendar.current.date(byAdding: .month, value: 1, to: state.date)!
@@ -155,12 +141,6 @@ public struct TransactionsFeature: Reducer {
                 state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
                 return .send(.loadTransactions)
 
-            case let .setAddTransactionSheetPresented(presented):
-                if !presented {
-                    state.addTransaction = nil
-                }
-                return .none
-
             case let .transactionsLoaded(.failure(error)):
                 print(error)
                 return .none
@@ -169,9 +149,6 @@ public struct TransactionsFeature: Reducer {
                 state.transactions = transactions
                 return .none
             }
-        }
-        .ifLet(\.addTransaction, action: /Action.addTransaction) {
-            AddTransaction()
         }
         ._printChanges()
     }
@@ -189,20 +166,16 @@ struct ValueView: View {
     }
 }
 
-public struct TransactionsView: View {
+public struct TransactionsListView: View {
 
     private struct ViewState: Equatable {
-        let addTransaction: AddTransaction.State?
         let currentDate: Date
-        let isAddingTransaction: Bool
         let summary: Summary
         let transactionsByDay: [Int: [SharedModels.Transaction]]
         let balanceByDay: [Int: Int]
         let days: [Int]
 
-        init(state: TransactionsFeature.State) {
-            self.addTransaction = state.addTransaction
-            self.isAddingTransaction = state.addTransaction != nil
+        init(state: TransactionsList.State) {
             self.currentDate = state.date
             self.summary = state.summary
             self.transactionsByDay = state.transactionsByDay
@@ -215,10 +188,10 @@ public struct TransactionsView: View {
         }
     }
 
-    private let store: StoreOf<TransactionsFeature>
-    @ObservedObject private var viewStore: ViewStore<ViewState, TransactionsFeature.Action>
+    private let store: StoreOf<TransactionsList>
+    @ObservedObject private var viewStore: ViewStore<ViewState, TransactionsList.Action>
 
-    public init(store: StoreOf<TransactionsFeature>) {
+    public init(store: StoreOf<TransactionsList>) {
         self.store = store
         self.viewStore = .init(store, observe: ViewState.init)
     }
@@ -281,26 +254,9 @@ public struct TransactionsView: View {
                         }
                     }
                 }
-
-                addTransactionButton
             }
             .onAppear { viewStore.send(.onAppear) }
             .navigationTitle("Transactions")
-            .sheet(
-                isPresented: viewStore.binding(
-                    get: \.isAddingTransaction,
-                    send: TransactionsFeature.Action.setAddTransactionSheetPresented
-                )
-            ) {
-                IfLetStore(
-                    store.scope(
-                        state: \.addTransaction,
-                        action: TransactionsFeature.Action.addTransaction
-                    )
-                ) {
-                    AddTransactionView(store: $0)
-                }
-            }
         }
     }
 
@@ -367,56 +323,24 @@ public struct TransactionsView: View {
             Divider()
         }
     }
-
-    @ViewBuilder
-    private var addTransactionButton: some View {
-        Button {
-            viewStore.send(.newTransactionButtonTapped)
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(.purple.gradient)
-
-                Image(systemName: "plus.square")
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
-            }
-            .frame(width: 60, height: 60)
-        }
-        .padding()
-    }
 }
 
 struct TransactionsView_Previews: PreviewProvider {
 
-    static let transactions = IdentifiedArray(uniqueElements: [
-        Transaction.mock(),
-        .mock(),
-        .mock()
-    ]
-    )
-
     static var previews: some View {
         TabView {
-            TransactionsView(
+            TransactionsListView(
                 store: Store(
-                    initialState: TransactionsFeature.State(
-                        date: .now,
-                        transactions: transactions // [.mock()]
-                    )) {
-                        TransactionsFeature()
-                            .dependency(
-                                \.transactionsStore,
-                                 TransactionsStore(
-                                    migrate: { },
-                                    deleteTransactions: { _ in },
-                                    fetchTransactions: { date in
-                                        [.mock(), .mock(), .mock(), .mock()]
-                                    },
-                                    saveTransaction: { _ in }
-                                 )
-                            )
+                    initialState: TransactionsList.State(
+                        date: .now
+                    )
+                ) {
+                    TransactionsList()
+                } withDependencies: {
+                    $0.transactionsStore.fetchTransactions = { date in
+                        [.mock(), .mock(), .mock(), .mock()]
                     }
+                }
             )
             .tabItem {
                 Label.init("Transactions", systemImage: "list.bullet.rectangle.portrait")

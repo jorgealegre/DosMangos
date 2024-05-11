@@ -4,7 +4,7 @@ import SwiftUI
 
 public typealias Transaction = SharedModels.Transaction
 
-public struct AddTransaction: Reducer {
+public struct TransactionForm: Reducer {
     public struct State: Equatable {
         public var isDatePickerVisible: Bool
         public var transaction: Transaction
@@ -69,7 +69,7 @@ public struct AddTransaction: Reducer {
     }
 }
 
-public struct AddTransactionView: View {
+public struct TransactionFormView: View {
 
     enum Field {
         case value, description
@@ -77,8 +77,8 @@ public struct AddTransactionView: View {
 
     @FocusState private var valueInFocus: Field?
 
-    private let store: StoreOf<AddTransaction>
-    @ObservedObject private var viewStore: ViewStore<ViewState, AddTransaction.Action>
+    private let store: StoreOf<TransactionForm>
+    @ObservedObject private var viewStore: ViewStore<ViewState, TransactionForm.Action>
 
     private struct ViewState: Equatable {
         let date: Date
@@ -87,7 +87,7 @@ public struct AddTransactionView: View {
         let transactionType: Transaction.TransactionType
         let value: String
 
-        init(state: AddTransaction.State) {
+        init(state: TransactionForm.State) {
             self.date = state.transaction.createdAt
             self.description = state.transaction.description
             self.isDatePickerVisible = state.isDatePickerVisible
@@ -96,7 +96,7 @@ public struct AddTransactionView: View {
         }
     }
 
-    public init(store: StoreOf<AddTransaction>) {
+    public init(store: StoreOf<TransactionForm>) {
         self.store = store
         self.viewStore = .init(store, observe: ViewState.init)
     }
@@ -132,7 +132,7 @@ public struct AddTransactionView: View {
 //                    .pickerStyle(.segmented)
 
 
-                    TextField("0", text: viewStore.binding(get: \.value, send: AddTransaction.Action.setValue))
+                    TextField("0", text: viewStore.binding(get: \.value, send: TransactionForm.Action.setValue))
                         .font(.system(size: 80).bold())
                         .keyboardType(.numberPad)
                         .focused($valueInFocus, equals: .value)
@@ -150,7 +150,7 @@ public struct AddTransactionView: View {
                             "",
                             selection: viewStore.binding(
                                 get: \.date,
-                                send: AddTransaction.Action.setCreationDate
+                                send: TransactionForm.Action.setCreationDate
                             ).animation(),
                             displayedComponents: .date
                         )
@@ -163,7 +163,7 @@ public struct AddTransactionView: View {
                         "Description",
                         text: viewStore.binding(
                             get: \.description,
-                            send: AddTransaction.Action.setDescription
+                            send: TransactionForm.Action.setDescription
                         ),
                         axis: .vertical
                     )
@@ -194,9 +194,9 @@ struct AddTransactionView_Previews: PreviewProvider {
         Color.black
             .ignoresSafeArea()
             .sheet(isPresented: .constant(true)) {
-                AddTransactionView(
-                    store: Store(initialState: AddTransaction.State()) {
-                        AddTransaction()
+                TransactionFormView(
+                    store: Store(initialState: TransactionForm.State()) {
+                        TransactionForm()
                     }
                 )
                 .tint(.purple)

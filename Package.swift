@@ -10,10 +10,10 @@ let package = Package(
     name: "DosMangos",
     platforms: [.iOS(.v17)],
     products: [
-        .library(name: "AppFeature", targets: ["AppFeature"]),
-        .library(name: "TransactionsFeature", targets: ["TransactionsFeature"]),
+        .library(name: "App", targets: ["App"]),
+        .library(name: "TransactionForm", targets: ["TransactionForm"]),
+        .library(name: "TransactionsList", targets: ["TransactionsList"]),
         .library(name: "TransactionsStore", targets: ["TransactionsStore"]),
-        .library(name: "AddTransactionFeature", targets: ["AddTransactionFeature"]),
         .library(name: "SharedModels", targets: ["SharedModels"])
     ],
     dependencies: [
@@ -23,18 +23,18 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "AppFeature",
+            name: "App",
             dependencies: [
                 tca,
-                "TransactionsFeature",
+                "TransactionForm",
+                "TransactionsList",
                 "SharedModels"
             ]
         ),
         .target(
-            name: "TransactionsFeature",
+            name: "TransactionsList",
             dependencies: [
                 tca,
-                "AddTransactionFeature",
                 "TransactionsStore",
                 "SharedModels"
             ]
@@ -48,7 +48,7 @@ let package = Package(
             ]
         ),
         .target(
-            name: "AddTransactionFeature",
+            name: "TransactionForm",
             dependencies: [
                 tca,
                 "SharedModels"

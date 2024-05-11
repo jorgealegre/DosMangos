@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CFE0A6FD2905BFA4009F1853 /* AppFeature */; };
+		CF16FA362AA511AA001EC00F /* App in Frameworks */ = {isa = PBXBuildFile; productRef = CF16FA352AA511AA001EC00F /* App */; };
 		CFFF4E7A2905BE200033F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E752905BE200033F168 /* Assets.xcassets */; };
 		CFFF4E7B2905BE200033F168 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E772905BE200033F168 /* Preview Assets.xcassets */; };
 		CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFF4E782905BE200033F168 /* DosMangosApp.swift */; };
@@ -27,7 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CFE0A6FE2905BFA4009F1853 /* AppFeature in Frameworks */,
+				CF16FA362AA511AA001EC00F /* App in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,7 +95,7 @@
 			);
 			name = DosMangos;
 			packageProductDependencies = (
-				CFE0A6FD2905BFA4009F1853 /* AppFeature */,
+				CF16FA352AA511AA001EC00F /* App */,
 			);
 			productName = MoneyTracker;
 			productReference = CF5CA85E2905BC6100156961 /* DosMangos.app */;
@@ -364,9 +364,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		CFE0A6FD2905BFA4009F1853 /* AppFeature */ = {
+		CF16FA352AA511AA001EC00F /* App */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AppFeature;
+			productName = App;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -4,7 +4,7 @@ import IdentifiedCollections
 import SharedModels
 import XCTestDynamicOverlay
 
-public struct TransactionsStore {
+public struct TransactionsStore: TestDependencyKey {
     public var migrate: @Sendable () async throws -> Void
 
     public var deleteTransactions: @Sendable (_ ids: [UUID]) async throws -> Void
@@ -22,17 +22,13 @@ public struct TransactionsStore {
         self.fetchTransactions = fetchTransactions
         self.saveTransaction = saveTransaction
     }
-}
 
-extension DependencyValues {
-    public var transactionsStore: TransactionsStore {
-        get { self[TransactionsStore.self] }
-        set { self[TransactionsStore.self] = newValue }
-    }
-}
-
-extension TransactionsStore: TestDependencyKey {
-    public static let previewValue = Self.mock
+    public static let previewValue = Self(
+        migrate: {},
+        deleteTransactions: { _ in },
+        fetchTransactions: { _ in [.mock()] },
+        saveTransaction: { _ in }
+    )
 
     public static let testValue = Self(
         migrate: unimplemented("\(Self.self).migrate"),
@@ -42,13 +38,9 @@ extension TransactionsStore: TestDependencyKey {
     )
 }
 
-extension TransactionsStore {
-    public static var mock: Self {
-        Self(
-            migrate: {},
-            deleteTransactions: { _ in },
-            fetchTransactions: { _ in [.mock()] },
-            saveTransaction: { _ in }
-        )
+extension DependencyValues {
+    public var transactionsStore: TransactionsStore {
+        get { self[TransactionsStore.self] }
+        set { self[TransactionsStore.self] = newValue }
     }
 }
