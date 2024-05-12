@@ -17,6 +17,34 @@ extension Date {
     }
 }
 
+extension TransactionsStore: DependencyKey {
+    public static let liveValue: TransactionsStore = {
+        let model = CoreData()
+
+        return Self(
+            migrate: {
+                // TODO: error handling
+                await model.loadPersistentStore()
+
+                #if DEBUG
+//                await model.loadMocks()
+                #endif
+            },
+            deleteTransactions: { ids in
+                // TODO: error handling
+                return try! await model.deleteTransactions(ids)
+            },
+            fetchTransactions: { date in
+                // TODO: error handling
+                return try! await model.fetchTransactions(date: date)
+            },
+            saveTransaction: { transaction in
+                await model.saveTransactions(transaction)
+            }
+        )
+    }()
+}
+
 private actor CoreData {
 
     nonisolated let container: NSPersistentContainer
@@ -110,34 +138,6 @@ private actor CoreData {
         }
     }
     #endif
-}
-
-extension TransactionsStore: DependencyKey {
-    public static let liveValue: TransactionsStore = {
-        let model = CoreData()
-
-        return Self(
-            migrate: {
-                // TODO: error handling
-                await model.loadPersistentStore()
-
-                #if DEBUG
-//                await model.loadMocks()
-                #endif
-            },
-            deleteTransactions: { ids in
-                // TODO: error handling
-                return try! await model.deleteTransactions(ids)
-            },
-            fetchTransactions: { date in
-                // TODO: error handling
-                return try! await model.fetchTransactions(date: date)
-            },
-            saveTransaction: { transaction in
-                await model.saveTransactions(transaction)
-            }
-        )
-    }()
 }
 
 extension NSManagedObjectContext {

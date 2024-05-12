@@ -2,19 +2,23 @@ import ComposableArchitecture
 import SharedModels
 import SwiftUI
 
-public typealias Transaction = SharedModels.Transaction
-
+@Reducer
 public struct TransactionForm: Reducer {
+    @ObservableState
     public struct State: Equatable {
         public var isDatePickerVisible: Bool
-        public var transaction: Transaction
+        public var transaction: SharedModels.Transaction
+
+        var value: String {
+            transaction.absoluteValue == 0 ? "" : transaction.absoluteValue.description
+        }
 
         public init(
             isDatePickerVisible: Bool = false,
-            transaction: Transaction? = nil
+            transaction: SharedModels.Transaction? = nil
         ) {
             self.isDatePickerVisible = isDatePickerVisible
-            self.transaction = transaction ?? Transaction(absoluteValue: 0, createdAt: Date(), description: "", transactionType: .expense)
+            self.transaction = transaction ?? SharedModels.Transaction(absoluteValue: 0, createdAt: Date(), description: "", transactionType: .expense)
         }
     }
 
@@ -24,47 +28,49 @@ public struct TransactionForm: Reducer {
         case setCreationDate(Date)
         case setDescription(String)
         case setValue(String)
-        case transactionTypeChanged(Transaction.TransactionType)
+        case transactionTypeChanged(SharedModels.Transaction.TransactionType)
     }
 
     public init() {}
 
-    public func reduce(into state: inout State, action: Action) -> Effect<Action> {
-        switch action {
-        case .dateButtonTapped:
-            state.isDatePickerVisible.toggle()
-            return .none
-
-        case .saveButtonTapped:
-            return .none
-
-        case let .setCreationDate(creationDate):
-            state.transaction.createdAt = creationDate
-            state.isDatePickerVisible = false
-            return .none
-
-        case let .setDescription(description):
-            state.transaction.description = description
-            return .none
-
-        case let .setValue(value):
-            // Reset state
-            guard !value.isEmpty else {
-                //                state.transaction = nil
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .dateButtonTapped:
+                state.isDatePickerVisible.toggle()
+                return .none
+                
+            case .saveButtonTapped:
+                return .none
+                
+            case let .setCreationDate(creationDate):
+                state.transaction.createdAt = creationDate
+                state.isDatePickerVisible = false
+                return .none
+                
+            case let .setDescription(description):
+                state.transaction.description = description
+                return .none
+                
+            case let .setValue(value):
+                // Reset state
+                guard !value.isEmpty else {
+                    //                state.transaction = nil
+                    return .none
+                }
+                
+                guard let value = Int(value) else {
+                    // TODO: show error
+                    return .none
+                }
+                
+                state.transaction.absoluteValue = value
+                return .none
+                
+            case let .transactionTypeChanged(transactionType):
+                state.transaction.transactionType = transactionType
                 return .none
             }
-
-            guard let value = Int(value) else {
-                // TODO: show error
-                return .none
-            }
-
-            state.transaction.absoluteValue = value
-            return .none
-
-        case let .transactionTypeChanged(transactionType):
-            state.transaction.transactionType = transactionType
-            return .none
         }
     }
 }
@@ -77,28 +83,10 @@ public struct TransactionFormView: View {
 
     @FocusState private var valueInFocus: Field?
 
-    private let store: StoreOf<TransactionForm>
-    @ObservedObject private var viewStore: ViewStore<ViewState, TransactionForm.Action>
-
-    private struct ViewState: Equatable {
-        let date: Date
-        let description: String
-        let isDatePickerVisible: Bool
-        let transactionType: Transaction.TransactionType
-        let value: String
-
-        init(state: TransactionForm.State) {
-            self.date = state.transaction.createdAt
-            self.description = state.transaction.description
-            self.isDatePickerVisible = state.isDatePickerVisible
-            self.transactionType = state.transaction.transactionType
-            self.value = state.transaction.absoluteValue == 0 ? "" : state.transaction.absoluteValue.description
-        }
-    }
+    @Bindable var store: StoreOf<TransactionForm>
 
     public init(store: StoreOf<TransactionForm>) {
         self.store = store
-        self.viewStore = .init(store, observe: ViewState.init)
     }
 
     public var body: some View {
@@ -132,26 +120,23 @@ public struct TransactionFormView: View {
 //                    .pickerStyle(.segmented)
 
 
-                    TextField("0", text: viewStore.binding(get: \.value, send: TransactionForm.Action.setValue))
+                    TextField("0", text: $store.value.sending(\.setValue))
                         .font(.system(size: 80).bold())
                         .keyboardType(.numberPad)
                         .focused($valueInFocus, equals: .value)
 
-                    if !viewStore.isDatePickerVisible {
+                    if !store.isDatePickerVisible {
                         Button {
-                            viewStore.send(.dateButtonTapped)
+                            store.send(.dateButtonTapped)
                         } label: {
-                            Text("\(viewStore.date.formatted(Date.FormatStyle().day().month(.wide).year()))")
+                            Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
                         }
                         .font(.title3.bold())
                         .padding(8)
                     } else {
                         DatePicker(
                             "",
-                            selection: viewStore.binding(
-                                get: \.date,
-                                send: TransactionForm.Action.setCreationDate
-                            ).animation(),
+                            selection: $store.transaction.createdAt.sending(\.setCreationDate),
                             displayedComponents: .date
                         )
                         .datePickerStyle(.graphical)
@@ -161,20 +146,17 @@ public struct TransactionFormView: View {
 
                     TextField(
                         "Description",
-                        text: viewStore.binding(
-                            get: \.description,
-                            send: TransactionForm.Action.setDescription
-                        ),
+                        text: $store.transaction.description.sending(\.setDescription),
                         axis: .vertical
                     )
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 30))
                     .submitLabel(.done)
                     .focused($valueInFocus, equals: .description)
-                    .onSubmit { viewStore.send(.saveButtonTapped) }
+                    .onSubmit { store.send(.saveButtonTapped) }
 
                     Button("Save") {
-                        viewStore.send(.saveButtonTapped)
+                        store.send(.saveButtonTapped)
                     }
                     .font(.headline)
                     .frame(height: 50)
@@ -189,7 +171,7 @@ public struct TransactionFormView: View {
     }
 }
 
-struct AddTransactionView_Previews: PreviewProvider {
+struct TransactionFormView_Previews: PreviewProvider {
     static var previews: some View {
         Color.black
             .ignoresSafeArea()

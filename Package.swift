@@ -4,7 +4,7 @@ import PackageDescription
 
 let tca = Target.Dependency.product(name: "ComposableArchitecture", package: "swift-composable-architecture")
 let dependencies = Target.Dependency.product(name: "Dependencies", package: "swift-dependencies")
-let xctestDynamicOverlay = Target.Dependency.product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay")
+let dependenciesMacros = Target.Dependency.product(name: "DependenciesMacros", package: "swift-dependencies")
 
 let package = Package(
     name: "DosMangos",
@@ -17,9 +17,8 @@ let package = Package(
         .library(name: "SharedModels", targets: ["SharedModels"])
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.2.0"),
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.0.0"),
-        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.2")
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.10.4"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.3.0")
     ],
     targets: [
         .target(
@@ -43,7 +42,7 @@ let package = Package(
             name: "TransactionsStore",
             dependencies: [
                 dependencies,
-                xctestDynamicOverlay,
+                dependenciesMacros,
                 "SharedModels"
             ]
         ),

@@ -1,27 +1,16 @@
 import Dependencies
+import DependenciesMacros
 import Foundation
 import IdentifiedCollections
 import SharedModels
-import XCTestDynamicOverlay
 
+@DependencyClient
 public struct TransactionsStore: TestDependencyKey {
     public var migrate: @Sendable () async throws -> Void
 
     public var deleteTransactions: @Sendable (_ ids: [UUID]) async throws -> Void
     public var fetchTransactions: @Sendable (_ date: Date) async throws -> IdentifiedArrayOf<Transaction>
     public var saveTransaction: @Sendable (Transaction) async throws -> Void
-
-    public init(
-        migrate: @Sendable @escaping () async -> Void,
-        deleteTransactions: @Sendable @escaping (_: [UUID]) async -> Void,
-        fetchTransactions: @Sendable @escaping (_: Date) async -> IdentifiedArrayOf<Transaction>,
-        saveTransaction: @Sendable @escaping (Transaction) async -> Void
-    ) {
-        self.migrate = migrate
-        self.deleteTransactions = deleteTransactions
-        self.fetchTransactions = fetchTransactions
-        self.saveTransaction = saveTransaction
-    }
 
     public static let previewValue = Self(
         migrate: {},
@@ -30,12 +19,7 @@ public struct TransactionsStore: TestDependencyKey {
         saveTransaction: { _ in }
     )
 
-    public static let testValue = Self(
-        migrate: unimplemented("\(Self.self).migrate"),
-        deleteTransactions: unimplemented("\(Self.self).deleteTransactions"),
-        fetchTransactions: unimplemented("\(Self.self).fetchTransactions"),
-        saveTransaction: unimplemented("\(Self.self).saveTransaction")
-    )
+    public static let testValue = Self()
 }
 
 extension DependencyValues {

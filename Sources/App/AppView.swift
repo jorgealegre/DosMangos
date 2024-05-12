@@ -4,45 +4,46 @@ import TransactionForm
 import TransactionsList
 import SwiftUI
 
+@Reducer
 public struct App: Reducer {
+    @ObservableState
     public struct State: Equatable {
-        @PresentationState var destination: Destination.State?
+        @Presents var destination: Destination.State?
+        
+        var appDelegate: AppDelegateReducer.State
         var migrationCompleted: Bool
         var transactionsList: TransactionsList.State
 
         public init(
+            appDelegate: AppDelegateReducer.State = .init(),
             destination: Destination.State? = nil,
             migrationCompleted: Bool = false,
             transactionsList: TransactionsList.State = .init(date: .now)
         ) {
+            self.appDelegate = appDelegate
             self.destination = destination
             self.migrationCompleted = migrationCompleted
             self.transactionsList = transactionsList
         }
     }
 
-    public enum Action: Equatable {
-        case addTransactionButtonTapped
+    public enum Action: Equatable, ViewAction {
+        public enum View: Equatable {
+            case addTransactionButtonTapped
+        }
+
         case destination(PresentationAction<Destination.Action>)
+        
+        case appDelegate(AppDelegateReducer.Action)
         case migrationComplete
         case migrationFailed
-        case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
+        case view(View)
     }
 
-    public struct Destination: Reducer {
-        public enum State: Equatable {
-            case transactionForm(TransactionForm.State)
-        }
-        public enum Action: Equatable {
-            case transactionForm(TransactionForm.Action)
-        }
-
-        public var body: some ReducerOf<Self> {
-            Scope(state: /State.transactionForm, action: /Action.transactionForm) {
-                TransactionForm()
-            }
-        }
+    @Reducer(state: .equatable, action: .equatable)
+    public enum Destination {
+        case transactionForm(TransactionForm)
     }
 
     public init() {}
@@ -50,16 +51,16 @@ public struct App: Reducer {
     @Dependency(\.transactionsStore) private var transactionsStore
     
     public var body: some ReducerOf<Self> {
-        Scope(state: \.transactionsList, action: /Action.transactionsList) {
+        Scope(state: \.appDelegate, action: \.appDelegate) {
+            AppDelegateReducer()
+        }
+
+        Scope(state: \.transactionsList, action: \.transactionsList) {
             TransactionsList()
         }
 
         Reduce { state, action in
             switch action {
-            case .addTransactionButtonTapped:
-                state.destination = .transactionForm(TransactionForm.State())
-                return .none
-
             case .appDelegate(.didFinishLaunching):
                 return .run { send in
                     do {
@@ -87,29 +88,23 @@ public struct App: Reducer {
 
             case .transactionsList:
                 return .none
+
+            case .view(.addTransactionButtonTapped):
+                state.destination = .transactionForm(TransactionForm.State())
+                return .none
             }
         }
-        .ifLet(\.$destination, action: /Action.destination) {
-            Destination()
-        }
+        .ifLet(\.$destination, action: \.destination)
     }
 }
 
+
+@ViewAction(for: App.self)
 public struct AppView: View {
-    let store: StoreOf<App>
-    @ObservedObject var viewStore: ViewStore<ViewState, App.Action>
-
-    struct ViewState: Equatable {
-        var migrationCompleted: Bool
-
-        init(state: App.State) {
-            self.migrationCompleted = state.migrationCompleted
-        }
-    }
+    @Bindable public var store: StoreOf<App>
 
     public init(store: StoreOf<App>) {
         self.store = store
-        self.viewStore = ViewStore(store, observe: ViewState.init)
     }
 
     public var body: some View {
@@ -119,7 +114,7 @@ public struct AppView: View {
                     TransactionsListView(
                         store: store.scope(
                             state: \.transactionsList,
-                            action: App.Action.transactionsList
+                            action: \.transactionsList
                         )
                     )
 
@@ -130,15 +125,16 @@ public struct AppView: View {
                 }
             }
 
-            if !viewStore.migrationCompleted {
+            if !store.migrationCompleted {
                 // TODO: better loading indicator
                 Color.red
             }
         }
         .sheet(
-            store: store.scope(state: \.$destination, action: { .destination($0) }),
-            state: /App.Destination.State.transactionForm,
-            action: App.Destination.Action.transactionForm,
+            item: $store.scope(
+                state: \.destination?.transactionForm,
+                action: \.destination.transactionForm
+            ),
             content: TransactionFormView.init
         )
     }
@@ -146,13 +142,13 @@ public struct AppView: View {
     @ViewBuilder
     private var addTransactionButton: some View {
         Button {
-            viewStore.send(.addTransactionButtonTapped)
+            send(.addTransactionButtonTapped)
         } label: {
             ZStack {
                 Circle()
-                    .fill(.purple.gradient)
+                    .fill(.purple)
 
-                Image(systemName: "plus.square")
+                Image(systemName: "plus")
                     .font(.largeTitle)
                     .foregroundColor(.white)
             }
@@ -166,7 +162,11 @@ public struct AppView: View {
 struct AppView_Previews: PreviewProvider {
     static var previews: some View {
         AppView(
-            store: Store(initialState: App.State(migrationCompleted: true)) {
+            store: Store(
+                initialState: App.State(
+                    migrationCompleted: true
+                )
+            ) {
                 App()
             }
         )
