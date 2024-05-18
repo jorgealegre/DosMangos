@@ -17,7 +17,11 @@ struct DosMangosApp: SwiftUI.App {
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    let store = Store(initialState: App.State()) {
+    let store = Store(
+        initialState: App.State(
+//            destination: .transactionForm(.init(focus: .description, transaction: .init(absoluteValue: 123, createdAt: Date(), description: "", transactionType: .expense)))
+        )
+    ) {
         App()
     }
 

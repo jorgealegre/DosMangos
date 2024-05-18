@@ -111,6 +111,7 @@ public struct TransactionForm: Reducer {
                 return .none
             }
         }
+        ._printChanges()
     }
 }
 
@@ -125,100 +126,112 @@ public struct TransactionFormView: View {
         self.store = store
     }
 
-/**
-
- //                    header: {
- //                            Text("Hola")
- //                        }
-
-//                    .formStyle(.columns)
-//                    HStack(alignment: .lastTextBaseline) {
-//                        Text("$")
-//                            .font(.system(size: 40))
-//                            .offset(y: -5)
-//                        TextField("0", text: viewStore.binding(get: \.value, send: AddTransaction.Action.setValue))
-//                            .font(.system(size: 80).bold())
-//                            .keyboardType(.numberPad)
-//                            .focused($valueInFocus, equals: .value)
-//                    }
-
-
-
- */
-
     public var body: some View {
         Form {
-            TextField("0", text: $store.value.sending(\.view.setValue))
-                .font(.system(size: 80).bold())
-                .keyboardType(.numberPad)
-                .focused($focus, equals: .value)
-                .onSubmit { send(.valueInputFinished) }
-
-            Picker("Type", selection: $store.transaction.transactionType) {
-                Text("Expense").tag(Transaction.TransactionType.expense)
-                Text("Income").tag(Transaction.TransactionType.income)
-            }
-            .pickerStyle(.segmented)
-
-            Section {
-                HStack {
-                    Button {
-                        send(.dateButtonTapped, animation: .default)
-                    } label: {
-                        // TODO: show this as Today, Yesterday, etc
-                        Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
-                    }
-
-                    Spacer()
-
-                    Button {
-                        send(.previousDayButtonTapped)
-                    } label: {
-                        Image(systemName: "chevron.backward")
-                            .renderingMode(.template)
-                            .foregroundColor(.accentColor)
-                            .padding(8)
-                    }
-                    Button {
-                        send(.nextDayButtonTapped)
-                    } label: {
-                        Image(systemName: "chevron.forward")
-                            .renderingMode(.template)
-                            .foregroundColor(.accentColor)
-                            .padding(8)
-                    }
-                }
-                .buttonStyle(BorderlessButtonStyle())
-
-                if store.isDatePickerVisible {
-                    DatePicker(
-                        "",
-                        selection: $store.transaction.createdAt.sending(\.view.setCreationDate),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .transition(.identity)
-                }
-            }
-
-            Section {
-                TextField(
-                    "Description",
-                    text: $store.transaction.description.sending(\.view.setDescription),
-                    axis: .vertical
-                )
-                .submitLabel(.done)
-                .focused($focus, equals: .description)
-                .onSubmit { send(.saveButtonTapped) }
-            }
-
-            Section {
-                Button("Save") {
-                    send(.saveButtonTapped)
-                }
-            }
+            valueInput
+            typePicker
+            dateTimePicker
+            descriptionInput
+            saveButton
         }
         .bind($store.focus, to: $focus)
+    }
+
+    @ViewBuilder
+    private var valueInput: some View {
+        TextField("0", text: $store.value.sending(\.view.setValue))
+            .font(.system(size: 80).bold())
+            .keyboardType(.numberPad)
+            .focused($focus, equals: .value)
+            .onSubmit { send(.valueInputFinished) }
+    }
+
+    @ViewBuilder
+    private var typePicker: some View {
+        Picker("Type", selection: $store.transaction.transactionType) {
+            Text("Expense").tag(Transaction.TransactionType.expense)
+            Text("Income").tag(Transaction.TransactionType.income)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var dateTimePicker: some View {
+        Section {
+            HStack {
+                Button {
+                    send(.dateButtonTapped, animation: .default)
+                } label: {
+                    // TODO: show this as Today, Yesterday, etc
+                    Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
+                }
+
+                Spacer()
+
+                Button {
+                    send(.previousDayButtonTapped)
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .renderingMode(.template)
+                        .foregroundColor(.accentColor)
+                        .padding(8)
+                }
+                Button {
+                    send(.nextDayButtonTapped)
+                } label: {
+                    Image(systemName: "chevron.forward")
+                        .renderingMode(.template)
+                        .foregroundColor(.accentColor)
+                        .padding(8)
+                }
+            }
+            .buttonStyle(BorderlessButtonStyle())
+
+            if store.isDatePickerVisible {
+                DatePicker(
+                    "",
+                    selection: $store.transaction.createdAt.sending(\.view.setCreationDate),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .transition(.identity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var descriptionInput: some View {
+        Section {
+            TextField(
+                "Description",
+                text: Binding(
+                    get: {
+                        store.transaction.description
+                    },
+                    set: { newDescription in
+                        if Set(newDescription).subtracting(Set(store.transaction.description)).contains("\n") {
+                            // submit happened
+                            send(.saveButtonTapped)
+                        } else {
+                            send(.setDescription(newDescription))
+                        }
+                    }
+                ),
+                axis: .vertical
+            )
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .focused($focus, equals: .description)
+        }
+    }
+
+    @ViewBuilder
+    private var saveButton: some View {
+        Section {
+            Button("Save") {
+                send(.saveButtonTapped)
+            }
+        }
     }
 }
 
