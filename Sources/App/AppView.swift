@@ -29,6 +29,8 @@ public struct App: Reducer {
 
     public enum Action: Equatable, ViewAction {
         public enum View: Equatable {
+            case newTransactionButtonTapped
+            case discardButtonTapped
             case addTransactionButtonTapped
         }
 
@@ -77,15 +79,7 @@ public struct App: Reducer {
 
             case let .destination(.presented(.transactionForm(.delegate(.saveTransaction(transaction))))):
                 state.destination = nil
-                state.transactionsList.transactions.insert(transaction, at: 0)
-                return .run { _ in
-                    do {
-                        try await transactionsStore.saveTransaction(transaction)
-                    } catch {
-                        print(error)
-                        // TODO: should try to recover
-                    }
-                }
+                return saveTransaction(state: &state, transaction)
 
             case .destination:
                 return .none
@@ -101,12 +95,42 @@ public struct App: Reducer {
             case .transactionsList:
                 return .none
 
-            case .view(.addTransactionButtonTapped):
-                state.destination = .transactionForm(TransactionForm.State())
-                return .none
+            case let .view(view):
+                switch view {
+                case .addTransactionButtonTapped:
+                    defer { state.destination = nil }
+                    guard let transaction = state.destination?.transactionForm?.transaction
+                    else { return .none }
+
+                    return saveTransaction(state: &state, transaction)
+
+                case .discardButtonTapped:
+                    state.destination = nil
+                    return .none
+
+                case .newTransactionButtonTapped:
+                    state.destination = .transactionForm(TransactionForm.State())
+                    return .none
+                }
             }
         }
         .ifLet(\.$destination, action: \.destination)
+    }
+
+    private func saveTransaction(
+        state: inout State,
+        _ transaction: SharedModels.Transaction
+    ) -> Effect<Action> {
+        state.transactionsList.transactions.insert(transaction, at: 0)
+        return .run { _ in
+            do {
+                try await transactionsStore.saveTransaction(transaction)
+            } catch {
+                print(error)
+                // TODO: should try to recover
+            }
+        }
+
     }
 }
 
@@ -147,19 +171,20 @@ public struct AppView: View {
         ) { store in
             NavigationStack {
                 TransactionFormView(store: store)
-            }
-            .navigationTitle("New Transaction")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Discard") {
-                        //                        store.send(.discardButtonTapped)
+                    .navigationTitle("New Transaction")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Discard") {
+                                send(.discardButtonTapped)
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Add") {
+                                send(.addTransactionButtonTapped)
+                            }
+                        }
                     }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        //                        store.send(.confirmAddButtonTapped)
-                    }
-                }
             }
         }
     }
@@ -167,7 +192,7 @@ public struct AppView: View {
     @ViewBuilder
     private var addTransactionButton: some View {
         Button {
-            send(.addTransactionButtonTapped)
+            send(.newTransactionButtonTapped)
         } label: {
             ZStack {
                 Circle()

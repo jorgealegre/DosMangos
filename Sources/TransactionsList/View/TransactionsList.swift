@@ -219,11 +219,7 @@ public struct TransactionsListView: View {
                     Text("\(createdAt.formatted(Date.FormatStyle().year().month().day()))")
                         .font(.caption.bold())
                     Spacer()
-                    HStack {
-                        Text("$\(store.balanceByDay[day]!.formatted())")
-                            .monospacedDigit()
-                            .font(.caption.bold())
-                    }
+                    ValueView(value: store.balanceByDay[day]!)
                 }
             }
         }
@@ -263,5 +259,6 @@ struct TransactionsView_Previews: PreviewProvider {
             Label.init("Transactions", systemImage: "list.bullet.rectangle.portrait")
         }
         .tint(.purple)
+        .preferredColorScheme(.dark)
     }
 }
