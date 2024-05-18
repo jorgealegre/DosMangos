@@ -6,7 +6,12 @@ import SwiftUI
 public struct TransactionForm: Reducer {
     @ObservableState
     public struct State: Equatable {
+        public enum Field {
+            case value, description
+        }
+
         public var isDatePickerVisible: Bool
+        public var focus: Field?
         public var transaction: SharedModels.Transaction
 
         var value: String {
@@ -15,58 +20,92 @@ public struct TransactionForm: Reducer {
 
         public init(
             isDatePickerVisible: Bool = false,
+            focus: Field? = .value,
             transaction: SharedModels.Transaction? = nil
         ) {
             self.isDatePickerVisible = isDatePickerVisible
+            self.focus = focus
             self.transaction = transaction ?? SharedModels.Transaction(absoluteValue: 0, createdAt: Date(), description: "", transactionType: .expense)
         }
     }
 
-    public enum Action: Equatable {
-        case dateButtonTapped
-        case saveButtonTapped
-        case setCreationDate(Date)
-        case setDescription(String)
-        case setValue(String)
+    public enum Action: ViewAction, BindableAction, Equatable {
+        public enum Delegate: Equatable {
+            case saveTransaction(SharedModels.Transaction)
+        }
+        @CasePathable
+        public enum View: Equatable {
+            case dateButtonTapped
+            case nextDayButtonTapped
+            case previousDayButtonTapped
+            case saveButtonTapped
+            case setCreationDate(Date)
+            case setDescription(String)
+            case setValue(String)
+            case valueInputFinished
+        }
+        case binding(BindingAction<State>)
+        case delegate(Delegate)
+        case view(View)
         case transactionTypeChanged(SharedModels.Transaction.TransactionType)
     }
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
-            case .dateButtonTapped:
-                state.isDatePickerVisible.toggle()
+            case .binding:
                 return .none
-                
-            case .saveButtonTapped:
+
+            case .delegate:
                 return .none
-                
-            case let .setCreationDate(creationDate):
-                state.transaction.createdAt = creationDate
-                state.isDatePickerVisible = false
-                return .none
-                
-            case let .setDescription(description):
-                state.transaction.description = description
-                return .none
-                
-            case let .setValue(value):
-                // Reset state
-                guard !value.isEmpty else {
-                    //                state.transaction = nil
+
+            case let .view(view):
+                switch view {
+                case .dateButtonTapped:
+                    state.isDatePickerVisible.toggle()
+                    return .none
+
+                case .nextDayButtonTapped:
+                    state.transaction.createdAt.addTimeInterval(60*60*24)
+                    return .none
+
+                case .previousDayButtonTapped:
+                    state.transaction.createdAt.addTimeInterval(-60*60*24)
+                    return .none
+
+                case .saveButtonTapped:
+                    return .send(.delegate(.saveTransaction(state.transaction)))
+
+                case let .setCreationDate(creationDate):
+                    state.transaction.createdAt = creationDate
+                    return .none
+
+                case let .setDescription(description):
+                    state.transaction.description = description
+                    return .none
+
+                case let .setValue(value):
+                    // Reset state
+                    guard !value.isEmpty else {
+                        return .none
+                    }
+
+                    guard let value = Int(value) else {
+                        // TODO: show error
+                        return .none
+                    }
+
+                    state.transaction.absoluteValue = value
+                    return .none
+
+                case .valueInputFinished:
+                    state.focus = .description
                     return .none
                 }
-                
-                guard let value = Int(value) else {
-                    // TODO: show error
-                    return .none
-                }
-                
-                state.transaction.absoluteValue = value
-                return .none
-                
+
             case let .transactionTypeChanged(transactionType):
                 state.transaction.transactionType = transactionType
                 return .none
@@ -75,33 +114,23 @@ public struct TransactionForm: Reducer {
     }
 }
 
+@ViewAction(for: TransactionForm.self)
 public struct TransactionFormView: View {
 
-    enum Field {
-        case value, description
-    }
+    @FocusState var focus: TransactionForm.State.Field?
 
-    @FocusState private var valueInFocus: Field?
-
-    @Bindable var store: StoreOf<TransactionForm>
+    @Bindable public var store: StoreOf<TransactionForm>
 
     public init(store: StoreOf<TransactionForm>) {
         self.store = store
     }
 
-    public var body: some View {
-        VStack(spacing: 10) {
-            Text("New Transaction")
+/**
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 10) {
-                    Form {
+ //                    header: {
+ //                            Text("Hola")
+ //                        }
 
-//                    header: {
-//                            Text("Hola")
-//                        }
-
-                    }
 //                    .formStyle(.columns)
 //                    HStack(alignment: .lastTextBaseline) {
 //                        Text("$")
@@ -112,62 +141,84 @@ public struct TransactionFormView: View {
 //                            .keyboardType(.numberPad)
 //                            .focused($valueInFocus, equals: .value)
 //                    }
-//
-//                    Picker("Type", selection: viewStore.binding(get: \.transactionType, send: AddTransaction.Action.transactionTypeChanged)) {
-//                        Text("Expense").tag(Transaction.TransactionType.expense)
-//                        Text("Income").tag(Transaction.TransactionType.income)
-//                    }
-//                    .pickerStyle(.segmented)
 
 
-                    TextField("0", text: $store.value.sending(\.setValue))
-                        .font(.system(size: 80).bold())
-                        .keyboardType(.numberPad)
-                        .focused($valueInFocus, equals: .value)
 
-                    if !store.isDatePickerVisible {
-                        Button {
-                            store.send(.dateButtonTapped)
-                        } label: {
-                            Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
-                        }
-                        .font(.title3.bold())
-                        .padding(8)
-                    } else {
-                        DatePicker(
-                            "",
-                            selection: $store.transaction.createdAt.sending(\.setCreationDate),
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.graphical)
+ */
+
+    public var body: some View {
+        Form {
+            TextField("0", text: $store.value.sending(\.view.setValue))
+                .font(.system(size: 80).bold())
+                .keyboardType(.numberPad)
+                .focused($focus, equals: .value)
+                .onSubmit { send(.valueInputFinished) }
+
+            Picker("Type", selection: $store.transaction.transactionType) {
+                Text("Expense").tag(Transaction.TransactionType.expense)
+                Text("Income").tag(Transaction.TransactionType.income)
+            }
+            .pickerStyle(.segmented)
+
+            Section {
+                HStack {
+                    Button {
+                        send(.dateButtonTapped, animation: .default)
+                    } label: {
+                        // TODO: show this as Today, Yesterday, etc
+                        Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
                     }
 
-//                    Divider()
+                    Spacer()
 
-                    TextField(
-                        "Description",
-                        text: $store.transaction.description.sending(\.setDescription),
-                        axis: .vertical
+                    Button {
+                        send(.previousDayButtonTapped)
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .renderingMode(.template)
+                            .foregroundColor(.accentColor)
+                            .padding(8)
+                    }
+                    Button {
+                        send(.nextDayButtonTapped)
+                    } label: {
+                        Image(systemName: "chevron.forward")
+                            .renderingMode(.template)
+                            .foregroundColor(.accentColor)
+                            .padding(8)
+                    }
+                }
+                .buttonStyle(BorderlessButtonStyle())
+
+                if store.isDatePickerVisible {
+                    DatePicker(
+                        "",
+                        selection: $store.transaction.createdAt.sending(\.view.setCreationDate),
+                        displayedComponents: .date
                     )
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 30))
-                    .submitLabel(.done)
-                    .focused($valueInFocus, equals: .description)
-                    .onSubmit { store.send(.saveButtonTapped) }
+                    .datePickerStyle(.graphical)
+                    .transition(.identity)
+                }
+            }
 
-                    Button("Save") {
-                        store.send(.saveButtonTapped)
-                    }
-                    .font(.headline)
-                    .frame(height: 50)
+            Section {
+                TextField(
+                    "Description",
+                    text: $store.transaction.description.sending(\.view.setDescription),
+                    axis: .vertical
+                )
+                .submitLabel(.done)
+                .focused($focus, equals: .description)
+                .onSubmit { send(.saveButtonTapped) }
+            }
+
+            Section {
+                Button("Save") {
+                    send(.saveButtonTapped)
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.top)
-        .onAppear {
-            valueInFocus = .value
-        }
+        .bind($store.focus, to: $focus)
     }
 }
 
@@ -176,12 +227,16 @@ struct TransactionFormView_Previews: PreviewProvider {
         Color.black
             .ignoresSafeArea()
             .sheet(isPresented: .constant(true)) {
-                TransactionFormView(
-                    store: Store(initialState: TransactionForm.State()) {
-                        TransactionForm()
-                    }
-                )
+                NavigationStack {
+                    TransactionFormView(
+                        store: Store(initialState: TransactionForm.State()) {
+                            TransactionForm()
+                        }
+                    )
+                    .navigationTitle("New Transaction")
+                }
                 .tint(.purple)
+                .preferredColorScheme(.dark)
             }
     }
 }

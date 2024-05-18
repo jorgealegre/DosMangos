@@ -80,26 +80,14 @@ public struct TransactionsList: Reducer {
     public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
-                //            case .addTransaction(.saveButtonTapped):
-                //                defer { state.addTransaction = nil }
-                //                guard let transaction = state.addTransaction?.transaction else { return .none }
-                //                state.transactions.insert(transaction, at: 0)
-                //                return .run { _ in
-                //                    do {
-                //                        try await transactionsStore.saveTransaction(transaction)
-                //                    } catch {
-                //                        print(error)
-                //                        // TODO: should try to recover
-                //                    }
-                //                }
-
             case .loadTransactions:
                 state.transactions = []
                 return .run { [date = state.date] send in
                     await send(
                         .transactionsLoaded(
                             TaskResult { try await transactionsStore.fetchTransactions(date) }
-                        )
+                        ),
+                        animation: .default
                     )
                 }
 
@@ -124,14 +112,14 @@ public struct TransactionsList: Reducer {
 
             case .view(.nextMonthButtonTapped):
                 state.date = Calendar.current.date(byAdding: .month, value: 1, to: state.date)!
-                return .send(.loadTransactions)
+                return .send(.loadTransactions, animation: .default)
 
             case .view(.onAppear):
                 return .send(.loadTransactions)
 
             case .view(.previousMonthButtonTapped):
                 state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
-                return .send(.loadTransactions)
+                return .send(.loadTransactions, animation: .default)
 
             }
         }

@@ -75,6 +75,18 @@ public struct App: Reducer {
             case .appDelegate:
                 return .none
 
+            case let .destination(.presented(.transactionForm(.delegate(.saveTransaction(transaction))))):
+                state.destination = nil
+                state.transactionsList.transactions.insert(transaction, at: 0)
+                return .run { _ in
+                    do {
+                        try await transactionsStore.saveTransaction(transaction)
+                    } catch {
+                        print(error)
+                        // TODO: should try to recover
+                    }
+                }
+
             case .destination:
                 return .none
 
@@ -131,12 +143,25 @@ public struct AppView: View {
             }
         }
         .sheet(
-            item: $store.scope(
-                state: \.destination?.transactionForm,
-                action: \.destination.transactionForm
-            ),
-            content: TransactionFormView.init
-        )
+            item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
+        ) { store in
+            NavigationStack {
+                TransactionFormView(store: store)
+            }
+            .navigationTitle("New Transaction")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Discard") {
+                        //                        store.send(.discardButtonTapped)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        //                        store.send(.confirmAddButtonTapped)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
