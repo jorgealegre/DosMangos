@@ -210,15 +210,20 @@ public struct TransactionsListView: View {
 
     @ViewBuilder
     private func sectionHeaderView(day: Int) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("\(store.transactionsByDay[day]!.first!.createdAt.formatted(Date.FormatStyle().year().month().day()))")
-                    .font(.caption.bold())
-                Spacer()
+        if
+            store.transactionsByDay.keys.contains(day),
+            let createdAt = store.transactionsByDay[day]?.first?.createdAt
+        {
+            VStack(spacing: 0) {
                 HStack {
-                    Text("$\(store.balanceByDay[day]!.formatted())")
-                        .monospacedDigit()
+                    Text("\(createdAt.formatted(Date.FormatStyle().year().month().day()))")
                         .font(.caption.bold())
+                    Spacer()
+                    HStack {
+                        Text("$\(store.balanceByDay[day]!.formatted())")
+                            .monospacedDigit()
+                            .font(.caption.bold())
+                    }
                 }
             }
         }
