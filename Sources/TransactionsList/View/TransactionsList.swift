@@ -1,6 +1,5 @@
 import ComposableArchitecture
 import IdentifiedCollections
-import TransactionsStore
 import SharedModels
 import SwiftUI
 
@@ -69,11 +68,9 @@ public struct TransactionsList: Reducer {
         }
 
         case loadTransactions
-        case transactionsLoaded(TaskResult<IdentifiedArrayOf<SharedModels.Transaction>>)
+        case transactionsLoaded(IdentifiedArrayOf<SharedModels.Transaction>)
         case view(View)
     }
-
-    @Dependency(\.transactionsStore) private var transactionsStore
 
     public init() {}
 
@@ -82,20 +79,16 @@ public struct TransactionsList: Reducer {
             switch action {
             case .loadTransactions:
                 state.transactions = []
-                return .run { [date = state.date] send in
-                    await send(
-                        .transactionsLoaded(
-                            TaskResult { try await transactionsStore.fetchTransactions(date) }
-                        ),
-                        animation: .default
-                    )
-                }
-
-            case let .transactionsLoaded(.failure(error)):
-                print(error)
+                // TODO: fix
                 return .none
+//                return .run { [date = state.date] send in
+////                    await send(
+////                        .transactionsLoaded(.init()),
+////                        animation: .default
+////                    )
+//                }
 
-            case let .transactionsLoaded(.success(transactions)):
+            case let .transactionsLoaded(transactions):
                 state.transactions = transactions
                 return .none
 
@@ -103,7 +96,7 @@ public struct TransactionsList: Reducer {
                 ids.forEach { state.transactions.remove(id: $0) }
                 return .run { _ in
                     do {
-                        try await transactionsStore.deleteTransactions(ids)
+//                        try await transactionsStore.deleteTransactions(ids)
                     } catch {
                         print(error)
                         // TODO: should try to recover
@@ -237,22 +230,23 @@ struct TransactionsView_Previews: PreviewProvider {
             ) {
                 TransactionsList()
             } withDependencies: {
-                $0.transactionsStore.fetchTransactions = { date in
-                    [
-                        .mock(),
-                        .mock(),
-                        .mock(),
-                        .mock(),
-                        .init(
-                            absoluteValue: 50,
-                            createdAt: Date.now.addingTimeInterval(
-                                -60*60*24*2
-                            ),
-                            description: "Coffee beans",
-                            transactionType: .expense
-                        )
-                    ]
-                }
+                _ = $0
+//                $0.transactionsStore.fetchTransactions = { date in
+//                    [
+//                        .mock(),
+//                        .mock(),
+//                        .mock(),
+//                        .mock(),
+//                        .init(
+//                            absoluteValue: 50,
+//                            createdAt: Date.now.addingTimeInterval(
+//                                -60*60*24*2
+//                            ),
+//                            description: "Coffee beans",
+//                            transactionType: .expense
+//                        )
+//                    ]
+//                }
             }
         )
         .tabItem {

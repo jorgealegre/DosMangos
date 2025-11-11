@@ -27,8 +27,8 @@ public struct App: Reducer {
         }
     }
 
-    public enum Action: Equatable, ViewAction {
-        public enum View: Equatable {
+    public enum Action: ViewAction {
+        public enum View {
             case newTransactionButtonTapped
             case discardButtonTapped
             case addTransactionButtonTapped
@@ -43,15 +43,13 @@ public struct App: Reducer {
         case view(View)
     }
 
-    @Reducer(state: .equatable, action: .equatable)
+    @Reducer
     public enum Destination {
         case transactionForm(TransactionForm)
     }
 
     public init() {}
 
-    @Dependency(\.transactionsStore) private var transactionsStore
-    
     public var body: some ReducerOf<Self> {
         Scope(state: \.appDelegate, action: \.appDelegate) {
             AppDelegateReducer()
@@ -66,7 +64,8 @@ public struct App: Reducer {
             case .appDelegate(.didFinishLaunching):
                 return .run { send in
                     do {
-                        try await self.transactionsStore.migrate()
+                        // TODO: fix
+                        //                        try await self.transactionsStore.migrate()
                         await send(.migrationComplete)
                     } catch {
                         print(error.localizedDescription)
@@ -124,7 +123,8 @@ public struct App: Reducer {
         state.transactionsList.transactions.insert(transaction, at: 0)
         return .run { _ in
             do {
-                try await transactionsStore.saveTransaction(transaction)
+                // TODO: fix
+//                try await transactionsStore.saveTransaction(transaction)
             } catch {
                 print(error)
                 // TODO: should try to recover
@@ -133,7 +133,7 @@ public struct App: Reducer {
 
     }
 }
-
+extension App.Destination.State: Equatable {}
 
 @ViewAction(for: App.self)
 public struct AppView: View {
