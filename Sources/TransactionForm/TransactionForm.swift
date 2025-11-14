@@ -29,8 +29,8 @@ public struct TransactionForm: Reducer {
         }
     }
 
-    public enum Action: ViewAction, BindableAction, Equatable {
-        public enum Delegate: Equatable {
+    public enum Action: ViewAction, BindableAction {
+        public enum Delegate {
             case saveTransaction(SharedModels.Transaction)
         }
         @CasePathable

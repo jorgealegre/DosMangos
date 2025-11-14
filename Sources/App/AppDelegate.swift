@@ -6,7 +6,7 @@ public struct AppDelegateReducer: Reducer {
         public init() {}
     }
 
-    public enum Action: Equatable {
+    public enum Action {
         case didFinishLaunching
     }
 

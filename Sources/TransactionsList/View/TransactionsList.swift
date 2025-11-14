@@ -59,8 +59,8 @@ public struct TransactionsList: Reducer {
         }
     }
 
-    public enum Action: Equatable, ViewAction {
-        public enum View: Equatable {
+    public enum Action: ViewAction {
+        public enum View {
             case nextMonthButtonTapped
             case onAppear
             case previousMonthButtonTapped
