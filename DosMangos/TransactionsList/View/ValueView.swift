@@ -1,5 +1,4 @@
 import Currency
-import SharedModels
 import SwiftUI
 
 struct ValueView: View {

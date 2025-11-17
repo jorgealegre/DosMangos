@@ -4,7 +4,7 @@ import SQLiteData
 
 extension DependencyValues {
     public mutating func bootstrapDatabase(syncEngineDelegate: (any SyncEngineDelegate)? = nil) throws {
-        defaultDatabase = try SharedModels.appDatabase()
+        defaultDatabase = try appDatabase()
 //        defaultSyncEngine = try SyncEngine(
 //            for: defaultDatabase,
 //            tables: RemindersList.self,
@@ -52,7 +52,11 @@ func appDatabase() throws -> any DatabaseWriter {
         """
         CREATE TABLE "transactions" (
           "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "title" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT ''
+          "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+          "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+          "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
         ) STRICT
         """
         )
@@ -60,7 +64,7 @@ func appDatabase() throws -> any DatabaseWriter {
 //        try #sql(
 //      """
 //      CREATE TABLE "remindersListAssets" (
-//        "remindersListID" TEXT PRIMARY KEY NOT NULL 
+//        "remindersListID" TEXT PRIMARY KEY NOT NULL
 //          REFERENCES "remindersLists"("id") ON DELETE CASCADE,
 //        "coverImage" BLOB
 //      ) STRICT

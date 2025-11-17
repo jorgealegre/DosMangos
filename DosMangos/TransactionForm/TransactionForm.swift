@@ -1,5 +1,4 @@
 import ComposableArchitecture
-import SharedModels
 import SwiftUI
 
 @Reducer
@@ -12,7 +11,7 @@ public struct TransactionForm: Reducer {
 
         public var isDatePickerVisible: Bool
         public var focus: Field?
-        public var transaction: SharedModels.Transaction.Draft
+        public var transaction: Transaction.Draft
 
         var value: String {
             transaction.value == 0 ? "" : transaction.value.description
@@ -21,13 +20,13 @@ public struct TransactionForm: Reducer {
         public init(
             isDatePickerVisible: Bool = false,
             focus: Field? = .value,
-            transaction: SharedModels.Transaction.Draft? = nil
+            transaction: Transaction.Draft? = nil
         ) {
             @Dependency(\.date.now) var now
 
             self.isDatePickerVisible = isDatePickerVisible
             self.focus = focus
-            self.transaction = transaction ?? SharedModels.Transaction.Draft(
+            self.transaction = transaction ?? Transaction.Draft(
                 description: "",
                 valueMinorUnits: 0,
                 currencyCode: "USD",
@@ -54,8 +53,10 @@ public struct TransactionForm: Reducer {
         case binding(BindingAction<State>)
         case delegate(Delegate)
         case view(View)
-        case transactionTypeChanged(SharedModels.Transaction.TransactionType)
+        case transactionTypeChanged(Transaction.TransactionType)
     }
+
+    @Dependency(\.dismiss) private var dismiss
 
     public init() {}
 
@@ -84,8 +85,10 @@ public struct TransactionForm: Reducer {
                     return .none
 
                 case .saveButtonTapped:
-//                    return .send(.delegate(.saveTransaction(state.transaction)))
-                    return .none
+                    state.focus = nil
+                    return .run { _ in
+                        await dismiss()
+                    }
 
                 case let .setCreationDate(creationDate):
                     state.transaction.createdAt = creationDate

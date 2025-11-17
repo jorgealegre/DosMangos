@@ -1,4 +1,3 @@
-import App
 import ComposableArchitecture
 import Dependencies
 import SwiftUI

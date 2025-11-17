@@ -1,8 +1,7 @@
-import SharedModels
 import SwiftUI
 
 struct TransactionView: View {
-    let transaction: SharedModels.Transaction
+    let transaction: Transaction
 
     var body: some View {
         HStack {

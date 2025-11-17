@@ -1,7 +1,6 @@
 import ComposableArchitecture
 import Currency
 import IdentifiedCollections
-import SharedModels
 import SwiftUI
 
 extension Date {
@@ -24,9 +23,9 @@ public struct TransactionsList: Reducer {
         public var date: Date
 
         @FetchAll
-        public var transactions: [SharedModels.Transaction]
+        public var transactions: [Transaction]
 
-        var transactionsByDay: [Int: [SharedModels.Transaction]] {
+        var transactionsByDay: [Int: [Transaction]] {
             Dictionary(grouping: transactions) { transaction in
                 // extract the day from the transaction
                 transaction.createdAt.get(.day)
@@ -70,7 +69,7 @@ public struct TransactionsList: Reducer {
             Array(transactionsByDay.keys.sorted().reversed())
         }
 
-        var transactionsQuery: some Statement<SharedModels.Transaction> & Sendable {
+        var transactionsQuery: some Statement<Transaction> & Sendable {
             Transaction.all
                 .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
                 .select { $0 }
@@ -124,7 +123,8 @@ public struct TransactionsList: Reducer {
                 return .send(.loadTransactions, animation: .default)
 
             case .view(.onAppear):
-                return .send(.loadTransactions)
+                return .none
+//                return .send(.loadTransactions)
 
             case .view(.previousMonthButtonTapped):
                 state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!

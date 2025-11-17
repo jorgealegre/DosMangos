@@ -1,7 +1,4 @@
 import ComposableArchitecture
-import SharedModels
-import TransactionForm
-import TransactionsList
 import SwiftUI
 
 @Reducer
@@ -159,10 +156,12 @@ public struct AppView: View {
 
 struct AppPreview: PreviewProvider {
     static var previews: some View {
-        Color.red
-        //        AppView(store: Store(initialState: App.State()) {
-        //            App()
-        //        })
-        //        .tint(.purple)
+        let _ = try! prepareDependencies {
+            $0.defaultDatabase = try appDatabase()
+        }
+        AppView(store: Store(initialState: App.State()) {
+            App()
+        })
+        .tint(.purple)
     }
 }
