@@ -12,29 +12,36 @@ public struct TransactionForm: Reducer {
 
         public var isDatePickerVisible: Bool
         public var focus: Field?
-        public var transaction: SharedModels.Transaction
+        public var transaction: SharedModels.Transaction.Draft
 
         var value: String {
-            transaction.absoluteValue == 0 ? "" : transaction.absoluteValue.description
+            transaction.value == 0 ? "" : transaction.value.description
         }
 
         public init(
             isDatePickerVisible: Bool = false,
             focus: Field? = .value,
-            transaction: SharedModels.Transaction? = nil
+            transaction: SharedModels.Transaction.Draft? = nil
         ) {
+            @Dependency(\.date.now) var now
+
             self.isDatePickerVisible = isDatePickerVisible
             self.focus = focus
-            self.transaction = transaction ?? SharedModels.Transaction(absoluteValue: 0, createdAt: Date(), description: "", transactionType: .expense)
+            self.transaction = transaction ?? SharedModels.Transaction.Draft(
+                description: "",
+                valueMinorUnits: 0,
+                currencyCode: "USD",
+                type: .expense,
+                createdAt: now
+            )
         }
     }
 
     public enum Action: ViewAction, BindableAction {
         public enum Delegate {
-            case saveTransaction(SharedModels.Transaction)
         }
         @CasePathable
-        public enum View: Equatable {
+        public enum View {
             case dateButtonTapped
             case nextDayButtonTapped
             case previousDayButtonTapped
@@ -77,7 +84,8 @@ public struct TransactionForm: Reducer {
                     return .none
 
                 case .saveButtonTapped:
-                    return .send(.delegate(.saveTransaction(state.transaction)))
+//                    return .send(.delegate(.saveTransaction(state.transaction)))
+                    return .none
 
                 case let .setCreationDate(creationDate):
                     state.transaction.createdAt = creationDate
@@ -98,7 +106,7 @@ public struct TransactionForm: Reducer {
                         return .none
                     }
 
-                    state.transaction.absoluteValue = value
+                    state.transaction.valueMinorUnits = value
                     return .none
 
                 case .valueInputFinished:
@@ -107,7 +115,7 @@ public struct TransactionForm: Reducer {
                 }
 
             case let .transactionTypeChanged(transactionType):
-                state.transaction.transactionType = transactionType
+                state.transaction.type = transactionType
                 return .none
             }
         }
@@ -148,7 +156,7 @@ public struct TransactionFormView: View {
 
     @ViewBuilder
     private var typePicker: some View {
-        Picker("Type", selection: $store.transaction.transactionType) {
+        Picker("Type", selection: $store.transaction.type) {
             Text("Expense").tag(Transaction.TransactionType.expense)
             Text("Income").tag(Transaction.TransactionType.income)
         }

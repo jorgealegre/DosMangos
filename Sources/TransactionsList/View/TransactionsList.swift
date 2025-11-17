@@ -1,14 +1,30 @@
 import ComposableArchitecture
+import Currency
 import IdentifiedCollections
 import SharedModels
 import SwiftUI
+
+extension Date {
+    var startOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        let day = calendar.date(from: Calendar.current.dateComponents([.year, .month], from: calendar.startOfDay(for: self)))!
+        return day
+    }
+
+    var endOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        return calendar.date(byAdding: DateComponents(month: 1, second: -1), to: self.startOfMonth)!
+    }
+}
 
 @Reducer
 public struct TransactionsList: Reducer {
     @ObservableState
     public struct State: Equatable {
         public var date: Date
-        public var transactions: IdentifiedArrayOf<SharedModels.Transaction>
+
+        @FetchAll
+        public var transactions: [SharedModels.Transaction]
 
         var transactionsByDay: [Int: [SharedModels.Transaction]] {
             Dictionary(grouping: transactions) { transaction in
@@ -17,32 +33,36 @@ public struct TransactionsList: Reducer {
             }
         }
 
-        var summary: Summary {
-            // TODO: could be simplified
-            let expenses = transactions
-                .filter({ $0.transactionType == .expense })
-                .map(\.value)
-                .reduce(0, +)
+//        var summary: Summary {
+//            // TODO: could be simplified
+//            let expenses = transactions
+//                .filter({ $0.transactionType == .expense })
+//                .map(\.value)
+//                .reduce(0, +)
+//
+//            let income = transactions
+//                .filter({ $0.transactionType == .income })
+//                .map(\.value)
+//                .reduce(0, +)
+//
+//            let monthlyBalance = income + expenses
+//
+//            return Summary(
+//                monthlyIncome: income,
+//                monthlyExpenses: expenses,
+//                monthlyBalance: monthlyBalance,
+//                worth: monthlyBalance
+//            )
+//        }
 
-            let income = transactions
-                .filter({ $0.transactionType == .income })
-                .map(\.value)
-                .reduce(0, +)
-
-            let monthlyBalance = income + expenses
-
-            return Summary(
-                monthlyIncome: income,
-                monthlyExpenses: expenses,
-                monthlyBalance: monthlyBalance,
-                worth: monthlyBalance
-            )
-        }
-
-        var balanceByDay: [Int: Int] {
-            var balanceByDay: [Int: Int] = [:]
+        var balanceByDay: [Int: USD] {
+            var balanceByDay: [Int: USD] = [:]
             for (day, transactions) in transactionsByDay {
-                balanceByDay[day] = transactions.map { $0.value }.reduce(0, +)
+                balanceByDay[day] = transactions
+                    .map { $0.value }
+                    .reduce(USD(integerLiteral: 0)) { total, value in
+                        total.adding(value)
+                    }
             }
             return balanceByDay
         }
@@ -50,12 +70,17 @@ public struct TransactionsList: Reducer {
             Array(transactionsByDay.keys.sorted().reversed())
         }
 
+        var transactionsQuery: some Statement<SharedModels.Transaction> & Sendable {
+            Transaction.all
+                .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
+                .select { $0 }
+        }
+
         public init(
-            date: Date,
-            transactions: IdentifiedArrayOf<SharedModels.Transaction> = []
+            date: Date
         ) {
             self.date = date
-            self.transactions = transactions
+            self._transactions = FetchAll(transactionsQuery, animation: .default)
         }
     }
 
@@ -68,7 +93,6 @@ public struct TransactionsList: Reducer {
         }
 
         case loadTransactions
-        case transactionsLoaded(IdentifiedArrayOf<SharedModels.Transaction>)
         case view(View)
     }
 
@@ -78,22 +102,14 @@ public struct TransactionsList: Reducer {
         Reduce { state, action in
             switch action {
             case .loadTransactions:
-                state.transactions = []
-                // TODO: fix
-                return .none
-//                return .run { [date = state.date] send in
-////                    await send(
-////                        .transactionsLoaded(.init()),
-////                        animation: .default
-////                    )
-//                }
-
-            case let .transactionsLoaded(transactions):
-                state.transactions = transactions
-                return .none
+                let fetchAll = state.$transactions
+                let query = state.transactionsQuery
+                return .run { _ in
+                    try await fetchAll.load(query, animation: .default)
+                }
 
             case let .view(.deleteTransactions(ids)):
-                ids.forEach { state.transactions.remove(id: $0) }
+//                ids.forEach { state.transactions.remove(id: $0) }
                 return .run { _ in
                     do {
 //                        try await transactionsStore.deleteTransactions(ids)
@@ -190,12 +206,12 @@ public struct TransactionsListView: View {
             HStack {
                 Text("In")
                 Spacer()
-                ValueView(value: store.summary.monthlyIncome)
+//                ValueView(value: store.summary.monthlyIncome)
             }
             HStack {
                 Text("Out")
                 Spacer()
-                ValueView(value: store.summary.monthlyExpenses)
+//                ValueView(value: store.summary.monthlyExpenses)
             }
 
         }
