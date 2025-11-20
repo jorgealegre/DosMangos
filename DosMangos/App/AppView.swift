@@ -125,11 +125,11 @@ public struct AppView: View {
                                 send(.discardButtonTapped)
                             }
                         }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Add") {
-//                                send(.addTransactionButtonTapped)
-                            }
-                        }
+//                        ToolbarItem(placement: .confirmationAction) {
+//                            Button("Add") {
+////                                send(.addTransactionButtonTapped)
+//                            }
+//                        }
                     }
             }
         }

@@ -70,7 +70,7 @@ public struct TransactionsList: Reducer {
         }
 
         var transactionsQuery: some Statement<Transaction> & Sendable {
-            Transaction.all
+            Transaction
                 .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
                 .select { $0 }
         }
@@ -104,6 +104,7 @@ public struct TransactionsList: Reducer {
                 let fetchAll = state.$transactions
                 let query = state.transactionsQuery
                 return .run { _ in
+                    print("fetchAll")
                     try await fetchAll.load(query, animation: .default)
                 }
 
@@ -124,7 +125,6 @@ public struct TransactionsList: Reducer {
 
             case .view(.onAppear):
                 return .none
-//                return .send(.loadTransactions)
 
             case .view(.previousMonthButtonTapped):
                 state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
@@ -236,39 +236,16 @@ public struct TransactionsListView: View {
 }
 
 struct TransactionsView_Previews: PreviewProvider {
-
     static var previews: some View {
-        TransactionsListView(
-            store: Store(
-                initialState: TransactionsList.State(
-                    date: .now
-                )
-            ) {
-                TransactionsList()
-            } withDependencies: {
-                _ = $0
-//                $0.transactionsStore.fetchTransactions = { date in
-//                    [
-//                        .mock(),
-//                        .mock(),
-//                        .mock(),
-//                        .mock(),
-//                        .init(
-//                            absoluteValue: 50,
-//                            createdAt: Date.now.addingTimeInterval(
-//                                -60*60*24*2
-//                            ),
-//                            description: "Coffee beans",
-//                            transactionType: .expense
-//                        )
-//                    ]
-//                }
-            }
-        )
-        .tabItem {
-            Label.init("Transactions", systemImage: "list.bullet.rectangle.portrait")
+        withDependencies {
+            $0.defaultDatabase = try! appDatabase()
+        } operation: {
+            TransactionsListView(
+                store: Store(initialState: TransactionsList.State(date: .now)) {
+                    TransactionsList()
+                }
+            )
         }
         .tint(.purple)
-        .preferredColorScheme(.dark)
     }
 }
