@@ -2,22 +2,22 @@ import ComposableArchitecture
 import SwiftUI
 
 @Reducer
-public struct TransactionForm: Reducer {
+struct TransactionForm: Reducer {
     @ObservableState
-    public struct State: Equatable {
-        public enum Field {
+    struct State: Equatable {
+        enum Field {
             case value, description
         }
 
-        public var isDatePickerVisible: Bool
-        public var focus: Field?
-        public var transaction: Transaction.Draft
+        var isDatePickerVisible: Bool
+        var focus: Field?
+        var transaction: Transaction.Draft
 
         var value: String {
             transaction.value == 0 ? "" : transaction.value.description
         }
 
-        public init(
+        init(
             isDatePickerVisible: Bool = false,
             focus: Field? = .value,
             transaction: Transaction.Draft? = nil
@@ -36,11 +36,11 @@ public struct TransactionForm: Reducer {
         }
     }
 
-    public enum Action: ViewAction, BindableAction {
-        public enum Delegate {
+    enum Action: ViewAction, BindableAction {
+        enum Delegate {
         }
         @CasePathable
-        public enum View {
+        enum View {
             case dateButtonTapped
             case nextDayButtonTapped
             case previousDayButtonTapped
@@ -58,9 +58,7 @@ public struct TransactionForm: Reducer {
 
     @Dependency(\.dismiss) private var dismiss
 
-    public init() {}
-
-    public var body: some Reducer<State, Action> {
+    var body: some Reducer<State, Action> {
         BindingReducer()
         Reduce { state, action in
             switch action {
@@ -127,17 +125,13 @@ public struct TransactionForm: Reducer {
 }
 
 @ViewAction(for: TransactionForm.self)
-public struct TransactionFormView: View {
+struct TransactionFormView: View {
 
     @FocusState var focus: TransactionForm.State.Field?
 
-    @Bindable public var store: StoreOf<TransactionForm>
+    @Bindable var store: StoreOf<TransactionForm>
 
-    public init(store: StoreOf<TransactionForm>) {
-        self.store = store
-    }
-
-    public var body: some View {
+    var body: some View {
         Form {
             valueInput
             typePicker

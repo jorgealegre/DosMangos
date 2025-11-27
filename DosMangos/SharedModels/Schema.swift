@@ -3,7 +3,7 @@ import OSLog
 import SQLiteData
 
 extension DependencyValues {
-    public mutating func bootstrapDatabase(syncEngineDelegate: (any SyncEngineDelegate)? = nil) throws {
+    mutating func bootstrapDatabase(syncEngineDelegate: (any SyncEngineDelegate)? = nil) throws {
         defaultDatabase = try appDatabase()
 //        defaultSyncEngine = try SyncEngine(
 //            for: defaultDatabase,

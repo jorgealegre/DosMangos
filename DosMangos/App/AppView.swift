@@ -2,15 +2,15 @@ import ComposableArchitecture
 import SwiftUI
 
 @Reducer
-public struct App: Reducer {
+struct App: Reducer {
     @ObservableState
-    public struct State: Equatable {
+    struct State: Equatable {
         @Presents var destination: Destination.State?
-        
+
         var appDelegate: AppDelegateReducer.State
         var transactionsList: TransactionsList.State
 
-        public init(
+        init(
             appDelegate: AppDelegateReducer.State = .init(),
             destination: Destination.State? = nil,
             transactionsList: TransactionsList.State = .init(date: .now)
@@ -21,27 +21,25 @@ public struct App: Reducer {
         }
     }
 
-    public enum Action: ViewAction {
-        public enum View {
+    enum Action: ViewAction {
+        enum View {
             case newTransactionButtonTapped
             case discardButtonTapped
         }
 
         case destination(PresentationAction<Destination.Action>)
-        
+
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
         case view(View)
     }
 
     @Reducer
-    public enum Destination {
+    enum Destination {
         case transactionForm(TransactionForm)
     }
 
-    public init() {}
-
-    public var body: some ReducerOf<Self> {
+    var body: some ReducerOf<Self> {
         Scope(state: \.appDelegate, action: \.appDelegate) {
             AppDelegateReducer()
         }
@@ -89,14 +87,10 @@ public struct App: Reducer {
 extension App.Destination.State: Equatable {}
 
 @ViewAction(for: App.self)
-public struct AppView: View {
-    @Bindable public var store: StoreOf<App>
+struct AppView: View {
+    @Bindable var store: StoreOf<App>
 
-    public init(store: StoreOf<App>) {
-        self.store = store
-    }
-
-    public var body: some View {
+    var body: some View {
         TabView {
             ZStack(alignment: .bottom) {
                 TransactionsListView(

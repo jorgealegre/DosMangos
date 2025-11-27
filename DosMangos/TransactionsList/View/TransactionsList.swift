@@ -17,13 +17,13 @@ extension Date {
 }
 
 @Reducer
-public struct TransactionsList: Reducer {
+struct TransactionsList: Reducer {
     @ObservableState
-    public struct State: Equatable {
-        public var date: Date
+    struct State: Equatable {
+        var date: Date
 
         @FetchAll(Transaction.none) // this query is dynamic
-        public var transactions: [Transaction]
+        var transactions: [Transaction]
 
         var transactionsByDay: [Int: [Transaction]] {
             Dictionary(grouping: transactions) { transaction in
@@ -75,7 +75,7 @@ public struct TransactionsList: Reducer {
                 .select { $0 }
         }
 
-        public init(
+        init(
             date: Date
         ) {
             self.date = date
@@ -83,8 +83,8 @@ public struct TransactionsList: Reducer {
         }
     }
 
-    public enum Action: ViewAction {
-        public enum View {
+    enum Action: ViewAction {
+        enum View {
             case nextMonthButtonTapped
             case onAppear
             case previousMonthButtonTapped
@@ -95,9 +95,7 @@ public struct TransactionsList: Reducer {
         case view(View)
     }
 
-    public init() {}
-
-    public var body: some ReducerOf<Self> {
+    var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .loadTransactions:
@@ -136,15 +134,11 @@ public struct TransactionsList: Reducer {
 }
 
 @ViewAction(for: TransactionsList.self)
-public struct TransactionsListView: View {
+struct TransactionsListView: View {
 
-    public let store: StoreOf<TransactionsList>
+    let store: StoreOf<TransactionsList>
 
-    public init(store: StoreOf<TransactionsList>) {
-        self.store = store
-    }
-
-    public var body: some View {
+    var body: some View {
         NavigationStack {
             List {
                 summary
