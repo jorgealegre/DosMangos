@@ -22,7 +22,7 @@ public struct TransactionsList: Reducer {
     public struct State: Equatable {
         public var date: Date
 
-        @FetchAll
+        @FetchAll(Transaction.none) // this query is dynamic
         public var transactions: [Transaction]
 
         var transactionsByDay: [Int: [Transaction]] {
@@ -104,7 +104,6 @@ public struct TransactionsList: Reducer {
                 let fetchAll = state.$transactions
                 let query = state.transactionsQuery
                 return .run { _ in
-                    print("fetchAll")
                     try await fetchAll.load(query, animation: .default)
                 }
 
@@ -235,17 +234,14 @@ public struct TransactionsListView: View {
     }
 }
 
-struct TransactionsView_Previews: PreviewProvider {
-    static var previews: some View {
-        withDependencies {
-            $0.defaultDatabase = try! appDatabase()
-        } operation: {
-            TransactionsListView(
-                store: Store(initialState: TransactionsList.State(date: .now)) {
-                    TransactionsList()
-                }
-            )
-        }
-        .tint(.purple)
+#Preview {
+    let _ = try! prepareDependencies {
+        try $0.bootstrapDatabase()
     }
+    TransactionsListView(
+        store: Store(initialState: TransactionsList.State(date: .now)) {
+            TransactionsList()
+        }
+    )
+    .tint(.purple)
 }

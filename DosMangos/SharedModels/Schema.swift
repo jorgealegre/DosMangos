@@ -18,7 +18,6 @@ extension DependencyValues {
 }
 
 func appDatabase() throws -> any DatabaseWriter {
-    print("appDatabase()")
     @Dependency(\.context) var context
     var configuration = Configuration()
     configuration.foreignKeysEnabled = true

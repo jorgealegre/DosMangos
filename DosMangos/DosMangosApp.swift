@@ -18,15 +18,19 @@ struct DosMangosApp: SwiftUI.App {
 
     var body: some Scene {
         WindowGroup {
-            AppView(
-                store: delegate.store
-            )
-            .tint(.purple)
+            if context == .live {
+                AppView(
+                    store: delegate.store
+                )
+                .tint(.purple)
+            }
         }
     }
 }
 
 final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
+    @Dependency(\.context) var context
+
     lazy var store = Store(
         initialState: App.State(
             //            destination: .transactionForm(.init(focus: .description, transaction: .init(absoluteValue: 123, createdAt: Date(), description: "", transactionType: .expense)))
@@ -39,7 +43,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        store.send(.appDelegate(.didFinishLaunching))
+        if context == .live {
+            store.send(.appDelegate(.didFinishLaunching))
+        }
         return true
     }
 
