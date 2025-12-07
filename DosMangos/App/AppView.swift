@@ -148,18 +148,14 @@ struct AppView: View {
     }
 }
 
-//struct AppPreview: PreviewProvider {
-//    static var previews: some View {
-////        let _ = try! prepareDependencies {
-////            $0.defaultDatabase = try appDatabase()
-////        }
-//        withDependencies {
-//            $0.defaultDatabase = try! appDatabase()
-//        } operation: {
-//            AppView(store: Store(initialState: App.State()) {
-//                App()
-//            })
-//            .tint(.purple)
-//        }
-//    }
-//}
+struct AppPreview: PreviewProvider {
+    static var previews: some View {
+        let _ = try! prepareDependencies {
+            $0.defaultDatabase = try appDatabase()
+        }
+        AppView(store: Store(initialState: App.State()) {
+            App()
+        })
+        .tint(.purple)
+    }
+}
