@@ -1,0 +1,1259 @@
+---
+alwaysApply: true
+---
+## Database Setup & Migrations
+
+### Database Bootstrap Pattern
+
+All apps follow a similar pattern for database setup:
+
+```swift
+extension DependencyValues {
+    mutating func bootstrapDatabase(
+        syncEngineDelegate: (any SyncEngineDelegate)? = nil
+    ) throws {
+        var configuration = Configuration()
+        configuration.foreignKeysEnabled = true
+        configuration.prepareDatabase { db in
+            #if DEBUG
+            db.trace(options: .profile) {
+                if context == .live {
+                    logger.debug("\($0.expandedDescription)")
+                } else {
+                    print("\($0.expandedDescription)")
+                }
+            }
+            #endif
+        }
+
+        let database = try SQLiteData.defaultDatabase(configuration: configuration)
+        logger.debug(
+            """
+            App database:
+            open "\(database.path)"
+            """
+        )
+
+        var migrator = DatabaseMigrator()
+        #if DEBUG
+        migrator.eraseDatabaseOnSchemaChange = true
+        #endif
+
+        migrator.registerMigration("Create initial tables") { db in
+            // Create tables
+        }
+
+        migrator.registerMigration("Create foreign key indexes") { db in
+            // Add indexes for performance
+        }
+
+        try migrator.migrate(database)
+
+        defaultDatabase = database
+        defaultSyncEngine = try SyncEngine(
+            for: database,
+            tables: SyncUp.self, Attendee.self, Meeting.self
+        )
+    }
+}
+```
+
+**Key Points:**
+- Enable foreign keys for referential integrity
+- Use `db.trace()` for SQL debugging in debug builds
+- Log database path for easy CLI access
+- `eraseDatabaseOnSchemaChange = true` in debug for rapid development
+- Separate migrations by logical groups
+- Create indexes for foreign keys
+- Initialize SyncEngine with all table types
+
+### Table Definitions with @Table
+
+```swift
+@Table
+struct Transaction: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var description: String
+    var valueMinorUnits: Int
+    var currencyCode: String
+    var type: TransactionType
+    var createdAt: Date
+
+    enum TransactionType: Int, QueryBindable, Sendable {
+        case expense
+        case income
+    }
+}
+
+// Always make Draft Equatable for TCA state
+extension Transaction.Draft: Equatable {}
+```
+
+**Key Points:**
+- `@Table` macro generates CRUD operations
+- Always make tables `Sendable` for concurrency
+- Custom enums need `QueryBindable` conformance
+- Draft types need `Equatable` for use in TCA state
+- Use `UUID` for IDs with `uuid()` SQL function
+
+### Migration Patterns
+
+#### Basic Table Creation
+
+```swift
+try #sql(
+    """
+    CREATE TABLE "transactions" (
+      "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+      "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+      "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+      "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
+    ) STRICT
+    """
+).execute(db)
+```
+
+#### Foreign Key Relationships
+
+```swift
+try #sql(
+    """
+    CREATE TABLE "attendees" (
+      "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+      "name" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "syncUpID" TEXT NOT NULL REFERENCES "syncUps"("id") ON DELETE CASCADE
+    ) STRICT
+    """
+).execute(db)
+```
+
+#### Indexes for Performance
+
+```swift
+try #sql(
+    """
+    CREATE INDEX IF NOT EXISTS "idx_attendees_syncUpID"
+    ON "attendees"("syncUpID")
+    """
+).execute(db)
+```
+
+**Key Points:**
+- Use `STRICT` mode for type safety
+- Provide sensible defaults for all columns
+- `ON CONFLICT REPLACE` for upsert behavior
+- `ON DELETE CASCADE` for automatic cleanup
+- Always index foreign key columns
+- Use `uuid()` and `datetime('now')` SQL functions
+
+### Sample Data Seeding
+
+```swift
+#if DEBUG
+extension Database {
+    func seedSampleData() throws {
+        @Dependency(\.date.now) var now
+        @Dependency(\.uuid) var uuid
+
+        try seed {
+            Transaction(
+                id: uuid(),
+                description: "Sample transaction",
+                valueMinorUnits: 100500_00,
+                currencyCode: "ARS",
+                type: .expense,
+                createdAt: now
+            )
+            SyncUp(id: UUID(1), seconds: 60, theme: .appOrange, title: "Design")
+
+            for name in ["Blob", "Blob Jr"] {
+                Attendee.Draft(name: name, syncUpID: UUID(1))
+            }
+        }
+    }
+}
+#endif
+```
+
+**Key Points:**
+- Only available in DEBUG builds
+- Use Dependencies for testable seeding
+- `seed` block allows mixing entities and drafts
+- Useful for preview and testing
+
+---
+
+## Reducer Patterns
+
+### Basic Reducer Structure
+
+```swift
+@Reducer
+struct FeatureName {
+    @ObservableState
+    struct State: Equatable {
+        // State properties
+    }
+
+    enum Action: ViewAction {
+        enum View {
+            case buttonTapped
+        }
+        case view(View)
+        case delegate(Delegate)
+        case internalAction
+    }
+
+    @Dependency(\.someClient) var someClient
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .view(let viewAction):
+                // Handle view actions
+                return .none
+            case .delegate:
+                return .none
+            case .internalAction:
+                return .none
+            }
+        }
+        ._printChanges()
+    }
+}
+```
+
+**Key Points:**
+- Use `@Reducer` macro
+- `@ObservableState` for observation
+- Group actions by source: `View`, `Delegate`, internal
+- `ViewAction` protocol for view-initiated actions
+- `._printChanges()` for debugging
+
+### Reducer Composition Patterns
+
+#### Scope Pattern for Child Reducers
+
+```swift
+var body: some ReducerOf<Self> {
+    Scope(state: \.appDelegate, action: \.appDelegate) {
+        AppDelegateReducer()
+    }
+
+    Scope(state: \.transactionsList, action: \.transactionsList) {
+        TransactionsList()
+    }
+
+    Reduce { state, action in
+        // Main reducer logic
+    }
+}
+```
+
+#### ForEach Pattern for Collections
+
+```swift
+var body: some Reducer<State, Action> {
+    BindingReducer()
+
+    Reduce { state, action in
+        // Main logic
+    }
+    .forEach(\.todos, action: \.todos) {
+        Todo()
+    }
+}
+```
+
+#### IfLet for Optional Destinations
+
+```swift
+var body: some ReducerOf<Self> {
+    Reduce { state, action in
+        // Logic
+    }
+    .ifLet(\.$destination, action: \.destination)
+    .ifLet(\.$alert, action: \.alert)
+}
+```
+
+**Key Points:**
+- Compose reducers from small, focused pieces
+- Use `Scope` for required child state
+- Use `.forEach` for collections
+- Use `.ifLet` for optional presentations
+- Order matters: child reducers run before parent
+
+### Effect Patterns
+
+#### Simple Run Effect
+
+```swift
+case .buttonTapped:
+    return .run { send in
+        let result = await someAsyncOperation()
+        await send(.operationCompleted(result))
+    }
+```
+
+#### Cancellable Effects
+
+```swift
+@Dependency(\.continuousClock) var clock
+private enum CancelID { case timer }
+
+case .startTimer:
+    return .run { send in
+        for await _ in self.clock.timer(interval: .seconds(1)) {
+            await send(.timerTicked)
+        }
+    }
+    .cancellable(id: CancelID.timer, cancelInFlight: true)
+
+case .stopTimer:
+    return .cancel(id: CancelID.timer)
+```
+
+#### Database Operations
+
+```swift
+case .saveTransaction:
+    let transaction = state.transaction
+    return .run { _ in
+        @Dependency(\.defaultDatabase) var database
+        try await database.write { db in
+            try Transaction.insert { transaction }.execute(db)
+        }
+    }
+```
+
+#### Debounced Effects
+
+```swift
+case .searchQueryChanged:
+    return .run { send in
+        try await clock.sleep(for: .milliseconds(300))
+        await send(.performSearch)
+    }
+    .cancellable(id: CancelID.search, cancelInFlight: true)
+```
+
+**Key Points:**
+- Use `.run` for async effects
+- Use `.cancellable` with IDs for cancellation
+- `cancelInFlight: true` for debouncing
+- Capture dependencies inside effects
+- Always handle errors appropriately
+
+### Delegate Pattern
+
+Parent-child communication using delegates:
+
+```swift
+// Child Reducer
+enum Action {
+    case delegate(Delegate)
+
+    @CasePathable
+    enum Delegate {
+        case didFinish(Result<State, Error>)
+        case playbackStarted
+    }
+}
+
+// Parent Reducer
+case .recordingMemo(.presented(.delegate(.didFinish(.success(recordingMemo))))):
+    state.recordingMemo = nil
+    state.voiceMemos.insert(
+        VoiceMemo.State(/* ... */),
+        at: 0
+    )
+    return .none
+
+case .recordingMemo(.presented(.delegate(.didFinish(.failure)))):
+    state.alert = AlertState { TextState("Recording failed.") }
+    state.recordingMemo = nil
+    return .none
+```
+
+**Key Points:**
+- Child sends delegate actions to communicate with parent
+- Parent observes nested delegate actions
+- Useful for presentation dismissal and data flow
+- Use `@CasePathable` for easier pattern matching
+
+---
+
+## State Management
+
+### ObservableState Pattern
+
+```swift
+@ObservableState
+struct State: Equatable {
+    var editMode: EditMode = .inactive
+    var todos: IdentifiedArrayOf<Todo.State> = []
+    @Presents var destination: Destination.State?
+
+    var filteredTodos: IdentifiedArrayOf<Todo.State> {
+        // Computed properties for derived state
+        switch filter {
+        case .active: return todos.filter { !$0.isComplete }
+        case .all: return todos
+        case .completed: return todos.filter(\.isComplete)
+        }
+    }
+}
+```
+
+**Key Points:**
+- Use `@ObservableState` for TCA observation
+- Use `@Presents` for optional presentation state
+- Computed properties for derived state
+- Always conform to `Equatable`
+- Keep state normalized (avoid duplicated data)
+
+### IdentifiedArrayOf for Collections
+
+```swift
+var todos: IdentifiedArrayOf<Todo.State> = []
+
+// Access by ID
+state.todos[id: todoID]?.description = "Updated"
+
+// Remove by ID
+state.todos.remove(id: todoID)
+
+// Insert at position
+state.todos.insert(newTodo, at: 0)
+```
+
+**Key Points:**
+- Provides O(1) lookup by ID
+- Elements must be `Identifiable`
+- Use for collections that are frequently accessed by ID
+- Maintains order like regular arrays
+
+### Focus State Management
+
+```swift
+// In State
+struct State: Equatable {
+    enum Field {
+        case value, description
+    }
+    var focus: Field?
+}
+
+// In View
+@FocusState var focus: TransactionForm.State.Field?
+@Bindable var store: StoreOf<TransactionForm>
+
+var body: some View {
+    TextField("Description", text: $store.transaction.description)
+        .focused($focus, equals: .description)
+}
+.bind($store.focus, to: $focus)
+```
+
+**Key Points:**
+- Store focus state in reducer for testability
+- Use `.bind()` to sync TCA and SwiftUI focus
+- Model focus as an enum of focusable fields
+- Programmatically control focus in reducer
+
+### @FetchAll and @FetchOne (SQLiteData)
+
+#### Dynamic Queries
+
+```swift
+@ObservableState
+struct State: Equatable {
+    var date: Date
+
+    @FetchAll(Transaction.none) // Empty initial query
+    var transactions: [Transaction]
+
+    var transactionsQuery: some Statement<Transaction> & Sendable {
+        Transaction
+            .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
+            .select { $0 }
+    }
+
+    init(date: Date) {
+        self.date = date
+        self._transactions = FetchAll(transactionsQuery, animation: .default)
+    }
+}
+
+// Loading the query
+case .loadTransactions:
+    let fetchAll = state.$transactions
+    let query = state.transactionsQuery
+    return .run { _ in
+        try await fetchAll.load(query, animation: .default)
+    }
+```
+
+#### Static Queries
+
+```swift
+@FetchAll(
+    SyncUp
+        .group(by: \.id)
+        .leftJoin(Attendee.all) { $0.id.eq($1.syncUpID) }
+        .select { Row.Columns(attendeeCount: $1.count(), syncUp: $0) },
+    animation: .default
+)
+var syncUps: [Row]
+
+```
+
+#### FetchOne for Single Records
+
+```swift
+@FetchOne var syncUp: SyncUp
+
+init(syncUp: SyncUp) {
+    _syncUp = FetchOne(wrappedValue: syncUp, SyncUp.find(syncUp.id))
+}
+```
+
+**Key Points:**
+- Use `@FetchAll` for collections, `@FetchOne` for single records
+- Can provide initial query or load dynamically
+- Specify animation for smooth updates
+- Access projected value with `$` for loading/reloading
+
+---
+
+## View Patterns
+
+### ViewAction Pattern
+
+```swift
+@ViewAction(for: TransactionsList.self)
+struct TransactionsListView: View {
+    let store: StoreOf<TransactionsList>
+
+    var body: some View {
+        Button("Delete") {
+            send(.deleteButtonTapped, animation: .default)
+        }
+    }
+}
+```
+
+**Key Points:**
+- `@ViewAction` macro provides `send()` function
+- Send actions with optional animation
+- Automatically wraps in `.view()` action case
+- Cleaner than calling `store.send(.view(.action))`
+
+### Bindable Store Pattern
+
+```swift
+@Bindable var store: StoreOf<TransactionForm>
+
+TextField("Description", text: $store.transaction.description)
+Picker("Type", selection: $store.transaction.type) { /* ... */ }
+```
+
+**Key Points:**
+- `@Bindable` enables two-way binding
+- Works with `@ObservableState`
+- Use `BindingReducer()` in reducer
+- Automatically updates state
+
+### Scope Pattern for Child Views
+
+```swift
+TransactionsListView(
+    store: store.scope(
+        state: \.transactionsList,
+        action: \.transactionsList
+    )
+)
+```
+
+**Key Points:**
+- Scope connects parent store to child view
+- Child only sees its own state/actions
+- Type-safe state and action mapping
+
+### Sheet and Alert Presentation
+
+#### Sheets
+
+```swift
+// State
+@Presents var destination: Destination.State?
+
+@Reducer
+enum Destination {
+    case transactionForm(TransactionForm)
+}
+
+// View
+.sheet(
+    item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
+) { store in
+    NavigationStack {
+        TransactionFormView(store: store)
+            .navigationTitle("New Transaction")
+    }
+}
+```
+
+#### Alerts
+
+```swift
+// State
+@Presents var alert: AlertState<Action.Alert>?
+
+// View
+.alert($store.scope(state: \.alert, action: \.alert))
+```
+
+**Key Points:**
+- Use `@Presents` for presentation state
+- Use `.sheet(item:)` pattern for TCA
+- Use `AlertState` for type-safe alerts
+- Scope the store to the presented feature
+
+### List Patterns
+
+```swift
+List {
+    ForEach(store.scope(state: \.filteredTodos, action: \.todos)) { store in
+        TodoView(store: store)
+    }
+    .onDelete { store.send(.delete($0)) }
+    .onMove { store.send(.move($0, $1)) }
+}
+```
+
+**Key Points:**
+- Scope to child stores for each list item
+- Use SwiftUI list modifiers (onDelete, onMove)
+- Customize appearance with row modifiers
+
+---
+
+## Testing Strategies
+
+### Basic Test Structure
+
+```swift
+@MainActor
+struct TodosTests {
+    let clock = TestClock()
+
+    @Test
+    func add() async {
+        let store = TestStore(initialState: Todos.State()) {
+            Todos()
+        } withDependencies: {
+            $0.uuid = .incrementing
+        }
+
+        await store.send(.addTodoButtonTapped) {
+            $0.todos.insert(
+                Todo.State(
+                    description: "",
+                    id: UUID(0),
+                    isComplete: false
+                ),
+                at: 0
+            )
+        }
+    }
+}
+```
+
+**Key Points:**
+- Mark test struct `@MainActor` for async tests
+- Use `TestStore` for exhaustive testing
+- Override dependencies in `withDependencies`
+- Assert state mutations in trailing closure
+
+### Testing Async Effects
+
+```swift
+@Test
+func complete() async {
+    let store = TestStore(initialState: state) {
+        Todos()
+    } withDependencies: {
+        $0.continuousClock = clock
+    }
+
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, true) {
+        $0.todos[id: UUID(0)]?.isComplete = true
+    }
+
+    // Advance test clock
+    await clock.advance(by: .seconds(1))
+
+    // Assert received action
+    await store.receive(\.sortCompletedTodos) {
+        $0.todos = [$0.todos[1], $0.todos[0]]
+    }
+}
+```
+
+**Key Points:**
+- Use `TestClock` for controllable time
+- `clock.advance()` to trigger timers
+- `store.receive()` to assert incoming actions
+- Assert state changes for each action
+
+### Testing Debounced/Cancellable Effects
+
+```swift
+@Test
+func completionDebounce() async {
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, true) {
+        $0.todos[id: UUID(0)]?.isComplete = true
+    }
+
+    await clock.advance(by: .milliseconds(500))
+
+    // Cancel previous effect
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, false) {
+        $0.todos[id: UUID(0)]?.isComplete = false
+    }
+
+    await clock.advance(by: .seconds(1))
+
+    // Only one effect completes
+    await store.receive(\.sortCompletedTodos)
+}
+```
+
+**Key Points:**
+- Test cancellation by triggering same effect
+- Verify only final effect completes
+- Use small time increments to test debouncing
+
+### Testing Long-Running Effects
+
+```swift
+@Test
+func recordHappyPath() async {
+    let didFinish = AsyncThrowingStream.makeStream(of: Bool.self)
+
+    let store = TestStore(initialState: VoiceMemos.State()) {
+        VoiceMemos()
+    } withDependencies: {
+        $0.audioRecorder.startRecording = { @Sendable _ in
+            try await didFinish.stream.first { _ in true }!
+        }
+        $0.audioRecorder.stopRecording = {
+            didFinish.continuation.yield(true)
+            didFinish.continuation.finish()
+        }
+    }
+
+    let task = await store.send(\.recordingMemo.onTask)
+
+    // ... test behavior ...
+
+    await store.send(\.recordingMemo.stopButtonTapped) { /* ... */ }
+    await store.receive(\.recordingMemo.audioRecorderDidFinish.success)
+
+    await task.cancel()
+}
+```
+
+**Key Points:**
+- Use `AsyncThrowingStream` for controllable async sequences
+- Store task reference for cancellation
+- Control when effects complete manually
+- Always cancel long-running tasks
+
+### Non-Exhaustive Testing
+
+```swift
+@Test
+func recordFailureNonExhaustive() async {
+    let store = TestStore(initialState: VoiceMemos.State()) {
+        VoiceMemos()
+    }
+
+    await store.withExhaustivity(.off(showSkippedAssertions: true)) {
+        await store.send(.recordButtonTapped)
+        await store.send(\.recordingMemo.onTask)
+
+        didFinish.continuation.finish(throwing: SomeError())
+
+        // Only assert the important action
+        await store.receive(\.recordingMemo.delegate.didFinish.failure) {
+            $0.alert = AlertState { TextState("Recording failed.") }
+            $0.recordingMemo = nil
+        }
+    }
+}
+```
+
+**Key Points:**
+- Use `.withExhaustivity(.off)` for integration-style tests
+- Focus on important state transitions
+- Skip intermediate actions
+- Useful for happy-path/smoke tests
+
+### Testing Dependencies
+
+#### UUID
+
+```swift
+withDependencies: {
+    $0.uuid = .incrementing // UUID(0), UUID(1), ...
+    $0.uuid = .constant(deadbeefID) // Same UUID every time
+}
+```
+
+#### Date
+
+```swift
+withDependencies: {
+    $0.date = .constant(Date(timeIntervalSinceReferenceDate: 0))
+}
+```
+
+#### Clock
+
+```swift
+let clock = TestClock()
+withDependencies: {
+    $0.continuousClock = clock
+}
+```
+
+#### Custom Clients
+
+```swift
+withDependencies: {
+    $0.audioRecorder.requestRecordPermission = { true }
+    $0.audioRecorder.startRecording = { @Sendable _ in
+        try await didFinish.stream.first { _ in true }!
+    }
+}
+```
+
+**Key Points:**
+- Override all dependencies used by feature
+- Use test-specific values for predictability
+- Control async behavior with streams
+- Deterministic dependencies enable reliable tests
+
+---
+
+## Dependencies Management
+
+### Defining Dependencies
+
+#### Simple Client
+
+```swift
+@DependencyClient
+struct AudioPlayerClient {
+    var play: @Sendable (_ url: URL) async throws -> Bool
+}
+
+extension AudioPlayerClient: TestDependencyKey {
+    static let testValue = Self()
+
+    static let previewValue = Self(
+        play: { _ in
+            try await Task.sleep(for: .seconds(5))
+            return true
+        }
+    )
+}
+
+extension DependencyValues {
+    var audioPlayer: AudioPlayerClient {
+        get { self[AudioPlayerClient.self] }
+        set { self[AudioPlayerClient.self] = newValue }
+    }
+}
+```
+
+**Key Points:**
+- `@DependencyClient` provides default failing implementations
+- `TestDependencyKey` requires `testValue` and optional `previewValue`
+- Test value fails if called without override
+- Preview value allows working in Xcode previews
+
+#### Live Implementation
+
+```swift
+extension AudioPlayerClient: DependencyKey {
+    static let liveValue: Self = {
+        let delegate = AudioPlayerDelegate()
+        return Self(
+            play: { [delegate] url in
+                await delegate.play(url: url)
+            }
+        )
+    }()
+}
+
+private actor AudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
+    var continuation: CheckedContinuation<Bool, Error>?
+    var player: AVAudioPlayer?
+
+    func play(url: URL) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            do {
+                self.player = try AVAudioPlayer(contentsOf: url)
+                self.player?.delegate = self
+                self.player?.play()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(
+        _ player: AVAudioPlayer,
+        successfully flag: Bool
+    ) {
+        continuation?.resume(returning: flag)
+    }
+}
+```
+
+**Key Points:**
+- Separate live implementation from interface
+- Use actors for thread-safe state
+- Wrap callbacks with continuations
+- Keep implementation details private
+
+### Using Dependencies
+
+#### In Reducers
+
+```swift
+@Reducer
+struct Feature {
+    @Dependency(\.audioPlayer) var audioPlayer
+    @Dependency(\.continuousClock) var clock
+    @Dependency(\.uuid) var uuid
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            return .run { send in
+                let result = await audioPlayer.play(url: state.url)
+                await send(.finished(result))
+            }
+        }
+    }
+}
+```
+
+#### In Effects
+
+```swift
+case .saveData:
+    return .run { send in
+        @Dependency(\.defaultDatabase) var database
+        @Dependency(\.date.now) var now
+
+        try await database.write { db in
+            try Record.insert {
+                Record.Draft(createdAt: now)
+            }.execute(db)
+        }
+    }
+```
+
+**Key Points:**
+- Use `@Dependency` property wrapper
+- Available in reducers and effects
+- Can declare in closures/effects
+
+### Preparing Dependencies
+
+```swift
+let _ = try! prepareDependencies {
+    try $0.bootstrapDatabase()
+}
+
+// In tests
+let syncUp = try! prepareDependencies {
+    try $0.bootstrapDatabase()
+    return try $0.defaultDatabase.read { db in
+        try SyncUp.limit(1).fetchOne(db)!
+    }
+}
+```
+
+**Key Points:**
+- Initialize dependencies before app/view loads
+- Can return values for use in previews/tests
+- Typically used for database setup
+- Available globally after preparation
+
+---
+
+## Navigation Patterns
+
+### NavigationStack with TCA
+
+```swift
+@Reducer
+enum Destination {
+    case transactionForm(TransactionForm)
+}
+
+@ObservableState
+struct State: Equatable {
+    @Presents var destination: Destination.State?
+}
+
+// View
+NavigationStack {
+    ContentView(store: store)
+}
+.sheet(
+    item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
+) { store in
+    NavigationStack {
+        TransactionFormView(store: store)
+    }
+}
+```
+
+**Key Points:**
+- Use `@Reducer enum` for destination types
+- `@Presents` for optional presentation
+- Scope store to destination
+- Nest NavigationStack in presentation
+
+### Dismissal Patterns
+
+```swift
+@Dependency(\.dismiss) var dismiss
+
+case .saveButtonTapped:
+    return .run { _ in
+        await dismiss()
+    }
+```
+
+**Key Points:**
+- Use dismiss dependency in TCA reducers
+- Call in async effects
+- Automatically dismisses the current presentation
+
+### Alert Navigation
+
+```swift
+// Define alert actions
+enum AlertAction {
+    case confirmDeletion
+    case continueWithoutRecording
+    case openSettings
+}
+
+// Create alert states
+extension AlertState where Action == FeatureReducer.AlertAction {
+    static let deleteItem = Self {
+        TextState("Delete?")
+    } actions: {
+        ButtonState(role: .destructive, action: .confirmDeletion) {
+            TextState("Yes")
+        }
+        ButtonState(role: .cancel) {
+            TextState("Nevermind")
+        }
+    } message: {
+        TextState("Are you sure you want to delete this item?")
+    }
+}
+
+// Show alert in reducer
+case .deleteButtonTapped:
+    state.alert = .deleteItem
+    return .none
+
+// Handle in view
+.alert($store.scope(state: \.alert, action: \.alert))
+```
+
+**Key Points:**
+- Type-safe alert actions
+- Reusable alert configurations
+- Use `AlertState` for structured alerts
+- Handle alert responses in reducer
+
+---
+
+## Common Utilities
+
+### Error Handling
+
+```swift
+
+// Usage
+withErrorReporting {
+    try database.write { db in
+        try SyncUp.delete(syncUp).execute(db)
+    }
+}
+```
+
+**Key Points:**
+- Centralized error logging
+- Swallows errors and returns nil
+- Both sync and async variants
+- Use for non-critical operations
+
+### Date Extensions
+
+```swift
+extension Date {
+    var startOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        let day = calendar.date(
+            from: Calendar.current.dateComponents([.year, .month], from: calendar.startOfDay(for: self))
+        )!
+        return day
+    }
+
+    var endOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        return calendar.date(
+            byAdding: DateComponents(month: 1, second: -1),
+            to: self.startOfMonth
+        )!
+    }
+
+    func get(_ component: Calendar.Component) -> Int {
+        @Dependency(\.calendar) var calendar
+        return calendar.component(component, from: self)
+    }
+}
+```
+
+**Key Points:**
+- Use dependency calendar for testability
+- Common date manipulations
+- Force-unwrap is okay for calendar operations
+
+### Duration Extensions
+
+```swift
+extension Int {
+    var duration: Duration {
+        get { .seconds(self) }
+        set { self = Int(newValue.components.seconds) }
+    }
+}
+
+// Usage
+var seconds: Int = 300
+let duration = seconds.duration // Duration.seconds(300)
+```
+
+**Key Points:**
+- Bidirectional conversion
+- Useful for SwiftUI bindings
+- Makes intent clearer
+
+### Helpers for Testing
+
+```swift
+
+// DateComponentsFormatter
+let dateComponentsFormatter: DateComponentsFormatter = {
+    let formatter = DateComponentsFormatter()
+    formatter.allowedUnits = [.minute, .second]
+    formatter.zeroFormattingBehavior = .pad
+    return formatter
+}()
+```
+
+**Key Points:**
+- Predictable UUIDs for tests
+- Shared formatters for consistency
+- Lazy initialization for performance
+
+---
+
+## Best Practices Summary
+
+### Architecture
+
+1. **Keep reducers focused**: One reducer per feature
+2. **Compose from bottom up**: Child reducers first, then parent
+3. **Use scoping**: Give children only what they need
+4. **Separate concerns**: View actions, delegate actions, internal actions
+
+### State
+
+1. **Make it Equatable**: Required for TCA, helps debugging
+2. **Normalize data**: Avoid duplication, derive when possible
+3. **Use IdentifiedArray**: For collections accessed by ID
+4. **Computed properties**: For derived state
+
+### Effects
+
+1. **Always cancellable**: Long-running effects need cancellation
+2. **Capture dependencies**: Inside effect closures
+3. **Handle errors**: Don't let them crash the app
+4. **Use TestClock**: For deterministic time in tests
+5. **Debounce appropriately**: For search, typing, etc.
+
+### Database
+
+1. **Enable foreign keys**: For referential integrity
+2. **Index foreign keys**: For query performance
+3. **Use migrations**: Never modify schema directly
+4. **STRICT mode**: For type safety
+5. **Seed data**: For development and testing
+
+### Testing
+
+1. **Test happy paths**: Ensure features work
+2. **Test edge cases**: Errors, cancellation, timing
+3. **Override all deps**: Used by the feature
+4. **Use TestClock**: For time-based effects
+5. **Exhaustive by default**: Non-exhaustive for integration tests
+
+### Views
+
+1. **Use ViewAction**: Cleaner action sending
+2. **Scope child views**: Don't pass entire store
+3. **Bindable state**: For two-way bindings
+4. **Focus management**: Model focus in state
+5. **Presentation**: Use `@Presents` with destination enum
+
+### Dependencies
+
+1. **@DependencyClient**: For client interfaces
+2. **Live, test, preview**: Provide all three
+3. **Propagate to children**: Use `withDependencies(from:)`
+4. **Test isolation**: Each test overrides what it needs
+
+---
+
+## Conclusion
+
+These patterns represent a robust, scalable approach to iOS app development using TCA and SQLiteData. Key themes:
+
+- **Testability**: Every pattern supports comprehensive testing
+- **Composability**: Features compose from small, focused pieces
+- **Type safety**: Leverage Swift's type system everywhere
+- **Clarity**: Explicit state flow and side effects
+- **Performance**: Efficient database queries and UI updates
+
+TCA provides a powerful, unidirectional architecture for managing state and side effects. SQLiteData integrates seamlessly with TCA through `@FetchAll` and `@FetchOne`, providing reactive database queries.
+
+These learnings from PointFree's example apps represent production-ready patterns that scale from simple to complex applications.
+
