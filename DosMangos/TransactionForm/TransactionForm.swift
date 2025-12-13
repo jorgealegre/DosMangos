@@ -10,8 +10,12 @@ struct TransactionForm: Reducer {
         }
 
         var isDatePickerVisible: Bool
+        var isPresentingCategoriesPopover: Bool
+        var isPresentingTagsPopover: Bool
         var focus: Field?
         var transaction: Transaction.Draft
+        var selectedCategories: [Category]
+        var selectedTags: [Tag]
 
         var value: String {
             transaction.value == 0 ? "" : transaction.value.description
@@ -19,12 +23,18 @@ struct TransactionForm: Reducer {
 
         init(
             isDatePickerVisible: Bool = false,
+            isPresentingCategoriesPopover: Bool = false,
+            isPresentingTagsPopover: Bool = false,
             focus: Field? = .value,
-            transaction: Transaction.Draft? = nil
+            transaction: Transaction.Draft? = nil,
+            selectedCategories: [Category] = [],
+            selectedTags: [Tag] = []
         ) {
             @Dependency(\.date.now) var now
 
             self.isDatePickerVisible = isDatePickerVisible
+            self.isPresentingCategoriesPopover = isPresentingCategoriesPopover
+            self.isPresentingTagsPopover = isPresentingTagsPopover
             self.focus = focus
             self.transaction = transaction ?? Transaction.Draft(
                 description: "",
@@ -33,6 +43,8 @@ struct TransactionForm: Reducer {
                 type: .expense,
                 createdAt: now
             )
+            self.selectedCategories = selectedCategories
+            self.selectedTags = selectedTags
         }
     }
 
@@ -42,6 +54,8 @@ struct TransactionForm: Reducer {
         @CasePathable
         enum View {
             case dateButtonTapped
+            case categoriesButtonTapped
+            case tagsButtonTapped
             case nextDayButtonTapped
             case previousDayButtonTapped
             case saveButtonTapped
@@ -57,6 +71,7 @@ struct TransactionForm: Reducer {
     }
 
     @Dependency(\.dismiss) private var dismiss
+    @Dependency(\.defaultDatabase) private var database
 
     var body: some Reducer<State, Action> {
         BindingReducer()
@@ -70,6 +85,14 @@ struct TransactionForm: Reducer {
 
             case let .view(view):
                 switch view {
+                case .categoriesButtonTapped:
+                    state.isPresentingCategoriesPopover.toggle()
+                    return .none
+
+                case .tagsButtonTapped:
+                    state.isPresentingTagsPopover.toggle()
+                    return .none
+
                 case .dateButtonTapped:
                     state.isDatePickerVisible.toggle()
                     return .none
@@ -84,7 +107,37 @@ struct TransactionForm: Reducer {
 
                 case .saveButtonTapped:
                     state.focus = nil
+                    let transaction = state.transaction
+                    let selectedCategories = state.selectedCategories
+                    let selectedTags = state.selectedTags
                     return .run { _ in
+                        withErrorReporting {
+                            try database.write { db in
+                                let transactionID = try Transaction.upsert { transaction }
+                                    .returning(\.id)
+                                    .fetchOne(db)!
+                                try TransactionCategory
+                                    .where { $0.transactionID.eq(transactionID) }
+                                    .delete()
+                                    .execute(db)
+                                try TransactionCategory.insert {
+                                    selectedCategories.map { category in
+                                        TransactionCategory.Draft(transactionID: transactionID, categoryID: category.id)
+                                    }
+                                }
+                                .execute(db)
+                                try TransactionTag
+                                    .where { $0.transactionID.eq(transactionID) }
+                                    .delete()
+                                    .execute(db)
+                                try TransactionTag.insert {
+                                    selectedTags.map { tag in
+                                        TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
+                                    }
+                                }
+                                .execute(db)
+                            }
+                        }
                         await dismiss()
                     }
 
@@ -136,6 +189,8 @@ struct TransactionFormView: View {
             valueInput
             typePicker
             dateTimePicker
+            categoriesSection
+            tagsSection
             descriptionInput
             saveButton
         }
@@ -231,6 +286,80 @@ struct TransactionFormView: View {
     }
 
     @ViewBuilder
+    private var categoriesSection: some View {
+        Section {
+            Button {
+                send(.categoriesButtonTapped, animation: .default)
+            } label: {
+                HStack {
+                    Image(systemName: "folder.fill")
+                        .font(.title)
+                        .foregroundStyle(.gray)
+                    Text("Categories")
+                        .foregroundStyle(Color(.label))
+                    Spacer()
+                    if let categoriesDetail {
+                        categoriesDetail
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .font(.callout)
+                            .foregroundStyle(.gray)
+                    }
+                    Image(systemName: "chevron.right")
+                }
+            }
+        }
+        .popover(isPresented: $store.isPresentingCategoriesPopover) {
+            NavigationStack {
+                CategoriesView(selectedCategories: $store.selectedCategories)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tagsSection: some View {
+        Section {
+            Button {
+                send(.tagsButtonTapped, animation: .default)
+            } label: {
+                HStack {
+                    Image(systemName: "number.square.fill")
+                        .font(.title)
+                        .foregroundStyle(.gray)
+                    Text("Tags")
+                        .foregroundStyle(Color(.label))
+                    Spacer()
+                    if let tagsDetail {
+                        tagsDetail
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .font(.callout)
+                            .foregroundStyle(.gray)
+                    }
+                    Image(systemName: "chevron.right")
+                }
+            }
+        }
+        .popover(isPresented: $store.isPresentingTagsPopover) {
+            NavigationStack {
+                TagsView(selectedTags: $store.selectedTags)
+            }
+        }
+    }
+
+    private var categoriesDetail: Text? {
+        guard !store.selectedCategories.isEmpty else { return nil }
+        let allCategories = store.selectedCategories.map(\.title).joined(separator: ", ")
+        return Text(allCategories)
+    }
+
+    private var tagsDetail: Text? {
+        guard !store.selectedTags.isEmpty else { return nil }
+        let allTags = store.selectedTags.map { "#\($0.title)" }.joined(separator: " ")
+        return Text(allTags)
+    }
+
+    @ViewBuilder
     private var saveButton: some View {
         Section {
             Button("Save") {
@@ -240,21 +369,21 @@ struct TransactionFormView: View {
     }
 }
 
-struct TransactionFormView_Previews: PreviewProvider {
-    static var previews: some View {
-        Color.black
-            .ignoresSafeArea()
-            .sheet(isPresented: .constant(true)) {
-                NavigationStack {
-                    TransactionFormView(
-                        store: Store(initialState: TransactionForm.State()) {
-                            TransactionForm()
-                        }
-                    )
-                    .navigationTitle("New Transaction")
-                }
-                .tint(.purple)
-                .preferredColorScheme(.dark)
-            }
+#Preview {
+    let _ = try! prepareDependencies {
+        $0.defaultDatabase = try appDatabase()
     }
+    Color.clear
+        .ignoresSafeArea()
+        .sheet(isPresented: .constant(true)) {
+            NavigationStack {
+                TransactionFormView(
+                    store: Store(initialState: TransactionForm.State()) {
+                        TransactionForm()
+                    }
+                )
+                .navigationTitle("New Transaction")
+            }
+            .tint(.purple)
+        }
 }

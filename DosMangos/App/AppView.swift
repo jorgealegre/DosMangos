@@ -105,6 +105,16 @@ struct AppView: View {
             .tabItem {
                 Label("Transactions", systemImage: "list.bullet.rectangle.portrait")
             }
+
+            Color.red
+                .tabItem {
+                    Label("Recurring", systemImage: "repeat.circle")
+                }
+
+            Color.red
+                .tabItem {
+                    Label("Map", systemImage: "map.fill")
+                }
         }
         .sheet(
             item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
@@ -148,14 +158,24 @@ struct AppView: View {
     }
 }
 
-struct AppPreview: PreviewProvider {
-    static var previews: some View {
-        let _ = try! prepareDependencies {
-            $0.defaultDatabase = try appDatabase()
-        }
-        AppView(store: Store(initialState: App.State()) {
-            App()
-        })
-        .tint(.purple)
+//struct AppPreview: PreviewProvider {
+//    static var previews: some View {
+//        let _ = try! prepareDependencies {
+//            $0.defaultDatabase = try appDatabase()
+//        }
+//        AppView(store: Store(initialState: App.State()) {
+//            App()
+//        })
+//        .tint(.purple)
+//    }
+//}
+
+#Preview {
+    let _ = try! prepareDependencies {
+        $0.defaultDatabase = try appDatabase()
     }
+    AppView(store: Store(initialState: App.State()) {
+        App()
+    })
+    .tint(.purple)
 }

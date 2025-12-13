@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF39BD0F2EE5FD36001CC9CC /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF39BD0D2EE5FD36001CC9CC /* CategoriesView.swift */; };
+		CF39BD102EE5FD36001CC9CC /* TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF39BD0E2EE5FD36001CC9CC /* TagsView.swift */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
 		CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095F2ECABF6E0009C56D /* SQLiteData */; };
 		CF9409632ECABF910009C56D /* Currency in Frameworks */ = {isa = PBXBuildFile; productRef = CF9409622ECABF910009C56D /* Currency */; };
@@ -20,19 +22,21 @@
 		CFDB9B282ECABD8F00F6C3BF /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDB9B102ECABD8F00F6C3BF /* AppDelegate.swift */; };
 		CFDB9B292ECABD8F00F6C3BF /* MonthlySummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDB9B182ECABD8F00F6C3BF /* MonthlySummary.swift */; };
 		CFDB9B2A2ECABD8F00F6C3BF /* TransactionForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDB9B162ECABD8F00F6C3BF /* TransactionForm.swift */; };
-		CFDB9B2B2ECABD8F00F6C3BF /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDB9B142ECABD8F00F6C3BF /* Transaction.swift */; };
+		CFDB9B2B2ECABD8F00F6C3BF /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDB9B142ECABD8F00F6C3BF /* Models.swift */; };
 		CFFF4E7A2905BE200033F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E752905BE200033F168 /* Assets.xcassets */; };
 		CFFF4E7B2905BE200033F168 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CFFF4E772905BE200033F168 /* Preview Assets.xcassets */; };
 		CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFF4E782905BE200033F168 /* DosMangosApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CF39BD0D2EE5FD36001CC9CC /* CategoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriesView.swift; sourceTree = "<group>"; };
+		CF39BD0E2EE5FD36001CC9CC /* TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagsView.swift; sourceTree = "<group>"; };
 		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFC631A72918933B00F33785 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CFDB9B102ECABD8F00F6C3BF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		CFDB9B112ECABD8F00F6C3BF /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
 		CFDB9B132ECABD8F00F6C3BF /* Schema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Schema.swift; sourceTree = "<group>"; };
-		CFDB9B142ECABD8F00F6C3BF /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
+		CFDB9B142ECABD8F00F6C3BF /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		CFDB9B162ECABD8F00F6C3BF /* TransactionForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionForm.swift; sourceTree = "<group>"; };
 		CFDB9B182ECABD8F00F6C3BF /* MonthlySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlySummary.swift; sourceTree = "<group>"; };
 		CFDB9B1A2ECABD8F00F6C3BF /* TransactionsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsList.swift; sourceTree = "<group>"; };
@@ -89,7 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				CFDB9B132ECABD8F00F6C3BF /* Schema.swift */,
-				CFDB9B142ECABD8F00F6C3BF /* Transaction.swift */,
+				CFDB9B142ECABD8F00F6C3BF /* Models.swift */,
 			);
 			path = SharedModels;
 			sourceTree = "<group>";
@@ -97,6 +101,8 @@
 		CFDB9B172ECABD8F00F6C3BF /* TransactionForm */ = {
 			isa = PBXGroup;
 			children = (
+				CF39BD0D2EE5FD36001CC9CC /* CategoriesView.swift */,
+				CF39BD0E2EE5FD36001CC9CC /* TagsView.swift */,
 				CFDB9B162ECABD8F00F6C3BF /* TransactionForm.swift */,
 			);
 			path = TransactionForm;
@@ -244,6 +250,8 @@
 				CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */,
 				CFDB9B212ECABD8F00F6C3BF /* AppView.swift in Sources */,
 				CFDB9B222ECABD8F00F6C3BF /* ValueView.swift in Sources */,
+				CF39BD0F2EE5FD36001CC9CC /* CategoriesView.swift in Sources */,
+				CF39BD102EE5FD36001CC9CC /* TagsView.swift in Sources */,
 				CFDB9B232ECABD8F00F6C3BF /* TransactionView.swift in Sources */,
 				CFDB9B242ECABD8F00F6C3BF /* Date+.swift in Sources */,
 				CFDB9B252ECABD8F00F6C3BF /* Schema.swift in Sources */,
@@ -252,7 +260,7 @@
 				CFDB9B282ECABD8F00F6C3BF /* AppDelegate.swift in Sources */,
 				CFDB9B292ECABD8F00F6C3BF /* MonthlySummary.swift in Sources */,
 				CFDB9B2A2ECABD8F00F6C3BF /* TransactionForm.swift in Sources */,
-				CFDB9B2B2ECABD8F00F6C3BF /* Transaction.swift in Sources */,
+				CFDB9B2B2ECABD8F00F6C3BF /* Models.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

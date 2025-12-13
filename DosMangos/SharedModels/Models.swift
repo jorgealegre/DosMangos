@@ -30,3 +30,35 @@ extension Transaction.Draft {
 //        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
     }
 }
+
+@Table
+struct Category: Identifiable, Hashable, Sendable {
+    @Column(primaryKey: true)
+    var title: String
+
+    var id: String { title }
+}
+
+@Table
+struct Tag: Identifiable, Hashable, Sendable {
+    @Column(primaryKey: true)
+    var title: String
+
+    var id: String { title }
+}
+
+@Table("transactionsCategories")
+struct TransactionCategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var transactionID: UUID
+    var categoryID: String
+}
+extension TransactionCategory.Draft: Equatable {}
+
+@Table("transactionsTags")
+struct TransactionTag: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var transactionID: UUID
+    var tagID: String
+}
+extension TransactionTag.Draft: Equatable {}

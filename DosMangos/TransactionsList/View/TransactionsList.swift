@@ -32,28 +32,6 @@ struct TransactionsList: Reducer {
             }
         }
 
-//        var summary: Summary {
-//            // TODO: could be simplified
-//            let expenses = transactions
-//                .filter({ $0.transactionType == .expense })
-//                .map(\.value)
-//                .reduce(0, +)
-//
-//            let income = transactions
-//                .filter({ $0.transactionType == .income })
-//                .map(\.value)
-//                .reduce(0, +)
-//
-//            let monthlyBalance = income + expenses
-//
-//            return Summary(
-//                monthlyIncome: income,
-//                monthlyExpenses: expenses,
-//                monthlyBalance: monthlyBalance,
-//                worth: monthlyBalance
-//            )
-//        }
-
         var balanceByDay: [Int: USD] {
             var balanceByDay: [Int: USD] = [:]
             for (day, transactions) in transactionsByDay {
@@ -141,8 +119,6 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationStack {
             List {
-                summary
-
                 ForEach(store.days, id: \.self) { day in
                     let transactions = store.transactionsByDay[day] ?? []
                     Section {
@@ -190,23 +166,6 @@ struct TransactionsListView: View {
                     }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("In")
-                Spacer()
-//                ValueView(value: store.summary.monthlyIncome)
-            }
-            HStack {
-                Text("Out")
-                Spacer()
-//                ValueView(value: store.summary.monthlyExpenses)
-            }
-
         }
     }
 
