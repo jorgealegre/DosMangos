@@ -125,6 +125,7 @@ struct TransactionsListView: View {
                         })
                     } header: {
                         sectionHeaderView(day: day)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                     } footer: {
                         if day == store.days.last {
                             Spacer(minLength: 80)
@@ -134,7 +135,7 @@ struct TransactionsListView: View {
             }
             .onAppear { send(.onAppear) }
             .navigationTitle(store.date.formatted(Date.FormatStyle().month(.wide)))
-            .listStyle(.insetGrouped)
+            .listStyle(.grouped)
             .listSectionSeparator(.hidden)
             .listRowSeparator(.hidden)
             .toolbar {
@@ -172,10 +173,12 @@ struct TransactionsListView: View {
         {
             VStack(spacing: 0) {
                 HStack {
-                    Text("\(headerDate.formatted(Date.FormatStyle().month().day()))")
+                    Text(headerDate.formattedRelativeDay())
                         .font(.caption.bold())
+                        .textCase(nil)
                     Spacer()
                     ValueView(value: store.balanceByDay[day]!)
+                        .font(.footnote)
                 }
             }
         }

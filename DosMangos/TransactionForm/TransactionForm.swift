@@ -238,8 +238,7 @@ struct TransactionFormView: View {
                 Button {
                     send(.dateButtonTapped, animation: .default)
                 } label: {
-                    // TODO: show this as Today, Yesterday, etc
-                    Text("\(store.transactionDate.formatted(Date.FormatStyle().day().month(.wide).year()))")
+                    Text(store.transactionDate.formattedRelativeDay())
                 }
 
                 Spacer()

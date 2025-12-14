@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: building the app
+alwaysApply: false
 ---
 # Build Configuration for DosMangos
 

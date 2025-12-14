@@ -151,35 +151,113 @@ extension Database {
     func seedSampleData() throws {
         @Dependency(\.date.now) var now
         @Dependency(\.uuid) var uuid
+        @Dependency(\.calendar) var calendar
 
-        let transactionIDs = (0...10).map { _ in uuid() }
-        let local = now.localDateComponents()
+        let nowLocal = now.localDateComponents()
+        let thisMonthStart = Date.localDate(year: nowLocal.year, month: nowLocal.month, day: 1) ?? now
+        let previousMonthStart = calendar.date(byAdding: .month, value: -1, to: thisMonthStart) ?? thisMonthStart
+
+        // Reference data
+        let tagIDs = ["weekend", "friends", "guilty_pleasure", "work", "recurring", "health"]
+        let categoryIDs = ["Home", "Food & Drinks", "Entertainment", "Personal", "Health", "Transport", "Salary"]
+
+        // We want ~10 transactions in the current month and a few in the previous month.
+        //
+        // Some months (early in the month) won't have enough past days yet, so if a "days ago" value
+        // would cross into the previous month we fall back to early-in-month days instead.
+        func dateInSameMonthAsNow(daysAgo: Int, hourOffset: Int) -> Date {
+            let candidate = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+            let candidateYM = calendar.dateComponents([.year, .month], from: candidate)
+            if candidateYM.year == nowLocal.year, candidateYM.month == nowLocal.month {
+                let base = calendar.startOfDay(for: candidate)
+                return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? candidate
+            } else {
+                let fallback = calendar.date(byAdding: .day, value: min(daysAgo, 20), to: thisMonthStart) ?? thisMonthStart
+                let base = calendar.startOfDay(for: fallback)
+                return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? fallback
+            }
+        }
+
+        func dateInPreviousMonth(dayOffsetFromStart: Int, hourOffset: Int) -> Date {
+            let baseDay = calendar.date(byAdding: .day, value: dayOffsetFromStart, to: previousMonthStart) ?? previousMonthStart
+            let base = calendar.startOfDay(for: baseDay)
+            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? baseDay
+        }
+
         try seed {
-            Transaction(
-                id: transactionIDs[0],
-                description: "Dinner at Alto El Fuego",
-                valueMinorUnits: 100500_00,
-                currencyCode: "ARS",
-                type: .expense,
-                createdAtUTC: now,
-                localYear: local.year,
-                localMonth: local.month,
-                localDay: local.day
-            )
-
-            let tagIDs = ["weekend", "friends", "guilty_pleasure"]
             for tagID in tagIDs {
               Tag(title: tagID)
             }
 
-            let categoryIDs = ["Home", "Food & Drinks", "Entertainment", "Personal", "Health"]
             for categoryID in categoryIDs {
               Category(title: categoryID)
             }
 
-            TransactionTag.Draft(transactionID: transactionIDs[0], tagID: tagIDs[0])
+            // Current month (~10)
+            let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+                (0, 19, "Dinner at Alto El Fuego", -8050, .expense, 1, [0, 1]),
+                (0, 9, "Coffee", -450, .expense, 1, [4]),
+                (1, 18, "Groceries", -12490, .expense, 0, [4]),
+                (2, 12, "Gym", -3999, .expense, 4, [5, 4]),
+                (3, 8, "Taxi", -1890, .expense, 5, []),
+                (5, 13, "Movie night", -1650, .expense, 2, [0]),
+                (7, 10, "Lunch with friends", -2350, .expense, 1, [1]),
+                (9, 16, "Salary", 250_000, .income, 6, [3, 4]),
+                (12, 11, "Streaming subscription", -1299, .expense, 2, [4]),
+                (15, 14, "Pharmacy", -2190, .expense, 4, [5]),
+            ]
 
-            TransactionCategory.Draft(transactionID: transactionIDs[0], categoryID: categoryIDs[1])
+            for (index, seed) in currentMonthSeed.enumerated() {
+                let id = uuid()
+                let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo, hourOffset: seed.hour + index % 2)
+                let local = date.localDateComponents()
+                Transaction(
+                    id: id,
+                    description: seed.description,
+                    valueMinorUnits: seed.valueMinorUnits,
+                    currencyCode: "USD",
+                    type: seed.type,
+                    createdAtUTC: date,
+                    localYear: local.year,
+                    localMonth: local.month,
+                    localDay: local.day
+                )
+
+                TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])
+                for tagIndex in seed.tagIndices {
+                    TransactionTag.Draft(transactionID: id, tagID: tagIDs[tagIndex])
+                }
+            }
+
+            // Previous month (a few)
+            let previousMonthSeed: [(dayOffset: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+                (2, 9, "Book", -1899, .expense, 3, []),
+                (6, 20, "Dinner out", -5400, .expense, 1, [0]),
+                (14, 12, "Internet bill", -5999, .expense, 0, [4]),
+                (21, 10, "Side project", 42000, .income, 6, [3]),
+            ]
+
+            for seed in previousMonthSeed {
+                let id = uuid()
+                let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset, hourOffset: seed.hour)
+                let local = date.localDateComponents()
+                Transaction(
+                    id: id,
+                    description: seed.description,
+                    valueMinorUnits: seed.valueMinorUnits,
+                    currencyCode: "USD",
+                    type: seed.type,
+                    createdAtUTC: date,
+                    localYear: local.year,
+                    localMonth: local.month,
+                    localDay: local.day
+                )
+
+                TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])
+                for tagIndex in seed.tagIndices {
+                    TransactionTag.Draft(transactionID: id, tagID: tagIDs[tagIndex])
+                }
+            }
         }
     }
 }

@@ -19,6 +19,42 @@ extension Date {
         @Dependency(\.calendar) var calendar
         return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))
     }
+
+    func formattedRelativeDay() -> String {
+        @Dependency(\.calendar) var calendar
+        @Dependency(\.date.now) var now
+
+        // We only care about the calendar day, not the time-of-day.
+        // Normalize both dates to the start of their day so RelativeDateTimeFormatter doesn't produce
+        // "6 hours ago" for earlier-today times.
+        let referenceDay = calendar.startOfDay(for: now)
+        let selfDay = calendar.startOfDay(for: self)
+
+        // We intentionally only special-case the named days ("today", "yesterday") using Apple's
+        // RelativeDateTimeFormatter, and fall back to a date string for anything older.
+        //
+        // Docs: https://developer.apple.com/documentation/foundation/relativedatetimeformatter
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .named
+        formatter.formattingContext = .beginningOfSentence
+
+        let dayDelta = calendar.dateComponents([.day], from: referenceDay, to: selfDay).day ?? 0
+        if dayDelta == 0 || dayDelta == -1 || dayDelta == 1 {
+            // 0 => today, -1 => yesterday, 1 => tomorrow (system-localized)
+            return formatter.localizedString(from: DateComponents(day: dayDelta))
+        }
+
+        // Date-only fallback.
+        return self.formatted(Date.FormatStyle().month().day().weekday(.wide))
+    }
 }
 
-
+import Playgrounds
+#Playground {
+    let date = Date()
+    _ = date.formattedRelativeDay()
+    _ = date.addingTimeInterval(60*60*4).formattedRelativeDay()
+    _ = date.addingTimeInterval(60*60*28).formattedRelativeDay()
+    _ = date.addingTimeInterval(-60*60*24).formattedRelativeDay()
+    _ = date.addingTimeInterval(-60*60*54).formattedRelativeDay()
+}
