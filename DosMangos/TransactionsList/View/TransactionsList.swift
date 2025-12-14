@@ -3,19 +3,6 @@ import Currency
 import IdentifiedCollections
 import SwiftUI
 
-extension Date {
-    var startOfMonth: Date {
-        @Dependency(\.calendar) var calendar
-        let day = calendar.date(from: Calendar.current.dateComponents([.year, .month], from: calendar.startOfDay(for: self)))!
-        return day
-    }
-
-    var endOfMonth: Date {
-        @Dependency(\.calendar) var calendar
-        return calendar.date(byAdding: DateComponents(month: 1, second: -1), to: self.startOfMonth)!
-    }
-}
-
 @Reducer
 struct TransactionsList: Reducer {
     @ObservableState
@@ -26,10 +13,13 @@ struct TransactionsList: Reducer {
         var transactions: [Transaction]
 
         var transactionsByDay: [Int: [Transaction]] {
-            Dictionary(grouping: transactions) { transaction in
-                // extract the day from the transaction
-                transaction.createdAt.get(.day)
+            var byDay = Dictionary(grouping: transactions) { transaction in
+                transaction.localDay
             }
+            for (day, dayTransactions) in byDay {
+                byDay[day] = dayTransactions.sorted { $0.createdAtUTC > $1.createdAtUTC }
+            }
+            return byDay
         }
 
         var balanceByDay: [Int: USD] {
@@ -48,8 +38,12 @@ struct TransactionsList: Reducer {
         }
 
         var transactionsQuery: some Statement<Transaction> & Sendable {
-            Transaction
-                .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
+            @Dependency(\.calendar) var calendar
+            let components = calendar.dateComponents([.year, .month], from: date)
+            let year = components.year!
+            let month = components.month!
+            return Transaction
+                .where { $0.localYear.eq(year) && $0.localMonth.eq((month)) }
                 .select { $0 }
         }
 
@@ -173,11 +167,12 @@ struct TransactionsListView: View {
     private func sectionHeaderView(day: Int) -> some View {
         if
             store.transactionsByDay.keys.contains(day),
-            let createdAt = store.transactionsByDay[day]?.first?.createdAt
+            let transaction = store.transactionsByDay[day]?.first,
+            let headerDate = Date.localDate(year: transaction.localYear, month: transaction.localMonth, day: transaction.localDay)
         {
             VStack(spacing: 0) {
                 HStack {
-                    Text("\(createdAt.formatted(Date.FormatStyle().year().month().day()))")
+                    Text("\(headerDate.formatted(Date.FormatStyle().month().day()))")
                         .font(.caption.bold())
                     Spacer()
                     ValueView(value: store.balanceByDay[day]!)

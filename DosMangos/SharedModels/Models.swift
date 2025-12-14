@@ -21,7 +21,16 @@ struct Transaction: Identifiable, Hashable, Sendable {
     }
     var type: TransactionType
 
-    var createdAt: Date
+    /// Canonical instant (stored as a full timestamp in UTC).
+    var createdAtUTC: Date
+
+    /// Stable local calendar label captured at creation/edit time.
+    ///
+    /// This is used for grouping and month filtering so transactions don't shift days/months when the
+    /// user travels across time zones.
+    var localYear: Int
+    var localMonth: Int
+    var localDay: Int
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {

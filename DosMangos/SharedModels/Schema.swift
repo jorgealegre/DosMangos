@@ -44,7 +44,10 @@ func appDatabase() throws -> any DatabaseWriter {
           "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
           "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
           "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
+          "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
+          "localYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "localMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0
         ) STRICT
         """
         )
@@ -88,6 +91,14 @@ func appDatabase() throws -> any DatabaseWriter {
     }
 
     migrator.registerMigration("Create foreign key indexes") { db in
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_transactions_localYMD_createdAtUTC"
+        ON "transactions"("localYear", "localMonth", "localDay", "createdAtUTC")
+        """
+        )
+        .execute(db)
+
         try #sql(
         """
         CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_transactionID"
@@ -142,6 +153,7 @@ extension Database {
         @Dependency(\.uuid) var uuid
 
         let transactionIDs = (0...10).map { _ in uuid() }
+        let local = now.localDateComponents()
         try seed {
             Transaction(
                 id: transactionIDs[0],
@@ -149,7 +161,10 @@ extension Database {
                 valueMinorUnits: 100500_00,
                 currencyCode: "ARS",
                 type: .expense,
-                createdAt: now
+                createdAtUTC: now,
+                localYear: local.year,
+                localMonth: local.month,
+                localDay: local.day
             )
 
             let tagIDs = ["weekend", "friends", "guilty_pleasure"]

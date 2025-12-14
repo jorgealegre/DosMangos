@@ -14,6 +14,10 @@ struct TransactionForm: Reducer {
         var isPresentingTagsPopover: Bool
         var focus: Field?
         var transaction: Transaction.Draft
+        /// The user-selected calendar day that the transaction "happened on".
+        ///
+        /// This is independent of `transaction.createdAtUTC`, which is treated as the insert timestamp.
+        var transactionDate: Date
         var selectedCategories: [Category]
         var selectedTags: [Tag]
 
@@ -31,6 +35,9 @@ struct TransactionForm: Reducer {
             selectedTags: [Tag] = []
         ) {
             @Dependency(\.date.now) var now
+            let nowLocal = now.localDateComponents()
+            let defaultTransactionDate =
+                Date.localDate(year: nowLocal.year, month: nowLocal.month, day: nowLocal.day) ?? now
 
             self.isDatePickerVisible = isDatePickerVisible
             self.isPresentingCategoriesPopover = isPresentingCategoriesPopover
@@ -41,8 +48,15 @@ struct TransactionForm: Reducer {
                 valueMinorUnits: 0,
                 currencyCode: "USD",
                 type: .expense,
-                createdAt: now
+                createdAtUTC: now,
+                localYear: nowLocal.year,
+                localMonth: nowLocal.month,
+                localDay: nowLocal.day
             )
+            self.transactionDate =
+                transaction.flatMap { txn in
+                    Date.localDate(year: txn.localYear, month: txn.localMonth, day: txn.localDay)
+                } ?? defaultTransactionDate
             self.selectedCategories = selectedCategories
             self.selectedTags = selectedTags
         }
@@ -59,7 +73,6 @@ struct TransactionForm: Reducer {
             case nextDayButtonTapped
             case previousDayButtonTapped
             case saveButtonTapped
-            case setCreationDate(Date)
             case setDescription(String)
             case setValue(String)
             case valueInputFinished
@@ -70,6 +83,7 @@ struct TransactionForm: Reducer {
         case transactionTypeChanged(Transaction.TransactionType)
     }
 
+    @Dependency(\.calendar) private var calendar
     @Dependency(\.dismiss) private var dismiss
     @Dependency(\.defaultDatabase) private var database
 
@@ -98,19 +112,25 @@ struct TransactionForm: Reducer {
                     return .none
 
                 case .nextDayButtonTapped:
-                    state.transaction.createdAt.addTimeInterval(60*60*24)
+                    state.transactionDate = calendar.date(byAdding: .day, value: 1, to: state.transactionDate)!
                     return .none
 
                 case .previousDayButtonTapped:
-                    state.transaction.createdAt.addTimeInterval(-60*60*24)
+                    state.transactionDate = calendar.date(byAdding: .day, value: -1, to: state.transactionDate)!
                     return .none
 
                 case .saveButtonTapped:
                     state.focus = nil
-                    let transaction = state.transaction
+                    var transaction = state.transaction
+                    let transactionDate = state.transactionDate
                     let selectedCategories = state.selectedCategories
                     let selectedTags = state.selectedTags
-                    return .run { _ in
+                    // Derive the stable local Y/M/D label at the persistence boundary.
+                    let local = transactionDate.localDateComponents()
+                    transaction.localYear = local.year
+                    transaction.localMonth = local.month
+                    transaction.localDay = local.day
+                    return .run { [transaction] _ in
                         withErrorReporting {
                             try database.write { db in
                                 let transactionID = try Transaction.upsert { transaction }
@@ -140,10 +160,6 @@ struct TransactionForm: Reducer {
                         }
                         await dismiss()
                     }
-
-                case let .setCreationDate(creationDate):
-                    state.transaction.createdAt = creationDate
-                    return .none
 
                 case let .setDescription(description):
                     state.transaction.description = description
@@ -223,7 +239,7 @@ struct TransactionFormView: View {
                     send(.dateButtonTapped, animation: .default)
                 } label: {
                     // TODO: show this as Today, Yesterday, etc
-                    Text("\(store.transaction.createdAt.formatted(Date.FormatStyle().day().month(.wide).year()))")
+                    Text("\(store.transactionDate.formatted(Date.FormatStyle().day().month(.wide).year()))")
                 }
 
                 Spacer()
@@ -250,7 +266,7 @@ struct TransactionFormView: View {
             if store.isDatePickerVisible {
                 DatePicker(
                     "",
-                    selection: $store.transaction.createdAt.sending(\.view.setCreationDate),
+                    selection: $store.transactionDate,
                     displayedComponents: .date
                 )
                 .datePickerStyle(.graphical)
