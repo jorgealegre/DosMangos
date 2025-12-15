@@ -2,10 +2,8 @@ import SwiftUI
 
 struct TransactionView: View {
     let transaction: Transaction
-    @State private var categories: [Category] = []
-    @State private var tags: [Tag] = []
-    
-    @Dependency(\.defaultDatabase) private var database
+    let categories: [String]
+    let tags: [String]
 
     var body: some View {
         HStack {
@@ -15,12 +13,12 @@ struct TransactionView: View {
                         .font(.title2)
                     Spacer()
                 }
-                
+
                 if !categories.isEmpty || !tags.isEmpty {
                     HStack(spacing: 4) {
                         if !categories.isEmpty {
-                            ForEach(categories) { category in
-                                Text(category.title)
+                            ForEach(categories, id: \.self) { category in
+                                Text(category)
                                     .font(.caption)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -28,10 +26,10 @@ struct TransactionView: View {
                                     .cornerRadius(4)
                             }
                         }
-                        
+
                         if !tags.isEmpty {
-                            ForEach(tags) { tag in
-                                Text("#\(tag.title)")
+                            ForEach(tags, id: \.self) { tag in
+                                Text("#\(tag)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -42,32 +40,6 @@ struct TransactionView: View {
             Spacer()
 
             ValueView(value: transaction.value)
-        }
-        .task {
-            await loadCategoriesAndTags()
-        }
-    }
-    
-    private func loadCategoriesAndTags() async {
-        await withErrorReporting {
-            let fetchedCategories = try await database.read { db in
-                try Category
-                    .join(TransactionCategory.all) { $0.title.eq($1.categoryID) }
-                    .where { $1.transactionID.eq(transaction.id) }
-                    .select { category, _ in category }
-                    .fetchAll(db)
-            }
-            
-            let fetchedTags = try await database.read { db in
-                try Tag
-                    .join(TransactionTag.all) { $0.title.eq($1.tagID) }
-                    .where { $1.transactionID.eq(transaction.id) }
-                    .select { tag, _ in tag }
-                    .fetchAll(db)
-            }
-            
-            self.categories = fetchedCategories
-            self.tags = fetchedTags
         }
     }
 }

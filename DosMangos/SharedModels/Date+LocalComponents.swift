@@ -48,13 +48,3 @@ extension Date {
         return self.formatted(Date.FormatStyle().month().day().weekday(.wide))
     }
 }
-
-import Playgrounds
-#Playground {
-    let date = Date()
-    _ = date.formattedRelativeDay()
-    _ = date.addingTimeInterval(60*60*4).formattedRelativeDay()
-    _ = date.addingTimeInterval(60*60*28).formattedRelativeDay()
-    _ = date.addingTimeInterval(-60*60*24).formattedRelativeDay()
-    _ = date.addingTimeInterval(-60*60*54).formattedRelativeDay()
-}

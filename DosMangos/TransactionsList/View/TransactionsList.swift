@@ -1,32 +1,44 @@
 import ComposableArchitecture
 import Currency
 import IdentifiedCollections
+import SQLiteData
 import SwiftUI
 
 @Reducer
 struct TransactionsList: Reducer {
+
+    @Selection
+    struct Row: Identifiable, Hashable, Sendable {
+        var id: UUID { transaction.id }
+        let transaction: Transaction
+        @Column(as: [String].JSONRepresentation.self)
+        let categories: [String]
+        @Column(as: [String].JSONRepresentation.self)
+        let tags: [String]
+    }
+
     @ObservableState
     struct State: Equatable {
         var date: Date
 
-        @FetchAll(Transaction.none) // this query is dynamic
-        var transactions: [Transaction]
+        @FetchAll(Row.none) // this query is dynamic
+        var rows: [Row]
 
-        var transactionsByDay: [Int: [Transaction]] {
-            var byDay = Dictionary(grouping: transactions) { transaction in
-                transaction.localDay
+        var rowsByDay: [Int: [Row]] {
+            var byDay = Dictionary(grouping: rows) { row in
+                row.transaction.localDay
             }
-            for (day, dayTransactions) in byDay {
-                byDay[day] = dayTransactions.sorted { $0.createdAtUTC > $1.createdAtUTC }
+            for (day, dayRows) in byDay {
+                byDay[day] = dayRows.sorted { $0.transaction.createdAtUTC > $1.transaction.createdAtUTC }
             }
             return byDay
         }
 
         var balanceByDay: [Int: USD] {
             var balanceByDay: [Int: USD] = [:]
-            for (day, transactions) in transactionsByDay {
-                balanceByDay[day] = transactions
-                    .map { $0.value }
+            for (day, rows) in rowsByDay {
+                balanceByDay[day] = rows
+                    .map { $0.transaction.value }
                     .reduce(USD(integerLiteral: 0)) { total, value in
                         total.adding(value)
                     }
@@ -34,24 +46,32 @@ struct TransactionsList: Reducer {
             return balanceByDay
         }
         var days: [Int] {
-            Array(transactionsByDay.keys.sorted().reversed())
+            Array(rowsByDay.keys.sorted().reversed())
         }
 
-        var transactionsQuery: some Statement<Transaction> & Sendable {
+        var rowsQuery: some Statement<Row> & Sendable {
             @Dependency(\.calendar) var calendar
             let components = calendar.dateComponents([.year, .month], from: date)
             let year = components.year!
             let month = components.month!
+
             return Transaction
+                .order { $0.createdAtUTC.desc() }
                 .where { $0.localYear.eq(year) && $0.localMonth.eq((month)) }
-                .select { $0 }
+                .withCategories
+                .withTags
+                .select {
+                    Row.Columns(
+                        transaction: $0,
+                        categories: $2.jsonTitles,
+                        tags: $4.jsonTitles
+                    )
+                }
         }
 
-        init(
-            date: Date
-        ) {
+        init(date: Date) {
             self.date = date
-            self._transactions = FetchAll(transactionsQuery, animation: .default)
+            self._rows = FetchAll(rowsQuery, animation: .default)
         }
     }
 
@@ -71,8 +91,8 @@ struct TransactionsList: Reducer {
         Reduce { state, action in
             switch action {
             case .loadTransactions:
-                let fetchAll = state.$transactions
-                let query = state.transactionsQuery
+                let fetchAll = state.$rows
+                let query = state.rowsQuery
                 return .run { _ in
                     try await fetchAll.load(query, animation: .default)
                 }
@@ -114,13 +134,17 @@ struct TransactionsListView: View {
         NavigationStack {
             List {
                 ForEach(store.days, id: \.self) { day in
-                    let transactions = store.transactionsByDay[day] ?? []
+                    let rows = store.rowsByDay[day] ?? []
                     Section {
-                        ForEach(transactions) { transaction in
-                            TransactionView(transaction: transaction)
+                        ForEach(rows) { row in
+                            TransactionView(
+                                transaction: row.transaction,
+                                categories: row.categories,
+                                tags: row.tags
+                            )
                         }
                         .onDelete(perform: { indexSet in
-                            let ids = indexSet.map { transactions[$0].id }
+                            let ids = indexSet.map { rows[$0].transaction.id }
                             send(.deleteTransactions(ids), animation: .default)
                         })
                     } header: {
@@ -167,8 +191,8 @@ struct TransactionsListView: View {
     @ViewBuilder
     private func sectionHeaderView(day: Int) -> some View {
         if
-            store.transactionsByDay.keys.contains(day),
-            let transaction = store.transactionsByDay[day]?.first,
+            store.rowsByDay.keys.contains(day),
+            let transaction = store.rowsByDay[day]?.first?.transaction,
             let headerDate = Date.localDate(year: transaction.localYear, month: transaction.localMonth, day: transaction.localDay)
         {
             VStack(spacing: 0) {

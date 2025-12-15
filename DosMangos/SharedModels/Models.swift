@@ -1,6 +1,6 @@
 import Currency
 import Foundation
-@_exported import SQLiteData
+import SQLiteData
 
 @Table
 struct Transaction: Identifiable, Hashable, Sendable {
@@ -47,6 +47,24 @@ struct Category: Identifiable, Hashable, Sendable {
 
     var id: String { title }
 }
+extension Category?.TableColumns {
+    var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
+        (self.title ?? "").jsonGroupArray(distinct: true, filter: self.title.isNot(nil))
+    }
+}
+@Table("transactionsCategories")
+struct TransactionCategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var transactionID: UUID
+    var categoryID: String
+}
+extension TransactionCategory.Draft: Equatable {}
+extension Transaction {
+    static let withCategories = Self
+        .group(by: \.id)
+        .leftJoin(TransactionCategory.all) { $0.id.eq($1.transactionID) }
+        .leftJoin(Category.all) { $1.categoryID.eq($2.title) }
+}
 
 @Table
 struct Tag: Identifiable, Hashable, Sendable {
@@ -55,15 +73,11 @@ struct Tag: Identifiable, Hashable, Sendable {
 
     var id: String { title }
 }
-
-@Table("transactionsCategories")
-struct TransactionCategory: Identifiable, Hashable, Sendable {
-    let id: UUID
-    var transactionID: UUID
-    var categoryID: String
+extension Tag?.TableColumns {
+    var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
+        (self.title ?? "").jsonGroupArray(distinct: true, filter: self.title.isNot(nil))
+    }
 }
-extension TransactionCategory.Draft: Equatable {}
-
 @Table("transactionsTags")
 struct TransactionTag: Identifiable, Hashable, Sendable {
     let id: UUID
@@ -71,3 +85,9 @@ struct TransactionTag: Identifiable, Hashable, Sendable {
     var tagID: String
 }
 extension TransactionTag.Draft: Equatable {}
+extension Transaction {
+    static let withTags = Self
+        .group(by: \.id)
+        .leftJoin(TransactionTag.all) { $0.id.eq($1.transactionID) }
+        .leftJoin(Tag.all) { $1.tagID.eq($2.title) }
+}
