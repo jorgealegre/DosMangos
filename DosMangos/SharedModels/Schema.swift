@@ -65,7 +65,8 @@ func appDatabase() throws -> any DatabaseWriter {
         CREATE TABLE "transactionsCategories" (
           "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
           "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
-          "categoryID" TEXT NOT NULL REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE
+          "categoryID" TEXT NOT NULL REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE("transactionID", "categoryID") ON CONFLICT IGNORE
         ) STRICT
         """
         )
@@ -83,7 +84,8 @@ func appDatabase() throws -> any DatabaseWriter {
         CREATE TABLE "transactionsTags" (
           "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
           "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
-          "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE
+          "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE("transactionID", "tagID") ON CONFLICT IGNORE
         ) STRICT
         """
         )

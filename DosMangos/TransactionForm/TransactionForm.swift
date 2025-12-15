@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Foundation
 import SwiftUI
 
 @Reducer
@@ -15,22 +16,18 @@ struct TransactionForm: Reducer {
         var focus: Field?
         var transaction: Transaction.Draft
         /// The user-selected calendar day that the transaction "happened on".
-        ///
-        /// This is independent of `transaction.createdAtUTC`, which is treated as the insert timestamp.
         var transactionDate: Date
         var selectedCategories: [Category]
         var selectedTags: [Tag]
-
-        var value: String {
-            transaction.value == 0 ? "" : transaction.value.description
-        }
+        /// UI is currently whole-dollars only (cents ignored), e.g. "12".
+        var valueText: String
 
         init(
             isDatePickerVisible: Bool = false,
             isPresentingCategoriesPopover: Bool = false,
             isPresentingTagsPopover: Bool = false,
             focus: Field? = .value,
-            transaction: Transaction.Draft? = nil,
+            draft: Transaction.Draft? = nil,
             selectedCategories: [Category] = [],
             selectedTags: [Tag] = []
         ) {
@@ -43,7 +40,7 @@ struct TransactionForm: Reducer {
             self.isPresentingCategoriesPopover = isPresentingCategoriesPopover
             self.isPresentingTagsPopover = isPresentingTagsPopover
             self.focus = focus
-            self.transaction = transaction ?? Transaction.Draft(
+            let transaction = draft ?? Transaction.Draft(
                 description: "",
                 valueMinorUnits: 0,
                 currencyCode: "USD",
@@ -53,12 +50,14 @@ struct TransactionForm: Reducer {
                 localMonth: nowLocal.month,
                 localDay: nowLocal.day
             )
-            self.transactionDate =
-                transaction.flatMap { txn in
-                    Date.localDate(year: txn.localYear, month: txn.localMonth, day: txn.localDay)
+            self.transactionDate = draft
+                .flatMap { existing in
+                    Date.localDate(year: existing.localYear, month: existing.localMonth, day: existing.localDay)
                 } ?? defaultTransactionDate
+            self.transaction = transaction
             self.selectedCategories = selectedCategories
             self.selectedTags = selectedTags
+            self.valueText = transaction.valueMinorUnits != 0 ? String(transaction.valueMinorUnits / 100) : ""
         }
     }
 
@@ -74,7 +73,6 @@ struct TransactionForm: Reducer {
             case previousDayButtonTapped
             case saveButtonTapped
             case setDescription(String)
-            case setValue(String)
             case valueInputFinished
         }
         case binding(BindingAction<State>)
@@ -91,6 +89,10 @@ struct TransactionForm: Reducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding(\.valueText):
+                state.transaction.valueMinorUnits = Int(state.valueText).map { $0 * 100 } ?? 0
+                return .none
+
             case .binding:
                 return .none
 
@@ -165,22 +167,9 @@ struct TransactionForm: Reducer {
                     state.transaction.description = description
                     return .none
 
-                case let .setValue(value):
-                    // Reset state
-                    guard !value.isEmpty else {
-                        return .none
-                    }
-
-                    guard let value = Int(value) else {
-                        // TODO: show error
-                        return .none
-                    }
-
-                    state.transaction.valueMinorUnits = value
-                    return .none
-
                 case .valueInputFinished:
                     state.focus = .description
+                    state.valueText = String(state.transaction.valueMinorUnits / 100)
                     return .none
                 }
 
@@ -215,11 +204,22 @@ struct TransactionFormView: View {
 
     @ViewBuilder
     private var valueInput: some View {
-        TextField("0", text: $store.value.sending(\.view.setValue))
-            .font(.system(size: 80).bold())
-            .keyboardType(.numberPad)
-            .focused($focus, equals: .value)
-            .onSubmit { send(.valueInputFinished) }
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(store.transaction.currencyCode)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Currency")
+
+            TextField("0", text: $store.valueText)
+                .font(.system(size: 80).bold())
+                .minimumScaleFactor(0.2)
+                .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+                .keyboardType(.numberPad)
+                .focused($focus, equals: .value)
+                .onSubmit { send(.valueInputFinished) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

@@ -1,6 +1,13 @@
 ---
 alwaysApply: true
 ---
+
+## Code style
+Try to keep code changes minimal and not too noisy. Avoid abstracting things too much, opt for
+the simpler solutions. Keep code comments simple too, mostly to explain the reason for something.
+If you have ideas of how to make things better but they escape the current ask, propose them to me
+instead of implementing them outright.
+
 ## Database Setup & Migrations
 
 ### Database Bootstrap Pattern
