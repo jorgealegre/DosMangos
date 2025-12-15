@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		CF39BD0F2EE5FD36001CC9CC /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF39BD0D2EE5FD36001CC9CC /* CategoriesView.swift */; };
 		CF39BD102EE5FD36001CC9CC /* TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF39BD0E2EE5FD36001CC9CC /* TagsView.swift */; };
+		CF8C0A1B2F1A2B3C4D5E6F71 /* SettingsFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8C0A1B2F1A2B3C4D5E6F70 /* SettingsFeature.swift */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
 		CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095F2ECABF6E0009C56D /* SQLiteData */; };
 		CF9409632ECABF910009C56D /* Currency in Frameworks */ = {isa = PBXBuildFile; productRef = CF9409622ECABF910009C56D /* Currency */; };
@@ -31,6 +32,7 @@
 /* Begin PBXFileReference section */
 		CF39BD0D2EE5FD36001CC9CC /* CategoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriesView.swift; sourceTree = "<group>"; };
 		CF39BD0E2EE5FD36001CC9CC /* TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagsView.swift; sourceTree = "<group>"; };
+		CF8C0A1B2F1A2B3C4D5E6F70 /* SettingsFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFeature.swift; sourceTree = "<group>"; };
 		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFC631A72918933B00F33785 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CFDB9B102ECABD8F00F6C3BF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -109,6 +111,14 @@
 			path = TransactionForm;
 			sourceTree = "<group>";
 		};
+		CF8C0A1B2F1A2B3C4D5E6F72 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				CF8C0A1B2F1A2B3C4D5E6F70 /* SettingsFeature.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
 		CFDB9B192ECABD8F00F6C3BF /* Model */ = {
 			isa = PBXGroup;
 			children = (
@@ -154,6 +164,7 @@
 				CFDB9B122ECABD8F00F6C3BF /* App */,
 				CFDB9B152ECABD8F00F6C3BF /* SharedModels */,
 				CFDB9B172ECABD8F00F6C3BF /* TransactionForm */,
+				CF8C0A1B2F1A2B3C4D5E6F72 /* Settings */,
 				CFDB9B202ECABD8F00F6C3BF /* TransactionsList */,
 			);
 			path = DosMangos;
@@ -249,6 +260,7 @@
 			files = (
 				CFFF4E7C2905BE200033F168 /* DosMangosApp.swift in Sources */,
 				CFDB9B212ECABD8F00F6C3BF /* AppView.swift in Sources */,
+				CF8C0A1B2F1A2B3C4D5E6F71 /* SettingsFeature.swift in Sources */,
 				CFE98F462EEF6278002703F1 /* Date+LocalComponents.swift in Sources */,
 				CFDB9B222ECABD8F00F6C3BF /* ValueView.swift in Sources */,
 				CF39BD0F2EE5FD36001CC9CC /* CategoriesView.swift in Sources */,

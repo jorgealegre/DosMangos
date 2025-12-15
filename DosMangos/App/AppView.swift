@@ -9,6 +9,7 @@ struct App: Reducer {
 
         var appDelegate: AppDelegateReducer.State
         var transactionsList: TransactionsList.State
+        var settings = Settings.State()
 
         init(
             appDelegate: AppDelegateReducer.State = .init(),
@@ -31,6 +32,7 @@ struct App: Reducer {
 
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
+        case settings(Settings.Action)
         case view(View)
     }
 
@@ -48,6 +50,10 @@ struct App: Reducer {
             TransactionsList()
         }
 
+        Scope(state: \.settings, action: \.settings) {
+            Settings()
+        }
+
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
@@ -60,6 +66,9 @@ struct App: Reducer {
                 return .none
 
             case .transactionsList:
+                return .none
+
+            case .settings:
                 return .none
 
             case let .view(view):
@@ -115,6 +124,16 @@ struct AppView: View {
                 .tabItem {
                     Label("Map", systemImage: "map.fill")
                 }
+
+            SettingsView(
+                store: store.scope(
+                    state: \.settings,
+                    action: \.settings
+                )
+            )
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
         }
         .sheet(
             item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
