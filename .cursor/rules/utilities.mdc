@@ -1,0 +1,93 @@
+---
+alwaysApply: true
+---
+
+## Common Utilities
+
+### Error Handling
+
+```swift
+
+// Usage
+withErrorReporting {
+    try database.write { db in
+        try SyncUp.delete(syncUp).execute(db)
+    }
+}
+```
+
+**Key Points:**
+- Centralized error logging
+- Swallows errors and returns nil
+- Both sync and async variants
+- Use for non-critical operations
+
+### Date Extensions
+
+```swift
+extension Date {
+    var startOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        let day = calendar.date(
+            from: Calendar.current.dateComponents([.year, .month], from: calendar.startOfDay(for: self))
+        )!
+        return day
+    }
+
+    var endOfMonth: Date {
+        @Dependency(\.calendar) var calendar
+        return calendar.date(
+            byAdding: DateComponents(month: 1, second: -1),
+            to: self.startOfMonth
+        )!
+    }
+
+    func get(_ component: Calendar.Component) -> Int {
+        @Dependency(\.calendar) var calendar
+        return calendar.component(component, from: self)
+    }
+}
+```
+
+**Key Points:**
+- Use dependency calendar for testability
+- Common date manipulations
+- Force-unwrap is okay for calendar operations
+
+### Duration Extensions
+
+```swift
+extension Int {
+    var duration: Duration {
+        get { .seconds(self) }
+        set { self = Int(newValue.components.seconds) }
+    }
+}
+
+// Usage
+var seconds: Int = 300
+let duration = seconds.duration // Duration.seconds(300)
+```
+
+**Key Points:**
+- Bidirectional conversion
+- Useful for SwiftUI bindings
+- Makes intent clearer
+
+### Helpers for Testing
+
+```swift
+
+// DateComponentsFormatter
+let dateComponentsFormatter: DateComponentsFormatter = {
+    let formatter = DateComponentsFormatter()
+    formatter.allowedUnits = [.minute, .second]
+    formatter.zeroFormattingBehavior = .pad
+    return formatter
+}()
+```
+
+**Key Points:**
+- Predictable UUIDs for tests
+- Shared formatters for consistency
+- Lazy initialization for performance

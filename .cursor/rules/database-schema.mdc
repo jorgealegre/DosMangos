@@ -1,0 +1,267 @@
+---
+alwaysApply: true
+---
+
+## Database Setup & Migrations
+
+### Database Bootstrap Pattern
+
+All apps follow a similar pattern for database setup:
+
+```swift
+extension DependencyValues {
+    mutating func bootstrapDatabase(
+        syncEngineDelegate: (any SyncEngineDelegate)? = nil
+    ) throws {
+        var configuration = Configuration()
+        configuration.foreignKeysEnabled = true
+        configuration.prepareDatabase { db in
+            #if DEBUG
+            db.trace(options: .profile) {
+                if context == .live {
+                    logger.debug("\($0.expandedDescription)")
+                } else {
+                    print("\($0.expandedDescription)")
+                }
+            }
+            #endif
+        }
+
+        let database = try SQLiteData.defaultDatabase(configuration: configuration)
+        logger.debug(
+            """
+            App database:
+            open "\(database.path)"
+            """
+        )
+
+        var migrator = DatabaseMigrator()
+        #if DEBUG
+        migrator.eraseDatabaseOnSchemaChange = true
+        #endif
+
+        migrator.registerMigration("Create initial tables") { db in
+            // Create tables
+        }
+
+        migrator.registerMigration("Create foreign key indexes") { db in
+            // Add indexes for performance
+        }
+
+        try migrator.migrate(database)
+
+        defaultDatabase = database
+        defaultSyncEngine = try SyncEngine(
+            for: database,
+            tables: SyncUp.self, Attendee.self, Meeting.self
+        )
+    }
+}
+```
+
+**Key Points:**
+- Enable foreign keys for referential integrity
+- Use `db.trace()` for SQL debugging in debug builds
+- Log database path for easy CLI access
+- `eraseDatabaseOnSchemaChange = true` in debug for rapid development
+- Separate migrations by logical groups
+- Create indexes for foreign keys
+- Initialize SyncEngine with all table types
+
+### Table Definitions with @Table
+
+```swift
+@Table
+struct Transaction: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var description: String
+    var valueMinorUnits: Int
+    var currencyCode: String
+    var type: TransactionType
+    var createdAt: Date
+
+    enum TransactionType: Int, QueryBindable, Sendable {
+        case expense
+        case income
+    }
+}
+
+// Always make Draft Equatable for TCA state
+extension Transaction.Draft: Equatable {}
+```
+
+**Key Points:**
+- `@Table` macro generates CRUD operations
+- Always make tables `Sendable` for concurrency
+- Custom enums need `QueryBindable` conformance
+- Draft types need `Equatable` for use in TCA state
+- Use `UUID` for IDs with `uuid()` SQL function
+
+### Migration Patterns
+
+#### Basic Table Creation
+
+```swift
+try #sql(
+    """
+    CREATE TABLE "transactions" (
+      "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+      "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+      "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+      "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
+    ) STRICT
+    """
+).execute(db)
+```
+
+#### Foreign Key Relationships
+
+```swift
+try #sql(
+    """
+    CREATE TABLE "attendees" (
+      "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+      "name" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+      "syncUpID" TEXT NOT NULL REFERENCES "syncUps"("id") ON DELETE CASCADE
+    ) STRICT
+    """
+).execute(db)
+```
+
+#### Indexes for Performance
+
+```swift
+try #sql(
+    """
+    CREATE INDEX IF NOT EXISTS "idx_attendees_syncUpID"
+    ON "attendees"("syncUpID")
+    """
+).execute(db)
+```
+
+**Key Points:**
+- Use `STRICT` mode for type safety
+- Provide sensible defaults for all columns
+- `ON CONFLICT REPLACE` for upsert behavior
+- `ON DELETE CASCADE` for automatic cleanup
+- Always index foreign key columns
+- Use `uuid()` and `datetime('now')` SQL functions
+
+### Sample Data Seeding
+
+```swift
+#if DEBUG
+extension Database {
+    func seedSampleData() throws {
+        @Dependency(\.date.now) var now
+        @Dependency(\.uuid) var uuid
+
+        try seed {
+            Transaction(
+                id: uuid(),
+                description: "Sample transaction",
+                valueMinorUnits: 100500_00,
+                currencyCode: "ARS",
+                type: .expense,
+                createdAt: now
+            )
+            SyncUp(id: UUID(1), seconds: 60, theme: .appOrange, title: "Design")
+
+            for name in ["Blob", "Blob Jr"] {
+                Attendee.Draft(name: name, syncUpID: UUID(1))
+            }
+        }
+    }
+}
+#endif
+```
+
+**Key Points:**
+- Only available in DEBUG builds
+- Use Dependencies for testable seeding
+- `seed` block allows mixing entities and drafts
+- Useful for preview and testing
+
+## Database Queries with @FetchAll and @FetchOne (SQLiteData)
+
+### Dynamic Queries
+
+```swift
+@ObservableState
+struct State: Equatable {
+    var date: Date
+
+    @FetchAll(Transaction.none) // Empty initial query
+    var transactions: [Transaction]
+
+    var transactionsQuery: some Statement<Transaction> & Sendable {
+        Transaction
+            .where { $0.createdAt.between(#bind(date.startOfMonth), and: #bind(date.endOfMonth)) }
+            .select { $0 }
+    }
+
+    init(date: Date) {
+        self.date = date
+        self._transactions = FetchAll(transactionsQuery, animation: .default)
+    }
+}
+
+// Loading the query
+case .loadTransactions:
+    let fetchAll = state.$transactions
+    let query = state.transactionsQuery
+    return .run { _ in
+        try await fetchAll.load(query, animation: .default)
+    }
+```
+
+### Static Queries
+
+```swift
+@FetchAll(
+    SyncUp
+        .group(by: \.id)
+        .leftJoin(Attendee.all) { $0.id.eq($1.syncUpID) }
+        .select { Row.Columns(attendeeCount: $1.count(), syncUp: $0) },
+    animation: .default
+)
+var syncUps: [Row]
+
+```
+
+### FetchOne for Single Records
+
+```swift
+@FetchOne var syncUp: SyncUp
+
+init(syncUp: SyncUp) {
+    _syncUp = FetchOne(wrappedValue: syncUp, SyncUp.find(syncUp.id))
+}
+```
+
+**Key Points:**
+- Use `@FetchAll` for collections, `@FetchOne` for single records
+- Can provide initial query or load dynamically
+- Specify animation for smooth updates
+- Access projected value with `$` for loading/reloading
+
+### Database Operations in Effects
+
+```swift
+case .saveTransaction:
+    let transaction = state.transaction
+    return .run { _ in
+        @Dependency(\.defaultDatabase) var database
+        try await database.write { db in
+            try Transaction.insert { transaction }.execute(db)
+        }
+    }
+```
+
+**Key Points:**
+- Use `@Dependency(\.defaultDatabase)` in effects
+- Wrap operations in `database.write` or `database.read`
+- Use `insert`, `update`, `delete` methods from `@Table` macro
+- Handle errors appropriately

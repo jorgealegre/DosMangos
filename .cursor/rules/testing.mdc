@@ -1,0 +1,210 @@
+---
+alwaysApply: true
+---
+
+## Testing Strategies
+
+### Basic Test Structure
+
+```swift
+@MainActor
+struct TodosTests {
+    let clock = TestClock()
+
+    @Test
+    func add() async {
+        let store = TestStore(initialState: Todos.State()) {
+            Todos()
+        } withDependencies: {
+            $0.uuid = .incrementing
+        }
+
+        await store.send(.addTodoButtonTapped) {
+            $0.todos.insert(
+                Todo.State(
+                    description: "",
+                    id: UUID(0),
+                    isComplete: false
+                ),
+                at: 0
+            )
+        }
+    }
+}
+```
+
+**Key Points:**
+- Mark test struct `@MainActor` for async tests
+- Use `TestStore` for exhaustive testing
+- Override dependencies in `withDependencies`
+- Assert state mutations in trailing closure
+
+### Testing Async Effects
+
+```swift
+@Test
+func complete() async {
+    let store = TestStore(initialState: state) {
+        Todos()
+    } withDependencies: {
+        $0.continuousClock = clock
+    }
+
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, true) {
+        $0.todos[id: UUID(0)]?.isComplete = true
+    }
+
+    // Advance test clock
+    await clock.advance(by: .seconds(1))
+
+    // Assert received action
+    await store.receive(\.sortCompletedTodos) {
+        $0.todos = [$0.todos[1], $0.todos[0]]
+    }
+}
+```
+
+**Key Points:**
+- Use `TestClock` for controllable time
+- `clock.advance()` to trigger timers
+- `store.receive()` to assert incoming actions
+- Assert state changes for each action
+
+### Testing Debounced/Cancellable Effects
+
+```swift
+@Test
+func completionDebounce() async {
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, true) {
+        $0.todos[id: UUID(0)]?.isComplete = true
+    }
+
+    await clock.advance(by: .milliseconds(500))
+
+    // Cancel previous effect
+    await store.send(\.todos[id: UUID(0)].binding.isComplete, false) {
+        $0.todos[id: UUID(0)]?.isComplete = false
+    }
+
+    await clock.advance(by: .seconds(1))
+
+    // Only one effect completes
+    await store.receive(\.sortCompletedTodos)
+}
+```
+
+**Key Points:**
+- Test cancellation by triggering same effect
+- Verify only final effect completes
+- Use small time increments to test debouncing
+
+### Testing Long-Running Effects
+
+```swift
+@Test
+func recordHappyPath() async {
+    let didFinish = AsyncThrowingStream.makeStream(of: Bool.self)
+
+    let store = TestStore(initialState: VoiceMemos.State()) {
+        VoiceMemos()
+    } withDependencies: {
+        $0.audioRecorder.startRecording = { @Sendable _ in
+            try await didFinish.stream.first { _ in true }!
+        }
+        $0.audioRecorder.stopRecording = {
+            didFinish.continuation.yield(true)
+            didFinish.continuation.finish()
+        }
+    }
+
+    let task = await store.send(\.recordingMemo.onTask)
+
+    // ... test behavior ...
+
+    await store.send(\.recordingMemo.stopButtonTapped) { /* ... */ }
+    await store.receive(\.recordingMemo.audioRecorderDidFinish.success)
+
+    await task.cancel()
+}
+```
+
+**Key Points:**
+- Use `AsyncThrowingStream` for controllable async sequences
+- Store task reference for cancellation
+- Control when effects complete manually
+- Always cancel long-running tasks
+
+### Non-Exhaustive Testing
+
+```swift
+@Test
+func recordFailureNonExhaustive() async {
+    let store = TestStore(initialState: VoiceMemos.State()) {
+        VoiceMemos()
+    }
+
+    await store.withExhaustivity(.off(showSkippedAssertions: true)) {
+        await store.send(.recordButtonTapped)
+        await store.send(\.recordingMemo.onTask)
+
+        didFinish.continuation.finish(throwing: SomeError())
+
+        // Only assert the important action
+        await store.receive(\.recordingMemo.delegate.didFinish.failure) {
+            $0.alert = AlertState { TextState("Recording failed.") }
+            $0.recordingMemo = nil
+        }
+    }
+}
+```
+
+**Key Points:**
+- Use `.withExhaustivity(.off)` for integration-style tests
+- Focus on important state transitions
+- Skip intermediate actions
+- Useful for happy-path/smoke tests
+
+### Testing Dependencies
+
+#### UUID
+
+```swift
+withDependencies: {
+    $0.uuid = .incrementing // UUID(0), UUID(1), ...
+    $0.uuid = .constant(deadbeefID) // Same UUID every time
+}
+```
+
+#### Date
+
+```swift
+withDependencies: {
+    $0.date = .constant(Date(timeIntervalSinceReferenceDate: 0))
+}
+```
+
+#### Clock
+
+```swift
+let clock = TestClock()
+withDependencies: {
+    $0.continuousClock = clock
+}
+```
+
+#### Custom Clients
+
+```swift
+withDependencies: {
+    $0.audioRecorder.requestRecordPermission = { true }
+    $0.audioRecorder.startRecording = { @Sendable _ in
+        try await didFinish.stream.first { _ in true }!
+    }
+}
+```
+
+**Key Points:**
+- Override all dependencies used by feature
+- Use test-specific values for predictability
+- Control async behavior with streams
+- Deterministic dependencies enable reliable tests

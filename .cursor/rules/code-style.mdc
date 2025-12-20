@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+Prefer to keep things as simple as you can. When generating code, do it in small units and check in often to see how your progress is going. Multiple small units of code changes are preferred.
+
+Don't write code comments that don't explain something important, like an important decision.
+
+If you have ideas of how to make things better but they escape the current ask, propose them to me instead of implementing them outright.

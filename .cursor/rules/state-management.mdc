@@ -1,0 +1,80 @@
+---
+alwaysApply: true
+---
+
+## State Management
+
+### ObservableState Pattern
+
+```swift
+@ObservableState
+struct State: Equatable {
+    var editMode: EditMode = .inactive
+    var todos: IdentifiedArrayOf<Todo.State> = []
+    @Presents var destination: Destination.State?
+
+    var filteredTodos: IdentifiedArrayOf<Todo.State> {
+        // Computed properties for derived state
+        switch filter {
+        case .active: return todos.filter { !$0.isComplete }
+        case .all: return todos
+        case .completed: return todos.filter(\.isComplete)
+        }
+    }
+}
+```
+
+**Key Points:**
+- Use `@ObservableState` for TCA observation
+- Use `@Presents` for optional presentation state
+- Computed properties for derived state
+- Keep state normalized (avoid duplicated data)
+
+### IdentifiedArrayOf for Collections
+
+```swift
+var todos: IdentifiedArrayOf<Todo.State> = []
+
+// Access by ID
+state.todos[id: todoID]?.description = "Updated"
+
+// Remove by ID
+state.todos.remove(id: todoID)
+
+// Insert at position
+state.todos.insert(newTodo, at: 0)
+```
+
+**Key Points:**
+- Provides O(1) lookup by ID
+- Elements must be `Identifiable`
+- Use for collections that are frequently accessed by ID
+- Maintains order like regular arrays
+
+### Focus State Management
+
+```swift
+// In State
+struct State: Equatable {
+    enum Field {
+        case value, description
+    }
+    var focus: Field?
+}
+
+// In View
+@FocusState var focus: TransactionForm.State.Field?
+@Bindable var store: StoreOf<TransactionForm>
+
+var body: some View {
+    TextField("Description", text: $store.transaction.description)
+        .focused($focus, equals: .description)
+}
+.bind($store.focus, to: $focus)
+```
+
+**Key Points:**
+- Store focus state in reducer for testability
+- Use `.bind()` to sync TCA and SwiftUI focus
+- Model focus as an enum of focusable fields
+- Programmatically control focus in reducer
