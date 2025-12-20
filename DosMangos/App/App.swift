@@ -25,6 +25,7 @@ struct AppReducer: Reducer {
         enum View {
             case newTransactionButtonTapped
             case discardButtonTapped
+            case shakeDetected
         }
 
         case appDelegate(AppDelegateReducer.Action)
@@ -37,6 +38,7 @@ struct AppReducer: Reducer {
     @Reducer
     enum Destination {
         case transactionForm(TransactionFormReducer)
+        case debugMenu
     }
 
     var body: some ReducerOf<Self> {
@@ -74,6 +76,12 @@ struct AppReducer: Reducer {
                             transaction: Transaction.Draft()
                         )
                     )
+                    return .none
+
+                case .shakeDetected:
+                    #if DEBUG
+                    state.destination = .debugMenu
+                    #endif
                     return .none
                 }
             }
@@ -130,6 +138,17 @@ struct AppView: View {
                     }
             }
         }
+#if DEBUG
+        .sheet(item: $store.scope(
+            state: \.destination?.debugMenu,
+            action: \.destination.debugMenu
+        )) { _ in
+            DebugMenuView()
+        }
+        .onShake {
+            send(.shakeDetected)
+        }
+#endif
     }
 
     @ViewBuilder

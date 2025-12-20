@@ -11,6 +11,17 @@ struct CategoriesView: View {
     @Dependency(\.defaultDatabase) var database
     @Environment(\.dismiss) var dismiss
 
+    var subcategoriesByParent: [String: [Category]] {
+        Dictionary(grouping: categories.filter { $0.parentCategoryID != nil }) { category in
+            category.parentCategoryID!
+        }
+    }
+
+    var parentCategories: [Category] {
+        categories.filter { $0.parentCategoryID == nil }
+            .sorted { $0.title < $1.title }
+    }
+
     var body: some View {
         Form {
             let selectedCategoryIDs = Set(selectedCategories.map(\.id))
@@ -21,19 +32,57 @@ struct CategoriesView: View {
                 }
             }
             if !categories.isEmpty {
-                Section {
-                    ForEach(categories) { category in
-                        CategoryRow(
-                            isSelected: selectedCategoryIDs.contains(category.id),
-                            selectedCategories: $selectedCategories,
-                            category: category
-                        )
-                        .swipeActions {
-                            Button("Delete", role: .destructive) {
-                                deleteButtonTapped(category: category)
+                // Grouped sections for parents with children
+                ForEach(parentCategories) { parent in
+                    let subcategories = subcategoriesByParent[parent.title] ?? []
+                    if !subcategories.isEmpty {
+                        Section(parent.title) {
+                            // Parent category row
+                            CategoryRow(
+                                isSelected: selectedCategoryIDs.contains(parent.id),
+                                selectedCategories: $selectedCategories,
+                                category: parent
+                            )
+                            .swipeActions {
+                                Button("Delete", role: .destructive) {
+                                    deleteButtonTapped(category: parent)
+                                }
+                                Button("Edit") {
+                                    editButtonTapped(category: parent)
+                                }
                             }
-                            Button("Edit") {
-                                editButtonTapped(category: category)
+                            // Subcategory rows
+                            ForEach(subcategories.sorted { $0.title < $1.title }) { subcategory in
+                                CategoryRow(
+                                    isSelected: selectedCategoryIDs.contains(subcategory.id),
+                                    selectedCategories: $selectedCategories,
+                                    category: subcategory
+                                )
+                                .swipeActions {
+                                    Button("Delete", role: .destructive) {
+                                        deleteButtonTapped(category: subcategory)
+                                    }
+                                    Button("Edit") {
+                                        editButtonTapped(category: subcategory)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Standalone parent (no children)
+                        Section {
+                            CategoryRow(
+                                isSelected: selectedCategoryIDs.contains(parent.id),
+                                selectedCategories: $selectedCategories,
+                                category: parent
+                            )
+                            .swipeActions {
+                                Button("Delete", role: .destructive) {
+                                    deleteButtonTapped(category: parent)
+                                }
+                                Button("Edit") {
+                                    editButtonTapped(category: parent)
+                                }
                             }
                         }
                     }
@@ -100,6 +149,8 @@ private struct CategoryRow: View {
             if isSelected {
                 selectedCategories.removeAll(where: { $0.id == category.id })
             } else {
+                // Single-select: clear previous selection and select new one
+                selectedCategories.removeAll()
                 selectedCategories.append(category)
             }
         } label: {

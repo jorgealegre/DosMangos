@@ -15,7 +15,7 @@ struct TransactionFormReducer: Reducer {
         var isPresentingTagsPopover: Bool = false
         var focus: Field? = .value
         var transaction: Transaction.Draft
-        var selectedCategories: [Category] = []
+        var selectedCategory: Category?
         var selectedTags: [Tag] = []
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
 
@@ -84,7 +84,7 @@ struct TransactionFormReducer: Reducer {
                 case .saveButtonTapped:
                     state.focus = nil
                     let transaction = state.transaction
-                    let selectedCategories = state.selectedCategories
+                    let selectedCategory = state.selectedCategory
                     let selectedTags = state.selectedTags
                     return .run { [transaction] _ in
                         withErrorReporting {
@@ -96,12 +96,12 @@ struct TransactionFormReducer: Reducer {
                                     .where { $0.transactionID.eq(transactionID) }
                                     .delete()
                                     .execute(db)
-                                try TransactionCategory.insert {
-                                    selectedCategories.map { category in
+                                if let category = selectedCategory {
+                                    try TransactionCategory.insert {
                                         TransactionCategory.Draft(transactionID: transactionID, categoryID: category.id)
                                     }
+                                    .execute(db)
                                 }
-                                .execute(db)
                                 try TransactionTag
                                     .where { $0.transactionID.eq(transactionID) }
                                     .delete()
@@ -261,7 +261,10 @@ struct TransactionFormView: View {
         }
         .popover(isPresented: $store.isPresentingCategoriesPopover) {
             NavigationStack {
-                CategoriesView(selectedCategories: $store.selectedCategories)
+                CategoriesView(selectedCategories: Binding(
+                    get: { store.selectedCategory.map { [$0] } ?? [] },
+                    set: { store.selectedCategory = $0.first }
+                ))
             }
         }
     }
@@ -298,9 +301,17 @@ struct TransactionFormView: View {
     }
 
     private var categoriesDetail: Text? {
-        guard !store.selectedCategories.isEmpty else { return nil }
-        let allCategories = store.selectedCategories.map(\.title).joined(separator: ", ")
-        return Text(allCategories)
+        guard let category = store.selectedCategory else { return nil }
+        // Format: "Parent › Child" if has parent, else just "Category"
+        let categoryTitle: String
+        if let parentID = category.parentCategoryID {
+            // Need to fetch parent title - for now just show category title
+            // TODO: Load parent category to show full "Parent › Child" format
+            categoryTitle = category.title
+        } else {
+            categoryTitle = category.title
+        }
+        return Text(categoryTitle)
     }
 
     private var tagsDetail: Text? {

@@ -22,6 +22,8 @@ func appDatabase() throws -> any DatabaseWriter {
             }
         }
 #endif
+
+        try db.createViews()
     }
     let database = try SQLiteData.defaultDatabase(configuration: configuration)
     logger.debug(
@@ -55,7 +57,8 @@ func appDatabase() throws -> any DatabaseWriter {
         try #sql(
         """
         CREATE TABLE "categories" (
-          "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL
+          "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL,
+          "parentCategoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE
         ) STRICT
         """
         )
@@ -129,6 +132,14 @@ func appDatabase() throws -> any DatabaseWriter {
         """
         )
         .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_categories_parentCategoryID"
+        ON "categories"("parentCategoryID")
+        """
+        )
+        .execute(db)
     }
 
     try migrator.migrate(database)
@@ -142,6 +153,47 @@ func appDatabase() throws -> any DatabaseWriter {
     }
 
     return database
+}
+
+// MARK: - Views
+
+extension Database {
+    func createViews() throws {
+
+        try #sql("""
+        CREATE TEMPORARY VIEW \(raw: TransactionCategoriesWithDisplayName.tableName) AS
+        SELECT
+            \(TransactionCategory.columns), 
+            CASE
+                WHEN "category".\(raw: Category.columns.title.name) IS NULL THEN ''
+                WHEN "parentCategory".\(raw: Category.columns.title.name) IS NOT NULL
+                THEN "parentCategory".\(raw: Category.columns.title.name) || ' › ' || "category".\(raw: Category.columns.title.name)
+                ELSE "category".\(raw: Category.columns.title.name)
+            END AS \(raw: TransactionCategoriesWithDisplayName.columns.displayName.name)
+        FROM \(raw: TransactionCategory.tableName)
+        LEFT JOIN \(raw: Category.tableName) AS "category"
+        ON \(TransactionCategory.columns.categoryID) = "category".\(raw: Category.columns.title.name)
+        LEFT JOIN \(raw: Category.tableName) AS "parentCategory" 
+        ON "category".\(raw: Category.columns.parentCategoryID.name) = "parentCategory".\(raw: Category.columns.title.name)
+        """)
+        .execute(self)
+
+        try TransactionsListRow.createTemporaryView(
+            as: Transaction
+                .group(by: \.id)
+                .join(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
+                .withTags
+                .select {
+                    TransactionsListRow.Columns(
+                        transaction: $0,
+                        category: $1.displayName,
+                        tags: $3.jsonTitles
+                    )
+                }
+
+        )
+        .execute(self)
+    }
 }
 
 // TODO: db functions
@@ -161,7 +213,22 @@ extension Database {
 
         // Reference data
         let tagIDs = ["weekend", "friends", "guilty_pleasure", "work", "recurring", "health"]
-        let categoryIDs = ["Home", "Food & Drinks", "Entertainment", "Personal", "Health", "Transport", "Salary"]
+
+        // Hierarchical categories
+        let parentCategories = ["Home", "Food & Drinks"]
+        let subcategories: [String: [String]] = [
+            "Home": ["Furniture", "Maintenance", "Utilities"],
+            "Food & Drinks": ["Restaurants", "Groceries"]
+        ]
+        let standaloneCategories = ["Entertainment", "Transport", "Salary", "Health"]
+
+        // Build flat list for transaction assignment
+        var categoryIDs: [String] = []
+        categoryIDs.append(contentsOf: parentCategories)
+        categoryIDs.append(contentsOf: standaloneCategories)
+        for (_, subs) in subcategories {
+            categoryIDs.append(contentsOf: subs)
+        }
 
         // We want ~10 transactions in the current month and a few in the previous month.
         //
@@ -188,11 +255,24 @@ extension Database {
 
         try seed {
             for tagID in tagIDs {
-              Tag(title: tagID)
+                Tag(title: tagID)
             }
 
-            for categoryID in categoryIDs {
-              Category(title: categoryID)
+            // Create parent categories
+            for parentID in parentCategories {
+                Category(title: parentID, parentCategoryID: nil)
+            }
+
+            // Create subcategories
+            for (parentID, subs) in subcategories {
+                for subID in subs {
+                    Category(title: subID, parentCategoryID: parentID)
+                }
+            }
+
+            // Create standalone categories
+            for categoryID in standaloneCategories {
+                Category(title: categoryID, parentCategoryID: nil)
             }
 
             // Current month (~10)

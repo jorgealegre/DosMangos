@@ -8,24 +8,14 @@ import SwiftUI
 @Reducer
 struct TransactionsList: Reducer {
 
-    @Selection
-    struct Row: Identifiable, Hashable, Sendable {
-        var id: UUID { transaction.id }
-        let transaction: Transaction
-        @Column(as: [String].JSONRepresentation.self)
-        let categories: [String]
-        @Column(as: [String].JSONRepresentation.self)
-        let tags: [String]
-    }
-
     @ObservableState
     struct State: Equatable {
         var date: Date
 
-        @FetchAll(Row.none) // this query is dynamic
-        var rows: [Row]
+        @FetchAll(TransactionsListRow.none) // this query is dynamic
+        var rows: [TransactionsListRow]
 
-        var rowsByDay: [Int: [Row]] {
+        var rowsByDay: [Int: [TransactionsListRow]] {
             var byDay = Dictionary(grouping: rows) { row in
                 row.transaction.localDay
             }
@@ -50,25 +40,20 @@ struct TransactionsList: Reducer {
             Array(rowsByDay.keys.sorted().reversed())
         }
 
-        var rowsQuery: some Statement<Row> & Sendable {
+        var rowsQuery: some Statement<TransactionsListRow> & Sendable {
             @Dependency(\.calendar) var calendar
             let components = calendar.dateComponents([.year, .month], from: date)
             let year = components.year!
             let month = components.month!
 
-            return Transaction
-                .order { $0.createdAtUTC.desc() }
-                .where { $0.localYear.eq(year) && $0.localMonth.eq((month)) }
-                .withCategories
-                .withTags
-                .select {
-                    Row.Columns(
-                        transaction: $0,
-                        categories: $2.jsonTitles,
-                        tags: $4.jsonTitles
-                    )
-                }
+            return TransactionsListRow
+//                .order { $0.createdAtUTC.desc() }
+                .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq((month)) }
+                .select { $0 }
         }
+
+//        WHERE "transactions"."localYear" = \(#bind(year))
+//          AND "transactions"."localMonth" = \(#bind(month))
 
         init(date: Date) {
             self.date = date
@@ -142,7 +127,7 @@ struct TransactionsListView: View {
                         ForEach(rows) { row in
                             TransactionView(
                                 transaction: row.transaction,
-                                categories: row.categories,
+                                category: row.category,
                                 tags: row.tags
                             )
                         }

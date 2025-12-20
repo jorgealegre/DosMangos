@@ -87,17 +87,16 @@ extension Transaction.Draft {
     }
 }
 
+// MARK: - Category
+
 @Table
 struct Category: Identifiable, Hashable, Sendable {
     @Column(primaryKey: true)
     var title: String
 
+    var parentCategoryID: String?
+
     var id: String { title }
-}
-extension Category?.TableColumns {
-    var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
-        (self.title ?? "").jsonGroupArray(distinct: true, filter: self.title.isNot(nil))
-    }
 }
 @Table("transactionsCategories")
 struct TransactionCategory: Identifiable, Hashable, Sendable {
@@ -106,12 +105,17 @@ struct TransactionCategory: Identifiable, Hashable, Sendable {
     var categoryID: String
 }
 extension TransactionCategory.Draft: Equatable {}
-extension Transaction {
-    static let withCategories = Self
-        .group(by: \.id)
-        .leftJoin(TransactionCategory.all) { $0.id.eq($1.transactionID) }
-        .leftJoin(Category.all) { $1.categoryID.eq($2.title) }
+
+@Table("transactionsCategoriesWithDisplayName")
+struct TransactionCategoriesWithDisplayName {
+    let id: UUID
+    var transactionID: UUID
+    var categoryID: String
+
+    let displayName: String
 }
+
+// MARK: - Tag
 
 @Table
 struct Tag: Identifiable, Hashable, Sendable {
@@ -137,4 +141,15 @@ extension Transaction {
         .group(by: \.id)
         .leftJoin(TransactionTag.all) { $0.id.eq($1.transactionID) }
         .leftJoin(Tag.all) { $1.tagID.eq($2.title) }
+}
+
+// MARK: - TransactionsListRow
+
+@Table("transactionsListRows")
+struct TransactionsListRow: Identifiable, Hashable, Sendable {
+    var id: UUID { transaction.id }
+    let transaction: Transaction
+    let category: String
+    @Column(as: [String].JSONRepresentation.self)
+    let tags: [String]
 }
