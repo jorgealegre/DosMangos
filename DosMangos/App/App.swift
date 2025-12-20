@@ -36,7 +36,7 @@ struct AppReducer: Reducer {
 
     @Reducer
     enum Destination {
-        case transactionForm(TransactionForm)
+        case transactionForm(TransactionFormReducer)
     }
 
     var body: some ReducerOf<Self> {
@@ -69,7 +69,7 @@ struct AppReducer: Reducer {
                     return .none
 
                 case .newTransactionButtonTapped:
-                    state.destination = .transactionForm(TransactionForm.State())
+                    state.destination = .transactionForm(TransactionFormReducer.State())
                     return .none
                 }
             }

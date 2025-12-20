@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 
 @Reducer
-struct TransactionForm: Reducer {
+struct TransactionFormReducer: Reducer {
     @ObservableState
     struct State: Equatable {
         enum Field {
@@ -181,12 +181,12 @@ struct TransactionForm: Reducer {
     }
 }
 
-@ViewAction(for: TransactionForm.self)
+@ViewAction(for: TransactionFormReducer.self)
 struct TransactionFormView: View {
 
-    @FocusState var focus: TransactionForm.State.Field?
+    @FocusState var focus: TransactionFormReducer.State.Field?
 
-    @Bindable var store: StoreOf<TransactionForm>
+    @Bindable var store: StoreOf<TransactionFormReducer>
 
     var body: some View {
         Form {
@@ -392,8 +392,8 @@ struct TransactionFormView: View {
         .sheet(isPresented: .constant(true)) {
             NavigationStack {
                 TransactionFormView(
-                    store: Store(initialState: TransactionForm.State()) {
-                        TransactionForm()
+                    store: Store(initialState: TransactionFormReducer.State()) {
+                        TransactionFormReducer()
                             ._printChanges()
                     }
                 )
