@@ -2,19 +2,18 @@ import ComposableArchitecture
 import SwiftUI
 
 @Reducer
-struct App: Reducer {
+struct AppReducer: Reducer {
     @ObservableState
     struct State: Equatable {
         @Presents var destination: Destination.State?
 
         var appDelegate: AppDelegateReducer.State
         var transactionsList: TransactionsList.State
-        var settings = Settings.State()
 
         init(
-            appDelegate: AppDelegateReducer.State = .init(),
+            appDelegate: AppDelegateReducer.State = AppDelegateReducer.State(),
             destination: Destination.State? = nil,
-            transactionsList: TransactionsList.State = .init(date: .now)
+            transactionsList: TransactionsList.State = TransactionsList.State(date: .now)
         ) {
             self.appDelegate = appDelegate
             self.destination = destination
@@ -28,11 +27,10 @@ struct App: Reducer {
             case discardButtonTapped
         }
 
-        case destination(PresentationAction<Destination.Action>)
-
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
-        case settings(Settings.Action)
+
+        case destination(PresentationAction<Destination.Action>)
         case view(View)
     }
 
@@ -50,10 +48,6 @@ struct App: Reducer {
             TransactionsList()
         }
 
-        Scope(state: \.settings, action: \.settings) {
-            Settings()
-        }
-
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
@@ -68,18 +62,8 @@ struct App: Reducer {
             case .transactionsList:
                 return .none
 
-            case .settings:
-                return .none
-
             case let .view(view):
                 switch view {
-//                case .addTransactionButtonTapped:
-//                    defer { state.destination = nil }
-//                    guard let transaction = state.destination?.transactionForm?.transaction
-//                    else { return .none }
-//
-//                    return saveTransaction(state: &state, transaction)
-
                 case .discardButtonTapped:
                     state.destination = nil
                     return .none
@@ -93,11 +77,11 @@ struct App: Reducer {
         .ifLet(\.$destination, action: \.destination)
     }
 }
-extension App.Destination.State: Equatable {}
+extension AppReducer.Destination.State: Equatable {}
 
-@ViewAction(for: App.self)
+@ViewAction(for: AppReducer.self)
 struct AppView: View {
-    @Bindable var store: StoreOf<App>
+    @Bindable var store: StoreOf<AppReducer>
 
     var body: some View {
         TabView {
@@ -124,20 +108,11 @@ struct AppView: View {
                 .tabItem {
                     Label("Map", systemImage: "map.fill")
                 }
-
-            SettingsView(
-                store: store.scope(
-                    state: \.settings,
-                    action: \.settings
-                )
-            )
-            .tabItem {
-                Label("Settings", systemImage: "gearshape")
-            }
         }
-        .sheet(
-            item: $store.scope(state: \.destination?.transactionForm, action: \.destination.transactionForm)
-        ) { store in
+        .sheet(item: $store.scope(
+            state: \.destination?.transactionForm,
+            action: \.destination.transactionForm
+        )) { store in
             NavigationStack {
                 TransactionFormView(store: store)
                     .navigationTitle("New Transaction")
@@ -148,11 +123,6 @@ struct AppView: View {
                                 send(.discardButtonTapped)
                             }
                         }
-//                        ToolbarItem(placement: .confirmationAction) {
-//                            Button("Add") {
-////                                send(.addTransactionButtonTapped)
-//                            }
-//                        }
                     }
             }
         }
@@ -193,8 +163,8 @@ struct AppView: View {
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
     }
-    AppView(store: Store(initialState: App.State()) {
-        App()
+    AppView(store: Store(initialState: AppReducer.State()) {
+        AppReducer()
     })
     .tint(.purple)
 }

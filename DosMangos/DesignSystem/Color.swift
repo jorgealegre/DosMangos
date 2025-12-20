@@ -14,10 +14,10 @@ extension Color {
 
 extension Color {
     static var income: Color {
-        .init(hex: 0x9BD770)
+        Color(hex: 0x9BD770)
     }
 
     static var expense: Color {
-        .init(hex: 0xFE8176)
+        Color(hex: 0xFE8176)
     }
 }

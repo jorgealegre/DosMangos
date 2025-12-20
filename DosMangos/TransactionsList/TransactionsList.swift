@@ -121,7 +121,6 @@ struct TransactionsList: Reducer {
 
             }
         }
-        ._printChanges()
     }
 }
 
@@ -216,6 +215,7 @@ struct TransactionsListView: View {
     TransactionsListView(
         store: Store(initialState: TransactionsList.State(date: .now)) {
             TransactionsList()
+                ._printChanges()
         }
     )
     .tint(.purple)

@@ -3,7 +3,7 @@ import Dependencies
 import SwiftUI
 
 @main
-struct DosMangosApp: SwiftUI.App {
+struct DosMangosApp: App {
     @UIApplicationDelegateAdaptor private var delegate: AppDelegate
 
     @Dependency(\.context) var context
@@ -22,7 +22,6 @@ struct DosMangosApp: SwiftUI.App {
                 AppView(
                     store: delegate.store
                 )
-                .tint(.purple)
             }
         }
     }
@@ -31,12 +30,8 @@ struct DosMangosApp: SwiftUI.App {
 final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
     @Dependency(\.context) var context
 
-    lazy var store = Store(
-        initialState: App.State(
-            //            destination: .transactionForm(.init(focus: .description, transaction: .init(absoluteValue: 123, createdAt: Date(), description: "", transactionType: .expense)))
-        )
-    ) {
-        App()
+    lazy var store = Store(initialState: AppReducer.State()) {
+        AppReducer()
     }
 
     func application(

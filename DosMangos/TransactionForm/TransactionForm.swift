@@ -178,7 +178,6 @@ struct TransactionForm: Reducer {
                 return .none
             }
         }
-        ._printChanges()
     }
 }
 
@@ -395,6 +394,7 @@ struct TransactionFormView: View {
                 TransactionFormView(
                     store: Store(initialState: TransactionForm.State()) {
                         TransactionForm()
+                            ._printChanges()
                     }
                 )
                 .navigationTitle("New Transaction")

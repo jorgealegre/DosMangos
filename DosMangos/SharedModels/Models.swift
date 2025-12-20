@@ -11,8 +11,9 @@ struct Transaction: Identifiable, Hashable, Sendable {
     var valueMinorUnits: Int
     var currencyCode: String
     var value: USD {
+        // TODO: hardcoded currency
+        //        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
         return USD(integerLiteral: valueMinorUnits)
-//        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
     }
 
     enum TransactionType: Int, QueryBindable, Sendable {
@@ -35,8 +36,8 @@ struct Transaction: Identifiable, Hashable, Sendable {
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
     var value: USD {
+        // TODO: hardcoded currency
         return USD(integerLiteral: valueMinorUnits)
-//        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
     }
 }
 

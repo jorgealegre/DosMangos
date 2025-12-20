@@ -43,14 +43,3 @@ struct TransactionView: View {
         }
     }
 }
-
-//struct TransactionView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        VStack(spacing: 0) {
-////            TransactionView(transaction: .mock())
-////            TransactionView(transaction: .mock())
-////            TransactionView(transaction: .mock())
-//        }
-//        .padding()
-//    }
-//}
