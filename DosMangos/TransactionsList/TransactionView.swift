@@ -39,7 +39,7 @@ struct TransactionView: View {
             }
             Spacer()
 
-            ValueView(value: transaction.value)
+            ValueView(value: transaction.signedValue)
         }
     }
 }

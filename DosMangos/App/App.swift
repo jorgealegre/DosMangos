@@ -69,7 +69,11 @@ struct AppReducer: Reducer {
                     return .none
 
                 case .newTransactionButtonTapped:
-                    state.destination = .transactionForm(TransactionFormReducer.State())
+                    state.destination = .transactionForm(
+                        TransactionFormReducer.State(
+                            transaction: Transaction.Draft()
+                        )
+                    )
                     return .none
                 }
             }
@@ -165,6 +169,7 @@ struct AppView: View {
     }
     AppView(store: Store(initialState: AppReducer.State()) {
         AppReducer()
+            ._printChanges()
     })
     .tint(.purple)
 }

@@ -13,7 +13,11 @@ struct Transaction: Identifiable, Hashable, Sendable {
     var value: USD {
         // TODO: hardcoded currency
         //        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
-        return USD(integerLiteral: valueMinorUnits)
+        return USD(minorUnits: Int64(valueMinorUnits))
+    }
+
+    var signedValue: USD {
+        type == .expense ? value.negated() : value
     }
 
     enum TransactionType: Int, QueryBindable, Sendable {
@@ -37,7 +41,49 @@ extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
     var value: USD {
         // TODO: hardcoded currency
-        return USD(integerLiteral: valueMinorUnits)
+        return USD(minorUnits: Int64(valueMinorUnits))
+    }
+}
+
+extension Transaction.Draft {
+    init() {
+        @Dependency(\.date.now) var now
+        let nowLocal = now.localDateComponents()
+
+        self.init(
+            description: "",
+            valueMinorUnits: 0,
+            currencyCode: "USD",
+            type: .expense,
+            createdAtUTC: now,
+            localYear: nowLocal.year,
+            localMonth: nowLocal.month,
+            localDay: nowLocal.day
+        )
+    }
+
+    var localDate: Date {
+        get {
+            Date.localDate(year: localYear, month: localMonth, day: localDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            localYear = local.year
+            localMonth = local.month
+            localDay = local.day
+        }
+    }
+
+    // 12300 <> "123"
+    var valueText: String {
+        get { valueMinorUnits != 0 ? String(valueMinorUnits / 100) : "" }
+        set {
+            guard let value = Int(newValue) else {
+                valueMinorUnits = 0
+                return
+            }
+            valueMinorUnits = value * 100
+        }
     }
 }
 

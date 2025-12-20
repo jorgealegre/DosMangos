@@ -197,16 +197,16 @@ extension Database {
 
             // Current month (~10)
             let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-                (0, 19, "Dinner at Alto El Fuego", -8050, .expense, 1, [0, 1]),
-                (0, 9, "Coffee", -450, .expense, 1, [4]),
-                (1, 18, "Groceries", -12490, .expense, 0, [4]),
-                (2, 12, "Gym", -3999, .expense, 4, [5, 4]),
-                (3, 8, "Taxi", -1890, .expense, 5, []),
-                (5, 13, "Movie night", -1650, .expense, 2, [0]),
-                (7, 10, "Lunch with friends", -2350, .expense, 1, [1]),
+                (0, 19, "Dinner at Alto El Fuego", 8050, .expense, 1, [0, 1]),
+                (0, 9, "Coffee", 450, .expense, 1, [4]),
+                (1, 18, "Groceries", 12490, .expense, 0, [4]),
+                (2, 12, "Gym", 3999, .expense, 4, [5, 4]),
+                (3, 8, "Taxi", 1890, .expense, 5, []),
+                (5, 13, "Movie night", 1650, .expense, 2, [0]),
+                (7, 10, "Lunch with friends", 2350, .expense, 1, [1]),
                 (9, 16, "Salary", 250_000, .income, 6, [3, 4]),
-                (12, 11, "Streaming subscription", -1299, .expense, 2, [4]),
-                (15, 14, "Pharmacy", -2190, .expense, 4, [5]),
+                (12, 11, "Streaming subscription", 1299, .expense, 2, [4]),
+                (15, 14, "Pharmacy", 2190, .expense, 4, [5]),
             ]
 
             for (index, seed) in currentMonthSeed.enumerated() {
@@ -233,9 +233,9 @@ extension Database {
 
             // Previous month (a few)
             let previousMonthSeed: [(dayOffset: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-                (2, 9, "Book", -1899, .expense, 3, []),
-                (6, 20, "Dinner out", -5400, .expense, 1, [0]),
-                (14, 12, "Internet bill", -5999, .expense, 0, [4]),
+                (2, 9, "Book", 1899, .expense, 3, []),
+                (6, 20, "Dinner out", 5400, .expense, 1, [0]),
+                (14, 12, "Internet bill", 5999, .expense, 0, [4]),
                 (21, 10, "Side project", 42000, .income, 6, [3]),
             ]
 

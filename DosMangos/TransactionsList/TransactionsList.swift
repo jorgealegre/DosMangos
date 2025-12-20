@@ -38,7 +38,7 @@ struct TransactionsList: Reducer {
             var balanceByDay: [Int: USD] = [:]
             for (day, rows) in rowsByDay {
                 balanceByDay[day] = rows
-                    .map { $0.transaction.value }
+                    .map { $0.transaction.signedValue }
                     .reduce(USD(integerLiteral: 0)) { total, value in
                         total.adding(value)
                     }
