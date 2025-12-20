@@ -11,6 +11,40 @@ alwaysApply: true
 - `ViewAction` protocol for view-initiated actions
 - State should conform to `Equatable`
 - Use IdentifiedArray if element is Identifiable
+- Declare dependencies with `@Dependency` as `private var` properties between Action enum and body
+
+### Reducer Structure
+
+```swift
+@Reducer
+struct FeatureReducer: Reducer {
+    @ObservableState
+    struct State: Equatable {
+        // State properties
+    }
+
+    enum Action: ViewAction {
+        enum View {
+            case buttonTapped
+        }
+        case view(View)
+    }
+
+    @Dependency(\.continuousClock) private var clock
+    @Dependency(\.defaultDatabase) private var database
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            // Reducer logic using dependencies
+        }
+    }
+}
+```
+
+**Key Points:**
+- Dependencies are accessible throughout the reducer body and effects
+- Mark dependencies as `private` for encapsulation
+- Dependencies placed between Action and body follow TCA conventions
 
 ### Reducer Composition Patterns
 
@@ -36,12 +70,12 @@ case .buttonTapped:
 #### Cancellable Effects
 
 ```swift
-@Dependency(\.continuousClock) var clock
+@Dependency(\.continuousClock) private var clock
 private enum CancelID { case timer }
 
 case .startTimer:
     return .run { send in
-        for await _ in self.clock.timer(interval: .seconds(1)) {
+        for await _ in clock.timer(interval: .seconds(1)) {
             await send(.timerTicked)
         }
     }
@@ -62,12 +96,31 @@ case .searchQueryChanged:
     .cancellable(id: CancelID.search, cancelInFlight: true)
 ```
 
+#### Effects with Error Handling
+
+For operations that should never fail due to programmer error (not user error):
+
+```swift
+import IssueReporting
+
+case .deleteButtonTapped:
+    let id = state.itemID
+    return .run { _ in
+        withErrorReporting {
+            try await database.write { db in
+                try Item.find(id).delete().execute(db)
+            }
+        }
+    }
+```
+
 **Key Points:**
 - Use `.run` for async effects
 - Use `.cancellable` with IDs for cancellation
 - `cancelInFlight: true` for debouncing
-- Capture dependencies inside effects
-- Always handle errors appropriately
+- Dependencies are accessed directly (not with `self.`)
+- **Wrap programmer errors with `withErrorReporting`**: Database operations with valid data, schema operations, etc.
+- **Don't wrap user errors**: Network failures, invalid user input, permission denials - handle these explicitly
 
 ### Delegate Pattern
 

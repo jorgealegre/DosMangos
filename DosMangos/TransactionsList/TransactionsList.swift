@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Currency
 import IdentifiedCollections
+import IssueReporting
 import SQLiteData
 import SwiftUI
 
@@ -87,6 +88,8 @@ struct TransactionsList: Reducer {
         case view(View)
     }
 
+    @Dependency(\.defaultDatabase) private var database
+
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
@@ -98,13 +101,14 @@ struct TransactionsList: Reducer {
                 }
 
             case let .view(.deleteTransactions(ids)):
-//                ids.forEach { state.transactions.remove(id: $0) }
                 return .run { _ in
-                    do {
-//                        try await transactionsStore.deleteTransactions(ids)
-                    } catch {
-                        print(error)
-                        // TODO: should try to recover
+                    await withErrorReporting {
+                        try await database.write { db in
+                            try Transaction
+                                .where { $0.id.in(ids) }
+                                .delete()
+                                .execute(db)
+                        }
                     }
                 }
 

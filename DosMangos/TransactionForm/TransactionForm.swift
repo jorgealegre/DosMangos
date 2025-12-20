@@ -36,13 +36,11 @@ struct TransactionFormReducer: Reducer {
             case nextDayButtonTapped
             case previousDayButtonTapped
             case saveButtonTapped
-            case setDescription(String)
             case valueInputFinished
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
         case view(View)
-        case transactionTypeChanged(Transaction.TransactionType)
     }
 
     @Dependency(\.calendar) private var calendar
@@ -119,18 +117,10 @@ struct TransactionFormReducer: Reducer {
                         await dismiss()
                     }
 
-                case let .setDescription(description):
-                    state.transaction.description = description
-                    return .none
-
                 case .valueInputFinished:
                     state.focus = .description
                     return .none
                 }
-
-            case let .transactionTypeChanged(transactionType):
-                state.transaction.type = transactionType
-                return .none
             }
         }
     }
@@ -233,24 +223,15 @@ struct TransactionFormView: View {
         Section {
             TextField(
                 "Description",
-                text: Binding(
-                    get: {
-                        store.transaction.description
-                    },
-                    set: { newDescription in
-                        if Set(newDescription).subtracting(Set(store.transaction.description)).contains("\n") {
-                            // submit happened
-                            send(.saveButtonTapped)
-                        } else {
-                            send(.setDescription(newDescription))
-                        }
-                    }
-                ),
+                text: $store.transaction.description,
                 axis: .vertical
             )
             .autocorrectionDisabled()
             .submitLabel(.done)
             .focused($focus, equals: .description)
+            .onSubmit {
+                send(.saveButtonTapped)
+            }
         }
     }
 
