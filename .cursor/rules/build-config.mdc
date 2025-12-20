@@ -12,9 +12,3 @@ alwaysApply: false
 
 ## Build Commands
 - **Build for Simulator**: Use `build_sim` with `simulatorName: "iPhone 17"`
-- **Build for Device**: Use `build_device` with appropriate device ID
-
-## Notes
-- This is an iOS app using SwiftUI and ComposableArchitecture
-- The project uses Swift Package Manager dependencies
-

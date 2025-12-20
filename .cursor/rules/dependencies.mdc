@@ -1,0 +1,142 @@
+---
+alwaysApply: true
+---
+
+## Dependencies Management
+
+### Defining Dependencies
+
+#### Simple Client
+
+```swift
+@DependencyClient
+struct AudioPlayerClient {
+    var play: @Sendable (_ url: URL) async throws -> Bool
+}
+
+extension AudioPlayerClient: TestDependencyKey {
+    static let testValue = Self()
+
+    static let previewValue = Self(
+        play: { _ in
+            try await Task.sleep(for: .seconds(5))
+            return true
+        }
+    )
+}
+
+extension DependencyValues {
+    var audioPlayer: AudioPlayerClient {
+        get { self[AudioPlayerClient.self] }
+        set { self[AudioPlayerClient.self] = newValue }
+    }
+}
+```
+
+**Key Points:**
+- `@DependencyClient` provides default failing implementations
+- `TestDependencyKey` requires `testValue` and optional `previewValue`
+- Test value fails if called without override
+- Preview value allows working in Xcode previews
+
+#### Live Implementation
+
+```swift
+extension AudioPlayerClient: DependencyKey {
+    static let liveValue: Self = {
+        let delegate = AudioPlayerDelegate()
+        return Self(
+            play: { [delegate] url in
+                await delegate.play(url: url)
+            }
+        )
+    }()
+}
+
+private actor AudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
+    var continuation: CheckedContinuation<Bool, Error>?
+    var player: AVAudioPlayer?
+
+    func play(url: URL) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            do {
+                self.player = try AVAudioPlayer(contentsOf: url)
+                self.player?.delegate = self
+                self.player?.play()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(
+        _ player: AVAudioPlayer,
+        successfully flag: Bool
+    ) {
+        continuation?.resume(returning: flag)
+    }
+}
+```
+
+**Key Points:**
+- Separate live implementation from interface
+- Use actors for thread-safe state
+- Wrap callbacks with continuations
+- Keep implementation details private
+
+### Using Dependencies
+
+#### In Reducers
+
+```swift
+@Reducer
+struct Feature {
+    @Dependency(\.audioPlayer) var audioPlayer
+    @Dependency(\.continuousClock) var clock
+    @Dependency(\.uuid) var uuid
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            return .run { send in
+                let result = await audioPlayer.play(url: state.url)
+                await send(.finished(result))
+            }
+        }
+    }
+}
+```
+
+#### In Effects
+
+```swift
+case .saveData:
+    return .run { send in
+        @Dependency(\.defaultDatabase) var database
+        @Dependency(\.date.now) var now
+
+        try await database.write { db in
+            try Record.insert {
+                Record.Draft(createdAt: now)
+            }.execute(db)
+        }
+    }
+```
+
+**Key Points:**
+- Use `@Dependency` property wrapper
+- Available in reducers and effects
+
+### Preparing Dependencies
+
+```swift
+let _ = try! prepareDependencies {
+    try $0.bootstrapDatabase()
+}
+```
+
+**Key Points:**
+- Initialize dependencies before app/view loads
+- Can return values for use in previews/tests
+- Typically used for database setup
+- Available globally after preparation

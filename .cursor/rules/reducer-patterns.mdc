@@ -1,0 +1,101 @@
+---
+alwaysApply: true
+---
+
+## Reducer Patterns
+
+**Key Points:**
+- Use `@Reducer` macro
+- `@ObservableState` for observation
+- Group actions by source: `View`, `Delegate`, etc
+- `ViewAction` protocol for view-initiated actions
+- State should conform to `Equatable`
+- Use IdentifiedArray if element is Identifiable
+
+### Reducer Composition Patterns
+
+**Key Points:**
+- Compose reducers from small, focused pieces
+- Use `Scope` for required child state
+- Use `.forEach` for collections
+- Use `.ifLet` for optional presentations
+- Order matters: child reducers run before parent
+
+### Effect Patterns
+
+#### Simple Run Effect
+
+```swift
+case .buttonTapped:
+    return .run { send in
+        let result = await someAsyncOperation()
+        await send(.operationCompleted(result))
+    }
+```
+
+#### Cancellable Effects
+
+```swift
+@Dependency(\.continuousClock) var clock
+private enum CancelID { case timer }
+
+case .startTimer:
+    return .run { send in
+        for await _ in self.clock.timer(interval: .seconds(1)) {
+            await send(.timerTicked)
+        }
+    }
+    .cancellable(id: CancelID.timer, cancelInFlight: true)
+
+case .stopTimer:
+    return .cancel(id: CancelID.timer)
+```
+
+#### Debounced Effects
+
+```swift
+case .searchQueryChanged:
+    return .run { send in
+        try await clock.sleep(for: .milliseconds(300))
+        await send(.performSearch)
+    }
+    .cancellable(id: CancelID.search, cancelInFlight: true)
+```
+
+**Key Points:**
+- Use `.run` for async effects
+- Use `.cancellable` with IDs for cancellation
+- `cancelInFlight: true` for debouncing
+- Capture dependencies inside effects
+- Always handle errors appropriately
+
+### Delegate Pattern
+
+Parent-child communication using delegates:
+
+```swift
+// Child Reducer
+enum Action {
+    case delegate(Delegate)
+
+    enum Delegate {
+        case didFinish(Result<State, Error>)
+        case playbackStarted
+    }
+}
+
+// Parent Reducer
+case .recordingMemo(.presented(.someFeature(.delegate(delegateAction)))):
+switch delegateAction {
+    case .didFinish...:
+    return .none
+
+    case .playbackStarted:
+    return .none
+}
+```
+
+**Key Points:**
+- Child sends delegate actions to communicate with parent
+- Parent observes nested delegate actions
+- Useful for presentation dismissal and data flow

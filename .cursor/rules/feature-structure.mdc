@@ -1,0 +1,78 @@
+---
+alwaysApply: true
+---
+
+## Feature File Structure
+
+Each feature should be organized as a single Swift file with a specific structure:
+
+### File Naming Convention
+
+- **File name**: Use the feature name (e.g., `TransactionsList.swift`)
+- **Reducer name**: Use the feature name (e.g., `TransactionsList`) with `Reducer` suffix (e.g., `TransactionsListReducer`)
+- **View name**: Use the feature name with `View` suffix (e.g., `TransactionsListView`)
+
+### File Structure
+
+The file should be organized in this order from top to bottom:
+
+1. **Imports** (at the very top, alphabetical)
+2. **Reducer** (with `@Reducer` macro, State, Action, and body)
+3. **View** (with `@ViewAction` macro)
+4. **Preview** (at the very end)
+
+### Example Structure
+
+```swift
+import ComposableArchitecture
+import SQLiteData
+import SwiftUI
+
+@Reducer
+struct TransactionsListReducer: Reducer {
+    @ObservableState
+    struct State: Equatable {
+        // State properties
+    }
+
+    enum Action: ViewAction {
+        enum View {
+            case buttonTapped
+        }
+        case view(View)
+    }
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            // Reducer logic
+        }
+    }
+}
+
+@ViewAction(for: TransactionsListReducer.self)
+struct TransactionsListView: View {
+    let store: StoreOf<TransactionsListReducer>
+
+    var body: some View {
+        // View implementation
+    }
+}
+
+#Preview {
+    let _ = try! prepareDependencies {
+        try $0.bootstrapDatabase()
+    }
+    TransactionsListView(
+        store: Store(initialState: TransactionsListReducer.State(/* ... */)) {
+            TransactionsListReducer()
+        }
+    )
+}
+```
+
+**Key Points:**
+- Single file per feature
+- Reducer at the top, View in the middle, Preview at the bottom
+- Use `@ViewAction` macro for cleaner action sending
+- Preview should set up dependencies (especially database) before creating the view
+- Keep related code together for easier navigation
