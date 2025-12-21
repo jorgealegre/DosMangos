@@ -161,7 +161,7 @@ extension Transaction {
 struct TransactionsListRow: Identifiable, Hashable, Sendable {
     var id: UUID { transaction.id }
     let transaction: Transaction
-    let category: String
+    let category: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TransactionView: View {
     let transaction: Transaction
-    let category: String
+    let category: String?
     let tags: [String]
 
     var body: some View {
@@ -14,24 +14,20 @@ struct TransactionView: View {
                     Spacer()
                 }
 
-                if !category.isEmpty || !tags.isEmpty {
-                    HStack(spacing: 4) {
-                        if !category.isEmpty {
-                            Text(category)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(4)
-                        }
+                HStack(spacing: 4) {
+                    if let category {
+                        Text(category)
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.gray.opacity(0.2))
+                            .cornerRadius(4)
+                    }
 
-                        if !tags.isEmpty {
-                            ForEach(tags, id: \.self) { tag in
-                                Text("#\(tag)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                    ForEach(tags, id: \.self) { tag in
+                        Text("#\(tag)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

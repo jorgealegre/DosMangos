@@ -181,7 +181,7 @@ extension Database {
         try TransactionsListRow.createTemporaryView(
             as: Transaction
                 .group(by: \.id)
-                .join(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
+                .leftJoin(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
                 .withTags
                 .select {
                     TransactionsListRow.Columns(
