@@ -36,6 +36,18 @@ struct Transaction: Identifiable, Hashable, Sendable {
     var localYear: Int
     var localMonth: Int
     var localDay: Int
+
+    var localDate: Date {
+        get {
+            Date.localDate(year: localYear, month: localMonth, day: localDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            localYear = local.year
+            localMonth = local.month
+            localDay = local.day
+        }
+    }
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {

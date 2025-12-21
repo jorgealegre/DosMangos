@@ -14,6 +14,16 @@ struct TransactionsList: Reducer {
 
         @FetchAll(TransactionsListRow.none) // this query is dynamic
         var rows: [TransactionsListRow]
+        var rowsQuery: some Statement<TransactionsListRow> & Sendable {
+            @Dependency(\.calendar) var calendar
+            let components = calendar.dateComponents([.year, .month], from: date)
+            let year = components.year!
+            let month = components.month!
+
+            return TransactionsListRow
+                .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq((month)) }
+                .select { $0 }
+        }
 
         var rowsByDay: [Int: [TransactionsListRow]] {
             var byDay = Dictionary(grouping: rows) { row in
@@ -40,21 +50,6 @@ struct TransactionsList: Reducer {
             Array(rowsByDay.keys.sorted().reversed())
         }
 
-        var rowsQuery: some Statement<TransactionsListRow> & Sendable {
-            @Dependency(\.calendar) var calendar
-            let components = calendar.dateComponents([.year, .month], from: date)
-            let year = components.year!
-            let month = components.month!
-
-            return TransactionsListRow
-//                .order { $0.createdAtUTC.desc() }
-                .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq((month)) }
-                .select { $0 }
-        }
-
-//        WHERE "transactions"."localYear" = \(#bind(year))
-//          AND "transactions"."localMonth" = \(#bind(month))
-
         init(date: Date) {
             self.date = date
             self._rows = FetchAll(rowsQuery, animation: .default)
@@ -73,6 +68,7 @@ struct TransactionsList: Reducer {
         case view(View)
     }
 
+    @Dependency(\.calendar) private var calendar
     @Dependency(\.defaultDatabase) private var database
 
     var body: some ReducerOf<Self> {
@@ -98,14 +94,14 @@ struct TransactionsList: Reducer {
                 }
 
             case .view(.nextMonthButtonTapped):
-                state.date = Calendar.current.date(byAdding: .month, value: 1, to: state.date)!
+                state.date = calendar.date(byAdding: .month, value: 1, to: state.date)!
                 return .send(.loadTransactions, animation: .default)
 
             case .view(.onAppear):
                 return .none
 
             case .view(.previousMonthButtonTapped):
-                state.date = Calendar.current.date(byAdding: .month, value: -1, to: state.date)!
+                state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
                 return .send(.loadTransactions, animation: .default)
 
             }
@@ -178,14 +174,10 @@ struct TransactionsListView: View {
 
     @ViewBuilder
     private func sectionHeaderView(day: Int) -> some View {
-        if
-            store.rowsByDay.keys.contains(day),
-            let transaction = store.rowsByDay[day]?.first?.transaction,
-            let headerDate = Date.localDate(year: transaction.localYear, month: transaction.localMonth, day: transaction.localDay)
-        {
+        if let transaction = store.rowsByDay[day]?.first?.transaction {
             VStack(spacing: 0) {
                 HStack {
-                    Text(headerDate.formattedRelativeDay())
+                    Text(transaction.localDate.formattedRelativeDay())
                         .font(.caption.bold())
                         .textCase(nil)
                     Spacer()
