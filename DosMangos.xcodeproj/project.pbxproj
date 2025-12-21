@@ -20,6 +20,10 @@
 		CF207A852EF61E2200851104 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Configurations/Base.xcconfig,
+				Configurations/Debug.xcconfig,
+				Configurations/Release.xcconfig,
+				Configurations/TestFlight.xcconfig,
 				iOS/Info.plist,
 			);
 			target = CF5CA85D2905BC6100156961 /* DosMangos */;
@@ -28,6 +32,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CF207A732EF61E2200851104 /* DosMangos */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (CF207A852EF61E2200851104 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = DosMangos; sourceTree = "<group>"; };
+		CFEC98102EF7905100449A78 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sources; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +52,7 @@
 		CF5CA8552905BC6100156961 = {
 			isa = PBXGroup;
 			children = (
+				CFEC98102EF7905100449A78 /* Sources */,
 				CF207A732EF61E2200851104 /* DosMangos */,
 				CF5CA85F2905BC6100156961 /* Products */,
 				CFE0A6FC2905BFA4009F1853 /* Frameworks */,
@@ -85,6 +91,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				CF207A732EF61E2200851104 /* DosMangos */,
+				CFEC98102EF7905100449A78 /* Sources */,
 			);
 			name = DosMangos;
 			packageProductDependencies = (
@@ -104,7 +111,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1410;
-				LastUpgradeCheck = 2610;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					CF5CA85D2905BC6100156961 = {
 						CreatedOnToolsVersion = 14.1;
