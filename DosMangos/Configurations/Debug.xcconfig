@@ -8,7 +8,7 @@ OTHER_SWIFT_FLAGS = $(inherited) -D DEBUG
 
 // Optimization
 SWIFT_OPTIMIZATION_LEVEL = -Onone
-SWIFT_COMPILATION_MODE = incremental
+SWIFT_COMPILATION_MODE = singlefile
 
 // Debug Information
 DEBUG_INFORMATION_FORMAT = dwarf
