@@ -1,0 +1,17 @@
+// Release Configuration
+// For App Store production builds
+
+#include "Base.xcconfig"
+
+// Swift Compiler - Custom Flags
+OTHER_SWIFT_FLAGS = $(inherited)
+
+// Optimization
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+
+// Debug Information (keep symbols for crash reports)
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+
+// No additional compilation conditions for production
+

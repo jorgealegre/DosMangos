@@ -1,0 +1,18 @@
+// TestFlight Configuration
+// For beta testing via TestFlight
+
+#include "Base.xcconfig"
+
+// Swift Compiler - Custom Flags
+OTHER_SWIFT_FLAGS = $(inherited) -D TESTFLIGHT
+
+// Optimization (same as Release)
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+
+// Debug Information (keep symbols for crash reports)
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+
+// Active Compilation Conditions
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = TESTFLIGHT
+

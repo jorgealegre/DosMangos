@@ -1,0 +1,4 @@
+// Base Configuration
+// Shared settings across all configurations
+
+MARKETING_VERSION = 0.1

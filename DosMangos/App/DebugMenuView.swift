@@ -1,9 +1,10 @@
-#if DEBUG
+#if DEBUG || TESTFLIGHT
 import SwiftUI
 import SQLiteData
 import Dependencies
 import IssueReporting
 import UIKit
+
 struct DebugMenuView: View {
     @Dependency(\.defaultDatabase) var database
     @Environment(\.dismiss) var dismiss

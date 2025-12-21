@@ -1,0 +1,18 @@
+// Debug Configuration
+// For local development in Xcode
+
+#include "Base.xcconfig"
+
+// Swift Compiler - Custom Flags
+OTHER_SWIFT_FLAGS = $(inherited) -D DEBUG
+
+// Optimization
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+SWIFT_COMPILATION_MODE = incremental
+
+// Debug Information
+DEBUG_INFORMATION_FORMAT = dwarf
+
+// Active Compilation Conditions
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
+

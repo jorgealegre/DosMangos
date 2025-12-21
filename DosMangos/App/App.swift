@@ -79,7 +79,7 @@ struct AppReducer: Reducer {
                     return .none
 
                 case .shakeDetected:
-                    #if DEBUG
+                    #if DEBUG || TESTFLIGHT
                     state.destination = .debugMenu
                     #endif
                     return .none
@@ -138,7 +138,7 @@ struct AppView: View {
                     }
             }
         }
-#if DEBUG
+        #if DEBUG || TESTFLIGHT
         .sheet(item: $store.scope(
             state: \.destination?.debugMenu,
             action: \.destination.debugMenu
@@ -148,7 +148,7 @@ struct AppView: View {
         .onShake {
             send(.shakeDetected)
         }
-#endif
+        #endif
     }
 
     @ViewBuilder

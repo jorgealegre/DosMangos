@@ -200,7 +200,6 @@ extension Database {
 
 nonisolated private let logger = Logger(subsystem: "DosMangos", category: "Database")
 
-#if DEBUG
 extension Database {
     func seedSampleData() throws {
         @Dependency(\.date.now) var now
@@ -343,4 +342,3 @@ extension Database {
         }
     }
 }
-#endif
