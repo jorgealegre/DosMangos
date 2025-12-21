@@ -10,3 +10,6 @@ set -v
 # Skip macro validation
 defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
 
+# Skip package plugin validation (for build tool plugins like ISOStandardCodegenPlugin)
+defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
+
