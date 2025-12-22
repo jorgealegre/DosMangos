@@ -124,7 +124,8 @@ struct TransactionsListView: View {
                             TransactionView(
                                 transaction: row.transaction,
                                 category: row.category,
-                                tags: row.tags
+                                tags: row.tags,
+                                location: row.location
                             )
                         }
                         .onDelete(perform: { indexSet in

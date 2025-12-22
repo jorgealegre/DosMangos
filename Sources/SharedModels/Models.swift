@@ -1,4 +1,5 @@
 import Currency
+import Dependencies
 import Foundation
 import SQLiteData
 
@@ -48,6 +49,8 @@ struct Transaction: Identifiable, Hashable, Sendable {
             localDay = local.day
         }
     }
+
+    var locationID: UUID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -155,6 +158,31 @@ extension Transaction {
         .leftJoin(Tag.all) { $1.tagID.eq($2.title) }
 }
 
+// MARK: - TransactionLocation
+
+@Table("transaction_locations")
+struct TransactionLocation: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var latitude: Double
+    var longitude: Double
+    var city: String?
+    var countryCode: String?
+
+    var countryDisplayName: String? {
+        guard let countryCode = countryCode else { return nil }
+        @Dependency(\.locale) var locale
+        return locale.localizedString(forRegionCode: countryCode)
+    }
+}
+extension TransactionLocation.Draft: Equatable {}
+extension TransactionLocation.Draft {
+    var countryDisplayName: String? {
+        guard let countryCode = countryCode else { return nil }
+        @Dependency(\.locale) var locale
+        return locale.localizedString(forRegionCode: countryCode)
+    }
+}
+
 // MARK: - TransactionsListRow
 
 @Table("transactionsListRows")
@@ -164,4 +192,5 @@ struct TransactionsListRow: Identifiable, Hashable, Sendable {
     let category: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
+    let location: TransactionLocation?
 }

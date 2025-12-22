@@ -4,6 +4,7 @@ struct TransactionView: View {
     let transaction: Transaction
     let category: String?
     let tags: [String]
+    let location: TransactionLocation?
 
     var body: some View {
         HStack {
@@ -28,6 +29,17 @@ struct TransactionView: View {
                         Text("#\(tag)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let location = location, let city = location.city, let countryName = location.countryDisplayName {
+                    HStack(spacing: 4) {
+                        Image(systemName: "location.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Text("\(city), \(countryName)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }

@@ -49,7 +49,20 @@ func appDatabase() throws -> any DatabaseWriter {
           "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
           "localYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
           "localMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0
+          "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "locationID" TEXT REFERENCES "transaction_locations"("id") ON DELETE SET NULL
+        ) STRICT
+        """
+        )
+        .execute(db)
+        try #sql(
+        """
+        CREATE TABLE "transaction_locations" (
+          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+          "latitude" REAL NOT NULL,
+          "longitude" REAL NOT NULL,
+          "city" TEXT,
+          "countryCode" TEXT
         ) STRICT
         """
         )
@@ -140,6 +153,14 @@ func appDatabase() throws -> any DatabaseWriter {
         """
         )
         .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_transactions_locationID"
+        ON "transactions"("locationID")
+        """
+        )
+        .execute(db)
     }
 
     try migrator.migrate(database)
@@ -163,7 +184,7 @@ extension Database {
         try #sql("""
         CREATE TEMPORARY VIEW \(raw: TransactionCategoriesWithDisplayName.tableName) AS
         SELECT
-            \(TransactionCategory.columns), 
+            \(TransactionCategory.columns),
             CASE
                 WHEN "category".\(raw: Category.columns.title.name) IS NULL THEN ''
                 WHEN "parentCategory".\(raw: Category.columns.title.name) IS NOT NULL
@@ -173,7 +194,7 @@ extension Database {
         FROM \(raw: TransactionCategory.tableName)
         LEFT JOIN \(raw: Category.tableName) AS "category"
         ON \(TransactionCategory.columns.categoryID) = "category".\(raw: Category.columns.title.name)
-        LEFT JOIN \(raw: Category.tableName) AS "parentCategory" 
+        LEFT JOIN \(raw: Category.tableName) AS "parentCategory"
         ON "category".\(raw: Category.columns.parentCategoryID.name) = "parentCategory".\(raw: Category.columns.title.name)
         """)
         .execute(self)
@@ -182,12 +203,14 @@ extension Database {
             as: Transaction
                 .group(by: \.id)
                 .leftJoin(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
+                .leftJoin(TransactionLocation.all) { $0.locationID.eq($2.id) }
                 .withTags
                 .select {
                     TransactionsListRow.Columns(
                         transaction: $0,
                         category: $1.displayName,
-                        tags: $3.jsonTitles
+                        tags: $4.jsonTitles,
+                        location: $2
                     )
                 }
 
@@ -252,6 +275,21 @@ extension Database {
             return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? baseDay
         }
 
+        // Create diverse locations
+        let locations: [(latitude: Double, longitude: Double, city: String, countryCode: String)] = [
+            (40.7128, -74.0060, "New York", "US"),
+            (-34.6037, -58.3816, "Buenos Aires", "AR"),
+            (51.5074, -0.1278, "London", "GB"),
+            (35.6762, 139.6503, "Tokyo", "JP"),
+            (-33.8688, 151.2093, "Sydney", "AU"),
+            (48.8566, 2.3522, "Paris", "FR"),
+            (19.0760, 72.8777, "Mumbai", "IN"),
+        ]
+        var locationIDs: [UUID] = []
+        for _ in locations {
+            locationIDs.append(uuid())
+        }
+
         try seed {
             for tagID in tagIDs {
                 Tag(title: tagID)
@@ -274,6 +312,16 @@ extension Database {
                 Category(title: categoryID, parentCategoryID: nil)
             }
 
+            for (index, location) in locations.enumerated() {
+                TransactionLocation(
+                    id: locationIDs[index],
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    city: location.city,
+                    countryCode: location.countryCode
+                )
+            }
+
             // Current month (~10)
             let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
                 (0, 19, "Dinner at Alto El Fuego", 8050, .expense, 1, [0, 1]),
@@ -292,6 +340,7 @@ extension Database {
                 let id = uuid()
                 let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo, hourOffset: seed.hour + index % 2)
                 let local = date.localDateComponents()
+                let locationID = locationIDs[index % locationIDs.count]
                 Transaction(
                     id: id,
                     description: seed.description,
@@ -301,7 +350,8 @@ extension Database {
                     createdAtUTC: date,
                     localYear: local.year,
                     localMonth: local.month,
-                    localDay: local.day
+                    localDay: local.day,
+                    locationID: locationID
                 )
 
                 TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])
@@ -318,10 +368,11 @@ extension Database {
                 (21, 10, "Side project", 42000, .income, 6, [3]),
             ]
 
-            for seed in previousMonthSeed {
+            for (index, seed) in previousMonthSeed.enumerated() {
                 let id = uuid()
                 let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset, hourOffset: seed.hour)
                 let local = date.localDateComponents()
+                let locationID = locationIDs[(index + 3) % locationIDs.count]
                 Transaction(
                     id: id,
                     description: seed.description,
@@ -331,7 +382,8 @@ extension Database {
                     createdAtUTC: date,
                     localYear: local.year,
                     localMonth: local.month,
-                    localDay: local.day
+                    localDay: local.day,
+                    locationID: locationID
                 )
 
                 TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])

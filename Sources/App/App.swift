@@ -8,18 +8,10 @@ struct AppReducer: Reducer {
     struct State: Equatable {
         @Presents var destination: Destination.State?
 
-        var appDelegate: AppDelegateReducer.State
-        var transactionsList: TransactionsList.State
+        var appDelegate = AppDelegateReducer.State()
+        var transactionsList = TransactionsList.State(date: .now)
 
-        init(
-            appDelegate: AppDelegateReducer.State = AppDelegateReducer.State(),
-            destination: Destination.State? = nil,
-            transactionsList: TransactionsList.State = TransactionsList.State(date: .now)
-        ) {
-            self.appDelegate = appDelegate
-            self.destination = destination
-            self.transactionsList = transactionsList
-        }
+        var currentLocation: Location?
     }
 
     enum Action: ViewAction {
@@ -65,6 +57,9 @@ struct AppReducer: Reducer {
 
             case let .location(locationAction):
                 switch locationAction {
+                case let .didUpdateLocations(locations):
+                    state.currentLocation = locations.last
+                    return .none
                 default:
                     return .none
                 }
@@ -84,7 +79,8 @@ struct AppReducer: Reducer {
                 case .newTransactionButtonTapped:
                     state.destination = .transactionForm(
                         TransactionFormReducer.State(
-                            transaction: Transaction.Draft()
+                            transaction: Transaction.Draft(),
+                            currentLocation: state.currentLocation
                         )
                     )
                     return .none
@@ -110,6 +106,7 @@ struct AppReducer: Reducer {
                                 // TODO: figure this out
                                 return
                             case .authorizedWhenInUse, .authorizedAlways:
+                                await locationManager.requestLocation()
                                 return
                             @unknown default:
                                 return
@@ -223,14 +220,16 @@ struct AppView: View {
 //}
 
 #Preview {
+    let locale = Locale(identifier: "en_US")
+//    let locale = Locale(identifier: "es_AR")
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
-        $0.locale = Locale(identifier: "es_AR")
+        $0.locale = locale
     }
     AppView(store: Store(initialState: AppReducer.State()) {
         AppReducer()
             ._printChanges()
     })
     .tint(.purple)
-    .environment(\.locale, Locale(identifier: "es_AR"))
+    .environment(\.locale, locale)
 }
