@@ -248,8 +248,8 @@ struct TransactionFormView: View {
                     Text("Categories")
                         .foregroundStyle(Color(.label))
                     Spacer()
-                    if let categoriesDetail {
-                        categoriesDetail
+                    if let category = store.selectedCategory {
+                        Text(category.title)
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .font(.callout)
@@ -298,20 +298,6 @@ struct TransactionFormView: View {
                 TagsView(selectedTags: $store.selectedTags)
             }
         }
-    }
-
-    private var categoriesDetail: Text? {
-        guard let category = store.selectedCategory else { return nil }
-        // Format: "Parent › Child" if has parent, else just "Category"
-        let categoryTitle: String
-        if let parentID = category.parentCategoryID {
-            // Need to fetch parent title - for now just show category title
-            // TODO: Load parent category to show full "Parent › Child" format
-            categoryTitle = category.title
-        } else {
-            categoryTitle = category.title
-        }
-        return Text(categoryTitle)
     }
 
     private var tagsDetail: Text? {

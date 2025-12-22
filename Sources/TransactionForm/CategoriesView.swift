@@ -130,7 +130,7 @@ struct CategoriesView: View {
                         .where { $0.title.eq(existingCategoryTitle) }
                         .execute(db)
                 } else {
-                    try Category.insert(or: .ignore) { category }
+                    try Category.insert { category }
                         .execute(db)
                 }
             }

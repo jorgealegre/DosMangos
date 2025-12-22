@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import CoreLocationClient
 import SwiftUI
 
 @Reducer
@@ -25,12 +26,14 @@ struct AppReducer: Reducer {
         enum View {
             case newTransactionButtonTapped
             case discardButtonTapped
+            case task
             case shakeDetected
         }
 
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
 
+        case location(LocationManagerClient.Action)
         case destination(PresentationAction<Destination.Action>)
         case view(View)
     }
@@ -40,6 +43,8 @@ struct AppReducer: Reducer {
         case transactionForm(TransactionFormReducer)
         case debugMenu
     }
+
+    @Dependency(\.locationManager) private var locationManager
 
     var body: some ReducerOf<Self> {
         Scope(state: \.appDelegate, action: \.appDelegate) {
@@ -57,6 +62,12 @@ struct AppReducer: Reducer {
 
             case .appDelegate:
                 return .none
+
+            case let .location(locationAction):
+                switch locationAction {
+                default:
+                    return .none
+                }
 
             case .destination:
                 return .none
@@ -77,6 +88,34 @@ struct AppReducer: Reducer {
                         )
                     )
                     return .none
+
+                case .task:
+                    return .merge(
+                        .run { send in
+                            for await locationAction in await locationManager.delegate() {
+                                await send(.location(locationAction))
+                            }
+                        },
+                        .run { _ in
+                            guard locationManager.locationServicesEnabled() else { return }
+                            let authorizationStatus = await locationManager.authorizationStatus()
+                            switch authorizationStatus {
+                            case .notDetermined:
+                                // TODO: we might prefer always location permissions
+                                await locationManager.requestWhenInUseAuthorization()
+                            case .denied:
+                                // TODO: let the user know
+                                return
+                            case .restricted:
+                                // TODO: figure this out
+                                return
+                            case .authorizedWhenInUse, .authorizedAlways:
+                                return
+                            @unknown default:
+                                return
+                            }
+                        }
+                    )
 
                 case .shakeDetected:
                     #if DEBUG || TESTFLIGHT
@@ -121,6 +160,7 @@ struct AppView: View {
                     Label("Map", systemImage: "map.fill")
                 }
         }
+        .task { await send(.task).finish() }
         .sheet(item: $store.scope(
             state: \.destination?.transactionForm,
             action: \.destination.transactionForm
@@ -185,6 +225,7 @@ struct AppView: View {
 #Preview {
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
+        $0.locale = Locale(identifier: "en_US")
     }
     AppView(store: Store(initialState: AppReducer.State()) {
         AppReducer()

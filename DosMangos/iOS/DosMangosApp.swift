@@ -32,6 +32,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
 
     lazy var store = Store(initialState: AppReducer.State()) {
         AppReducer()
+#if DEBUG
+            ._printChanges()
+#endif
     }
 
     func application(

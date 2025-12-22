@@ -81,7 +81,7 @@ struct TagsView: View {
                         .where { $0.title.eq(existingTagTitle) }
                         .execute(db)
                 } else {
-                    try Tag.insert(or: .ignore) { tag }
+                    try Tag.insert { tag }
                         .execute(db)
                 }
             }
