@@ -225,11 +225,12 @@ struct AppView: View {
 #Preview {
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
-        $0.locale = Locale(identifier: "en_US")
+        $0.locale = Locale(identifier: "es_AR")
     }
     AppView(store: Store(initialState: AppReducer.State()) {
         AppReducer()
             ._printChanges()
     })
     .tint(.purple)
+    .environment(\.locale, Locale(identifier: "es_AR"))
 }
