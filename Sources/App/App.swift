@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import CoreLocationClient
+import Sharing
 import SwiftUI
 
 @Reducer
@@ -8,10 +9,11 @@ struct AppReducer: Reducer {
     struct State: Equatable {
         @Presents var destination: Destination.State?
 
+        // Just by declaring this property here, a load will start
+        @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
+
         var appDelegate = AppDelegateReducer.State()
         var transactionsList = TransactionsList.State(date: .now)
-
-        var currentLocation: Location?
     }
 
     enum Action: ViewAction {
@@ -25,7 +27,6 @@ struct AppReducer: Reducer {
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
 
-        case location(LocationManagerClient.Action)
         case destination(PresentationAction<Destination.Action>)
         case view(View)
     }
@@ -55,15 +56,6 @@ struct AppReducer: Reducer {
             case .appDelegate:
                 return .none
 
-            case let .location(locationAction):
-                switch locationAction {
-                case let .didUpdateLocations(locations):
-                    state.currentLocation = locations.last
-                    return .none
-                default:
-                    return .none
-                }
-
             case .destination:
                 return .none
 
@@ -79,40 +71,28 @@ struct AppReducer: Reducer {
                 case .newTransactionButtonTapped:
                     state.destination = .transactionForm(
                         TransactionFormReducer.State(
-                            transaction: Transaction.Draft(),
-                            currentLocation: state.currentLocation
+                            transaction: Transaction.Draft()
                         )
                     )
                     return .none
 
                 case .task:
-                    return .merge(
-                        .run { send in
-                            for await locationAction in await locationManager.delegate() {
-                                await send(.location(locationAction))
-                            }
-                        },
-                        .run { _ in
-                            guard locationManager.locationServicesEnabled() else { return }
-                            let authorizationStatus = await locationManager.authorizationStatus()
-                            switch authorizationStatus {
-                            case .notDetermined:
-                                // TODO: we might prefer always location permissions
-                                await locationManager.requestWhenInUseAuthorization()
-                            case .denied:
-                                // TODO: let the user know
-                                return
-                            case .restricted:
-                                // TODO: figure this out
-                                return
-                            case .authorizedWhenInUse, .authorizedAlways:
-                                await locationManager.requestLocation()
-                                return
-                            @unknown default:
-                                return
-                            }
+                    return .run { _ in
+                        guard await locationManager.locationServicesEnabled() else { return }
+                        let authorizationStatus = await locationManager.authorizationStatus()
+                        switch authorizationStatus {
+                        case .notDetermined:
+                            await locationManager.requestWhenInUseAuthorization()
+                        case .denied:
+                            return
+                        case .restricted:
+                            return
+                        case .authorizedWhenInUse, .authorizedAlways:
+                            return
+                        @unknown default:
+                            return
                         }
-                    )
+                    }
 
                 case .shakeDetected:
                     #if DEBUG || TESTFLIGHT
@@ -226,10 +206,12 @@ struct AppView: View {
         $0.defaultDatabase = try appDatabase()
         $0.locale = locale
     }
-    AppView(store: Store(initialState: AppReducer.State()) {
-        AppReducer()
-            ._printChanges()
-    })
+    AppView(
+        store: Store(initialState: AppReducer.State()) {
+            AppReducer()
+                ._printChanges()
+        }
+    )
     .tint(.purple)
     .environment(\.locale, locale)
 }

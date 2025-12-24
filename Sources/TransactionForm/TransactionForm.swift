@@ -1,6 +1,6 @@
 import ComposableArchitecture
-import CoreLocationClient
 import Foundation
+import Sharing
 import SwiftUI
 
 @Reducer
@@ -18,15 +18,12 @@ struct TransactionFormReducer: Reducer {
         var transaction: Transaction.Draft
         var selectedCategory: Category?
         var selectedTags: [Tag] = []
-        var locationDraft: TransactionLocation.Draft?
-        var isLoadingLocation: Bool = false
-        var locationError: Bool = false
-        var currentLocation: Location?
+
+        @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
 
-        init(transaction: Transaction.Draft, currentLocation: Location? = nil) {
+        init(transaction: Transaction.Draft) {
             self.transaction = transaction
-            self.currentLocation = currentLocation
             // TODO: load the tags and categories for this transaction
         }
     }
@@ -47,16 +44,12 @@ struct TransactionFormReducer: Reducer {
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
-        case startLocationCapture(Location)
-        case locationGeocoded(city: String?, countryCode: String?)
-        case locationFailed
         case view(View)
     }
 
     @Dependency(\.calendar) private var calendar
     @Dependency(\.dismiss) private var dismiss
     @Dependency(\.defaultDatabase) private var database
-    @Dependency(\.geocodingClient) private var geocodingClient
 
     var body: some Reducer<State, Action> {
         BindingReducer()
@@ -66,36 +59,6 @@ struct TransactionFormReducer: Reducer {
                 return .none
 
             case .delegate:
-                return .none
-
-            case let .startLocationCapture(location):
-                state.isLoadingLocation = true
-                let coordinate = location.coordinate
-                return .run { send in
-                    do {
-                        let result = try await geocodingClient.reverseGeocode(coordinate)
-                        await send(.locationGeocoded(city: result.city, countryCode: result.countryCode))
-                    } catch {
-                        await send(.locationFailed)
-                    }
-                }
-
-            case let .locationGeocoded(city, countryCode):
-                guard
-                    let latitude = state.currentLocation?.coordinate.latitude,
-                      let longitude = state.currentLocation?.coordinate.longitude
-                else {
-                    state.locationError = true
-                    state.isLoadingLocation = false
-                    return .none
-                }
-                state.locationDraft = TransactionLocation.Draft(latitude: latitude, longitude: longitude, city: city, countryCode: countryCode)
-                state.isLoadingLocation = false
-                return .none
-
-            case .locationFailed:
-                state.locationError = true
-                state.isLoadingLocation = false
                 return .none
 
             case let .view(view):
@@ -127,7 +90,19 @@ struct TransactionFormReducer: Reducer {
                     let transaction = state.transaction
                     let selectedCategory = state.selectedCategory
                     let selectedTags = state.selectedTags
-                    let locationDraft = state.locationDraft
+
+                    let locationDraft: TransactionLocation.Draft?
+                    if let currentLocation = state.currentLocation {
+                        locationDraft = TransactionLocation.Draft(
+                            latitude: currentLocation.location.coordinate.latitude,
+                            longitude: currentLocation.location.coordinate.longitude,
+                            city: currentLocation.city,
+                            countryCode: currentLocation.countryCode
+                        )
+                    } else {
+                        locationDraft = nil
+                    }
+
                     return .run { _ in
                         withErrorReporting {
                             try database.write { db in
@@ -174,12 +149,7 @@ struct TransactionFormReducer: Reducer {
                     return .none
 
                 case .onAppear:
-                    if let location = state.currentLocation {
-                        return .send(.startLocationCapture(location))
-                    } else {
-                        state.locationError = true
-                        return .none
-                    }
+                    return .none
                 }
             }
         }
@@ -378,26 +348,30 @@ struct TransactionFormView: View {
                     .font(.title)
                     .foregroundStyle(.gray)
 
-                if store.isLoadingLocation {
+                if store.$currentLocation.isLoading {
                     ProgressView()
                         .padding(.leading, 8)
                     Text("Getting location...")
                         .foregroundStyle(.secondary)
-                } else if let location = store.locationDraft {
+                } else if store.$currentLocation.loadError != nil {
+                    Text("Fetching your location failed")
+                        .foregroundStyle(.secondary)
+                } else if let currentLocation = store.currentLocation {
                     VStack(alignment: .leading, spacing: 2) {
-                        if let city = location.city, let countryName = location.countryDisplayName {
+                        if let city = currentLocation.city,
+                           let countryName = currentLocation.countryDisplayName {
                             Text("\(city), \(countryName)")
+                                .foregroundStyle(Color(.label))
+                        } else if currentLocation.city != nil {
+                            Text(currentLocation.city!)
                                 .foregroundStyle(Color(.label))
                         } else {
                             Text("Location captured")
                                 .foregroundStyle(.secondary)
                         }
                     }
-                } else if store.locationError {
-                    Text("Location unavailable")
-                        .foregroundStyle(.secondary)
                 } else {
-                    Text("No location")
+                    Text("Location unavailable")
                         .foregroundStyle(.secondary)
                 }
 

@@ -5,10 +5,8 @@ import SwiftUI
 struct ValueView: View {
     let value: USD
 
-    @Dependency(\.locale) private var locale
-
     var body: some View {
-        Text("\(value.localizedString(for: locale))")
+        Text("\(value.roundedAmount.description) \(type(of: value).alphabeticCode)")
             .monospacedDigit()
             .bold()
             .foregroundStyle(value < 0 ? Color.expense : .income)

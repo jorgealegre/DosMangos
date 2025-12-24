@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import CoreLocationClient
 import Dependencies
 import SwiftUI
 
@@ -13,6 +14,9 @@ struct DosMangosApp: App {
             try! prepareDependencies {
                 try $0.bootstrapDatabase()
             }
+
+            // Need to touch the location client so that it starts up in the main thread.
+            _ = LocationManagerClient.live
         }
     }
 
