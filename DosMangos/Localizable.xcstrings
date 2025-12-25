@@ -74,9 +74,6 @@
         }
       }
     },
-    "Debug Menu" : {
-
-    },
     "Delete" : {
       "localizations" : {
         "es-419" : {
@@ -247,9 +244,6 @@
           }
         }
       }
-    },
-    "Seed Database" : {
-
     },
     "Tag name" : {
       "localizations" : {

@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF8E32FF2EFCC23D00255A11 /* CoreLocationClient in Frameworks */ = {isa = PBXBuildFile; productRef = CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
 		CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095F2ECABF6E0009C56D /* SQLiteData */; };
 		CF9409632ECABF910009C56D /* Currency in Frameworks */ = {isa = PBXBuildFile; productRef = CF9409622ECABF910009C56D /* Currency */; };
-		CFEC98182EF8F85300449A78 /* CoreLocationClient in Frameworks */ = {isa = PBXBuildFile; productRef = CFEC98172EF8F85300449A78 /* CoreLocationClient */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,7 +44,7 @@
 				CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */,
 				CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */,
 				CF9409632ECABF910009C56D /* Currency in Frameworks */,
-				CFEC98182EF8F85300449A78 /* CoreLocationClient in Frameworks */,
+				CF8E32FF2EFCC23D00255A11 /* CoreLocationClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,7 +100,7 @@
 				CF94095C2ECABF3F0009C56D /* ComposableArchitecture */,
 				CF94095F2ECABF6E0009C56D /* SQLiteData */,
 				CF9409622ECABF910009C56D /* Currency */,
-				CFEC98172EF8F85300449A78 /* CoreLocationClient */,
+				CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */,
 			);
 			productName = MoneyTracker;
 			productReference = CF5CA85E2905BC6100156961 /* DosMangos.app */;
@@ -135,7 +135,7 @@
 				CF94095B2ECABF3F0009C56D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 				CF94095E2ECABF6E0009C56D /* XCRemoteSwiftPackageReference "sqlite-data" */,
 				CF9409612ECABF910009C56D /* XCRemoteSwiftPackageReference "swift-currency" */,
-				CFEC98162EF8F85300449A78 /* XCLocalSwiftPackageReference "../swift-core-location" */,
+				CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */,
 			);
 			productRefGroup = CF5CA85F2905BC6100156961 /* Products */;
 			projectDirPath = "";
@@ -471,14 +471,15 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		CFEC98162EF8F85300449A78 /* XCLocalSwiftPackageReference "../swift-core-location" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../swift-core-location";
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
+		CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jorgealegre/swift-core-location";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		CF94095B2ECABF3F0009C56D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
@@ -506,6 +507,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */;
+			productName = CoreLocationClient;
+		};
 		CF94095C2ECABF3F0009C56D /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CF94095B2ECABF3F0009C56D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
@@ -520,10 +526,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CF9409612ECABF910009C56D /* XCRemoteSwiftPackageReference "swift-currency" */;
 			productName = Currency;
-		};
-		CFEC98172EF8F85300449A78 /* CoreLocationClient */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = CoreLocationClient;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
