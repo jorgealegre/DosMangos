@@ -408,7 +408,7 @@ struct TransactionFormView: View {
                             ._printChanges()
                     }
                 )
-                .navigationTitle("New Transaction")
+                .navigationTitle("New transaction")
             }
             .tint(.purple)
         }

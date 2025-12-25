@@ -144,7 +144,7 @@ struct AppView: View {
         )) { store in
             NavigationStack {
                 TransactionFormView(store: store)
-                    .navigationTitle("New Transaction")
+                    .navigationTitle("New transaction")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
