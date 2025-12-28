@@ -14,6 +14,7 @@ struct AppReducer: Reducer {
 
         var appDelegate = AppDelegateReducer.State()
         var transactionsList = TransactionsList.State(date: .now)
+        var settings = SettingsReducer.State()
     }
 
     enum Action: ViewAction {
@@ -26,6 +27,7 @@ struct AppReducer: Reducer {
 
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
+        case settings(SettingsReducer.Action)
 
         case destination(PresentationAction<Destination.Action>)
         case view(View)
@@ -48,6 +50,10 @@ struct AppReducer: Reducer {
             TransactionsList()
         }
 
+        Scope(state: \.settings, action: \.settings) {
+            SettingsReducer()
+        }
+
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
@@ -60,6 +66,9 @@ struct AppReducer: Reducer {
                 return .none
 
             case .transactionsList:
+                return .none
+
+            case .settings:
                 return .none
 
             case let .view(view):
@@ -137,10 +146,15 @@ struct AppView: View {
                     Label("Map", systemImage: "map.fill")
                 }
 
-            Color.red
-                .tabItem {
-                    Label("Tools", systemImage: "gearshape.fill")
-                }
+            SettingsView(
+                store: store.scope(
+                    state: \.settings,
+                    action: \.settings
+                )
+            )
+            .tabItem {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
         }
         .task { await send(.task).finish() }
         .sheet(item: $store.scope(
