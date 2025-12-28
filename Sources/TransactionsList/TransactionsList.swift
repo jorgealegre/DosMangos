@@ -64,7 +64,6 @@ struct TransactionsList: Reducer {
             case deleteTransactions([UUID])
         }
 
-        case loadTransactions
         case view(View)
     }
 
@@ -74,13 +73,6 @@ struct TransactionsList: Reducer {
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
-            case .loadTransactions:
-                let fetchAll = state.$rows
-                let query = state.rowsQuery
-                return .run { _ in
-                    try await fetchAll.load(query, animation: .default)
-                }
-
             case let .view(.deleteTransactions(ids)):
                 return .run { _ in
                     await withErrorReporting {
@@ -95,16 +87,24 @@ struct TransactionsList: Reducer {
 
             case .view(.nextMonthButtonTapped):
                 state.date = calendar.date(byAdding: .month, value: 1, to: state.date)!
-                return .send(.loadTransactions, animation: .default)
+                return loadTransactions(state: state)
 
             case .view(.onAppear):
-                return .none
+                return loadTransactions(state: state)
 
             case .view(.previousMonthButtonTapped):
                 state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
-                return .send(.loadTransactions, animation: .default)
+                return loadTransactions(state: state)
 
             }
+        }
+    }
+
+    private func loadTransactions(state: State) -> Effect<Action> {
+        let fetchAll = state.$rows
+        let query = state.rowsQuery
+        return .run { _ in
+            try await fetchAll.load(query, animation: .default)
         }
     }
 }
@@ -128,10 +128,10 @@ struct TransactionsListView: View {
                                 location: row.location
                             )
                         }
-                        .onDelete(perform: { indexSet in
+                        .onDelete { indexSet in
                             let ids = indexSet.map { rows[$0].transaction.id }
                             send(.deleteTransactions(ids), animation: .default)
-                        })
+                        }
                     } header: {
                         sectionHeaderView(day: day)
                             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))

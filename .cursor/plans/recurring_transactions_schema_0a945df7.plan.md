@@ -36,6 +36,8 @@ flowchart LR
     T -->|"links back via"| RT
 ```
 
+
+
 1. **recurring_transactions** stores templates with recurrence patterns
 2. When viewing a date range, the app computes which occurrences fall in that range
 3. Virtual instances are shown for dates without a real transaction
@@ -77,61 +79,15 @@ CREATE TABLE "recurring_transactions" (
 ) STRICT
 ```
 
+
+
 ### Column Details
 
-| Column | Type | Description |
-
-|--------|------|-------------|
-
-| `frequency` | INTEGER | 0=daily, 1=weekly, 2=biweekly, 3=monthly, 4=quarterly, 5=yearly |
-
-| `interval` | INTEGER | Every X periods (default 1). E.g., interval=2 + monthly = every 2 months |
-
-| `daysOfWeekBitmask` | INTEGER | For weekly: bitmask where bit 0=Sun, 1=Mon, ..., 6=Sat. E.g., 0b0100010 = Mon+Fri |
-
-| `daysOfMonthBitmask` | INTEGER | For monthly: bitmask where bit 0=day 1, ..., bit 30=day 31, bit 31=last day of month. E.g., 1st and 15th = 0x4001 |
-
-| `weekOfMonth` | INTEGER | For "Nth weekday": 1=first, 2=second, 3=third, 4=fourth, 5=last |
-
-| `dayOfWeekForMonthly` | INTEGER | For "Nth weekday": 0=Sun, 1=Mon, ..., 6=Sat |
-
-| `startDate` | TEXT | First possible occurrence (ISO date) |
-
-| `endDate` | TEXT | Last possible occurrence (null = forever) |
-
-| `isActive` | INTEGER | 0=paused, 1=active |
+| Column | Type | Description ||--------|------|-------------|| `frequency` | INTEGER | 0=daily, 1=weekly, 2=biweekly, 3=monthly, 4=quarterly, 5=yearly || `interval` | INTEGER | Every X periods (default 1). E.g., interval=2 + monthly = every 2 months || `daysOfWeekBitmask` | INTEGER | For weekly: bitmask where bit 0=Sun, 1=Mon, ..., 6=Sat. E.g., 0b0100010 = Mon+Fri || `daysOfMonthBitmask` | INTEGER | For monthly: bitmask where bit 0=day 1, ..., bit 30=day 31, bit 31=last day of month. E.g., 1st and 15th = 0x4001 || `weekOfMonth` | INTEGER | For "Nth weekday": 1=first, 2=second, 3=third, 4=fourth, 5=last || `dayOfWeekForMonthly` | INTEGER | For "Nth weekday": 0=Sun, 1=Mon, ..., 6=Sat || `startDate` | TEXT | First possible occurrence (ISO date) || `endDate` | TEXT | Last possible occurrence (null = forever) || `isActive` | INTEGER | 0=paused, 1=active |
 
 ### Pattern Examples
 
-| Pattern | frequency | interval | daysOfWeekBitmask | daysOfMonthBitmask | weekOfMonth | dayOfWeekForMonthly |
-
-|---------|-----------|----------|-------------------|---------------------|-------------|---------------------|
-
-| Monthly on 1st | 3 (monthly) | 1 | null | 1 (bit 0) | null | null |
-
-| Monthly on 15th | 3 (monthly) | 1 | null | 16384 (bit 14) | null | null |
-
-| Monthly 1st and 15th | 3 (monthly) | 1 | null | 16385 (bits 0+14) | null | null |
-
-| Monthly last day | 3 (monthly) | 1 | null | 2147483648 (bit 31) | null | null |
-
-| First Monday of month | 3 (monthly) | 1 | null | null | 1 | 1 |
-
-| Last Friday of month | 3 (monthly) | 1 | null | null | 5 | 5 |
-
-| Every Monday | 1 (weekly) | 1 | 2 (bit 1) | null | null | null |
-
-| Mon, Wed, Fri | 1 (weekly) | 1 | 42 (bits 1+3+5) | null | null | null |
-
-| Every other Friday | 2 (biweekly) | 1 | 32 (bit 5) | null | null | null |
-
-| Quarterly on 1st | 4 (quarterly) | 1 | null | 1 (bit 0) | null | null |
-
-| Daily | 0 (daily) | 1 | null | null | null | null |
-
-| Every 3 days | 0 (daily) | 3 | null | null | null | null |
-
-| Yearly on Jan 15 | 5 (yearly) | 1 | null | 16384 (bit 14) | null | null |---
+| Pattern | frequency | interval | daysOfWeekBitmask | daysOfMonthBitmask | weekOfMonth | dayOfWeekForMonthly ||---------|-----------|----------|-------------------|---------------------|-------------|---------------------|| Monthly on 1st | 3 (monthly) | 1 | null | 1 (bit 0) | null | null || Monthly on 15th | 3 (monthly) | 1 | null | 16384 (bit 14) | null | null || Monthly 1st and 15th | 3 (monthly) | 1 | null | 16385 (bits 0+14) | null | null || Monthly last day | 3 (monthly) | 1 | null | 2147483648 (bit 31) | null | null || First Monday of month | 3 (monthly) | 1 | null | null | 1 | 1 || Last Friday of month | 3 (monthly) | 1 | null | null | 5 | 5 || Every Monday | 1 (weekly) | 1 | 2 (bit 1) | null | null | null || Mon, Wed, Fri | 1 (weekly) | 1 | 42 (bits 1+3+5) | null | null | null || Every other Friday | 2 (biweekly) | 1 | 32 (bit 5) | null | null | null || Quarterly on 1st | 4 (quarterly) | 1 | null | 1 (bit 0) | null | null || Daily | 0 (daily) | 1 | null | null | null | null || Every 3 days | 0 (daily) | 3 | null | null | null | null || Yearly on Jan 15 | 5 (yearly) | 1 | null | 16384 (bit 14) | null | null |---
 
 ## Updates to `transactions` Table
 
@@ -164,6 +120,8 @@ CREATE TABLE "recurring_transactions_categories" (
   UNIQUE("recurringTransactionID", "categoryID") ON CONFLICT IGNORE
 ) STRICT
 ```
+
+
 
 ### `recurring_transactions_tags`
 
@@ -225,6 +183,8 @@ enum RecurringFrequency: Int, QueryBindable, Sendable {
 }
 ```
 
+
+
 ### New @Table Structs
 
 - `RecurringTransaction` - Main template struct
@@ -260,5 +220,3 @@ func virtualInstances(
 ---
 
 ## Summary
-
-| Change | File ||--------|------|| Add `recurring_transactions` table | Schema.swift || Add `recurring_transactions_categories` join table | Schema.swift || Add `recurring_transactions_tags` join table | Schema.swift || Add columns to `transactions`: status, recurringTransactionID, occurrenceDate | Schema.swift || Add indexes | Schema.swift || Add `RecurringTransaction`, `RecurringFrequency`, `Transaction.Status` | Models.swift |
