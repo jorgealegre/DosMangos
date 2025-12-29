@@ -38,7 +38,7 @@ struct CategoryListReducer: Reducer {
 
     @ObservableState
     struct State: Equatable {
-        @Fetch(CategoryRequest())
+        @Fetch(CategoryRequest(), animation: .default)
         var categories = CategoryRequest.Value(categories: [:])
 
 
@@ -49,9 +49,13 @@ struct CategoryListReducer: Reducer {
     enum Action: ViewAction {
         enum View {
             case task
+            case createCategory(title: String)
+            case createSubcategory(title: String, parentCategoryID: String)
         }
         case view(View)
     }
+
+    @Dependency(\.defaultDatabase) private var database
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -60,6 +64,42 @@ struct CategoryListReducer: Reducer {
                 switch view {
                 case .task:
                     return .none
+
+                case let .createCategory(title):
+                    // TODO: I might want to keep the text field filled in and show an error message if there's a unique constraint error for example
+                    return .run { _ in
+                        do {
+                            try database.write { db in
+                                try Category.insert {
+                                    Category.Draft(title: title)
+                                }
+                                .execute(db)
+                            }
+                        } catch let error as DatabaseError where error.extendedResultCode == .SQLITE_CONSTRAINT_PRIMARYKEY {
+                            reportIssue(error)
+                            // TODO: alert the user
+                        } catch {
+                            reportIssue(error)
+                        }
+                    }
+
+                case let .createSubcategory(title, parentCategoryID):
+                    // TODO: I might want to keep the text field filled in and show an error message if there's a unique constraint error for example
+                    return .run { _ in
+                        do {
+                            try database.write { db in
+                                try Category.insert {
+                                    Category.Draft(title: title, parentCategoryID: parentCategoryID)
+                                }
+                                .execute(db)
+                            }
+                        } catch let error as DatabaseError where error.extendedResultCode == .SQLITE_CONSTRAINT_PRIMARYKEY {
+                            reportIssue(error)
+                            // TODO: alert the user
+                        } catch {
+                            reportIssue(error)
+                        }
+                    }
                 }
             }
         }
@@ -69,46 +109,75 @@ struct CategoryListReducer: Reducer {
 @ViewAction(for: CategoryListReducer.self)
 struct CategoryListView: View {
     let store: StoreOf<CategoryListReducer>
+    @State private var newCategoryTitle = ""
+    @State private var newSubcategoryTitles: [String: String] = [:]
 
     var body: some View {
-
-//        if true {
-//            ContentUnavailableView {
-//                Label("No categories", systemImage: "folder.fill")
-//            } description: {
-//                Text("Create a new category to start grouping your transactions.")
-//            } actions: {
-//                Button("Create new") {
-//
-//                }
-//            }
-//        }
-
         List {
-            TextField("New category", text: .constant(""))
-                .padding(.leading)
+            if store.categories.categories.isEmpty {
+                ContentUnavailableView {
+                    Label("No categories", systemImage: "folder.fill")
+                } description: {
+                    Text("Create a new category to start grouping your transactions.")
+                }
 
-            ForEach(store.categories.categories.elements, id: \.key) { parent, children in
-                Section {
-                    Text(parent.title)
-                        .bold()
-                    ForEach(children) { child in
-                        Text("• " + child.title)
-                            .padding(.leading)
-                    }
-                    TextField("New subcategory for \(parent.title)", text: .constant(""))
+                newCategoryTextField
+            } else {
+                newCategoryTextField
+
+                ForEach(store.categories.categories.elements, id: \.key) { parent, children in
+                    Section {
+                        Text(parent.title)
+                            .bold()
+                        ForEach(children) { child in
+                            Text("• " + child.title)
+                                .padding(.leading)
+                        }
+                        TextField("New subcategory for \(parent.title)", text: Binding(
+                            get: { newSubcategoryTitles[parent.id] ?? "" },
+                            set: { newSubcategoryTitles[parent.id] = $0 }
+                        ))
+                        .submitLabel(.continue)
                         .padding(.leading)
+                        .onSubmit {
+                            guard
+                                let title = newSubcategoryTitles[parent.id],
+                                !title.trimmingCharacters(in: .whitespaces).isEmpty
+                            else { return }
+                            send(.createSubcategory(
+                                title: title.trimmingCharacters(in: .whitespaces),
+                                parentCategoryID: parent.id
+                            ))
+                            newSubcategoryTitles[parent.id] = ""
+                        }
+                    }
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Categories")
         .task { await send(.task).finish() }
+    }
+
+    private var newCategoryTextField: some View {
+        TextField("New category", text: $newCategoryTitle)
+            .bold()
+            .submitLabel(.continue)
+            .autocorrectionDisabled()
+            .onSubmit {
+                guard !newCategoryTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                send(.createCategory(title: newCategoryTitle.trimmingCharacters(in: .whitespaces)))
+                newCategoryTitle = ""
+            }
     }
 }
 
 #Preview {
     let _ = try! prepareDependencies {
         try $0.bootstrapDatabase()
+//        try $0.defaultDatabase.write { db in
+//            try db.seedSampleData()
+//        }
     }
     NavigationStack {
         CategoryListView(

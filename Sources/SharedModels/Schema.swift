@@ -167,10 +167,6 @@ func appDatabase() throws -> any DatabaseWriter {
 
     try database.write { db in
         // TODO: triggers
-
-        if context != .live {
-            try db.seedSampleData()
-        }
     }
 
     return database
