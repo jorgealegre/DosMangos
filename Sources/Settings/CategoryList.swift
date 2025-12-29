@@ -51,6 +51,7 @@ struct CategoryListReducer: Reducer {
             case task
             case createCategory(title: String)
             case createSubcategory(title: String, parentCategoryID: String)
+            case deleteCategory(id: String)
         }
         case view(View)
     }
@@ -100,6 +101,17 @@ struct CategoryListReducer: Reducer {
                             reportIssue(error)
                         }
                     }
+
+                case let .deleteCategory(id):
+                    return .run { _ in
+                        withErrorReporting {
+                            try database.write { db in
+                                try Category.find(id)
+                                    .delete()
+                                    .execute(db)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -129,16 +141,31 @@ struct CategoryListView: View {
                     Section {
                         Text(parent.title)
                             .bold()
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    send(.deleteCategory(id: parent.id))
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         ForEach(children) { child in
                             Text("• " + child.title)
                                 .padding(.leading)
+                                .swipeActions {
+                                    Button(role: .destructive) {
+                                        send(.deleteCategory(id: child.id))
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                         }
                         TextField("New subcategory for \(parent.title)", text: Binding(
                             get: { newSubcategoryTitles[parent.id] ?? "" },
                             set: { newSubcategoryTitles[parent.id] = $0 }
                         ))
-                        .submitLabel(.continue)
                         .padding(.leading)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
                         .onSubmit {
                             guard
                                 let title = newSubcategoryTitles[parent.id],
@@ -162,7 +189,7 @@ struct CategoryListView: View {
     private var newCategoryTextField: some View {
         TextField("New category", text: $newCategoryTitle)
             .bold()
-            .submitLabel(.continue)
+            .submitLabel(.done)
             .autocorrectionDisabled()
             .onSubmit {
                 guard !newCategoryTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
