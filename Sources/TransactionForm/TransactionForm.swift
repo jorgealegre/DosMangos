@@ -167,11 +167,11 @@ struct TransactionFormView: View {
         Form {
             valueInput
             typePicker
+            descriptionInput
             dateTimePicker
             categoriesSection
             tagsSection
             locationSection
-            descriptionInput
             saveButton
         }
         .bind($store.focus, to: $focus)

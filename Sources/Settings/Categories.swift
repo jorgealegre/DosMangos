@@ -4,7 +4,7 @@ import SQLiteData
 import SwiftUI
 
 @Reducer
-struct CategoryListReducer: Reducer {
+struct CategoriesReducer: Reducer {
 
     struct CategoryRequest: FetchKeyRequest, Equatable {
         struct Value: Equatable {
@@ -118,9 +118,9 @@ struct CategoryListReducer: Reducer {
     }
 }
 
-@ViewAction(for: CategoryListReducer.self)
-struct CategoryListView: View {
-    let store: StoreOf<CategoryListReducer>
+@ViewAction(for: CategoriesReducer.self)
+struct CategoriesView: View {
+    let store: StoreOf<CategoriesReducer>
     @State private var newCategoryTitle = ""
     @State private var newSubcategoryTitles: [String: String] = [:]
 
@@ -207,9 +207,9 @@ struct CategoryListView: View {
 //        }
     }
     NavigationStack {
-        CategoryListView(
-            store: Store(initialState: CategoryListReducer.State()) {
-                CategoryListReducer()
+        CategoriesView(
+            store: Store(initialState: CategoriesReducer.State()) {
+                CategoriesReducer()
                     ._printChanges()
             }
         )

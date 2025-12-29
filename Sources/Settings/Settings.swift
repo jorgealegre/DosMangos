@@ -12,7 +12,7 @@ struct SettingsReducer: Reducer {
 
     @Reducer
     enum Path {
-        case categoryList(CategoryListReducer)
+        case categories(CategoriesReducer)
     }
 
     enum Action: ViewAction {
@@ -33,7 +33,7 @@ struct SettingsReducer: Reducer {
             case let .view(view):
                 switch view {
                 case .categoriesTapped:
-                    state.path.append(.categoryList(CategoryListReducer.State()))
+                    state.path.append(.categories(CategoriesReducer.State()))
                     return .none
 
                 case .tagsTapped:
@@ -78,8 +78,8 @@ struct SettingsView: View {
             .navigationTitle("Settings")
         } destination: { store in
             switch store.case {
-            case let .categoryList(store):
-                CategoryListView(store: store)
+            case let .categories(store):
+                CategoriesView(store: store)
             }
         }
     }
