@@ -5,7 +5,14 @@ import SwiftUI
 struct SettingsReducer: Reducer {
     @ObservableState
     struct State: Equatable {
+        var path = StackState<Path.State>()
+
         init() {}
+    }
+
+    @Reducer
+    enum Path {
+        case categoryList(CategoryListReducer)
     }
 
     enum Action: ViewAction {
@@ -13,16 +20,20 @@ struct SettingsReducer: Reducer {
             case categoriesTapped
             case tagsTapped
         }
+        case path(StackActionOf<Path>)
         case view(View)
     }
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .path:
+                return .none
+
             case let .view(view):
                 switch view {
                 case .categoriesTapped:
-                    // TODO: Navigate to categories editor
+                    state.path.append(.categoryList(CategoryListReducer.State()))
                     return .none
 
                 case .tagsTapped:
@@ -31,15 +42,17 @@ struct SettingsReducer: Reducer {
                 }
             }
         }
+        .forEach(\.path, action: \.path)
     }
 }
+extension SettingsReducer.Path.State: Equatable {}
 
 @ViewAction(for: SettingsReducer.self)
 struct SettingsView: View {
-    let store: StoreOf<SettingsReducer>
+    @Bindable var store: StoreOf<SettingsReducer>
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
                 Grid(horizontalSpacing: 16, verticalSpacing: 16) {
                     GridRow {
@@ -63,6 +76,11 @@ struct SettingsView: View {
                 .padding()
             }
             .navigationTitle("Settings")
+        } destination: { store in
+            switch store.case {
+            case let .categoryList(store):
+                CategoryListView(store: store)
+            }
         }
     }
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF23A8602F02328D0033C31B /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = CF23A85F2F02328D0033C31B /* Collections */; };
 		CF8E32FF2EFCC23D00255A11 /* CoreLocationClient in Frameworks */ = {isa = PBXBuildFile; productRef = CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
 		CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095F2ECABF6E0009C56D /* SQLiteData */; };
@@ -43,6 +44,7 @@
 			files = (
 				CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */,
 				CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */,
+				CF23A8602F02328D0033C31B /* Collections in Frameworks */,
 				CF9409632ECABF910009C56D /* Currency in Frameworks */,
 				CF8E32FF2EFCC23D00255A11 /* CoreLocationClient in Frameworks */,
 			);
@@ -101,6 +103,7 @@
 				CF94095F2ECABF6E0009C56D /* SQLiteData */,
 				CF9409622ECABF910009C56D /* Currency */,
 				CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */,
+				CF23A85F2F02328D0033C31B /* Collections */,
 			);
 			productName = MoneyTracker;
 			productReference = CF5CA85E2905BC6100156961 /* DosMangos.app */;
@@ -136,6 +139,7 @@
 				CF94095E2ECABF6E0009C56D /* XCRemoteSwiftPackageReference "sqlite-data" */,
 				CF9409612ECABF910009C56D /* XCRemoteSwiftPackageReference "swift-currency" */,
 				CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */,
+				CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */,
 			);
 			productRefGroup = CF5CA85F2905BC6100156961 /* Products */;
 			projectDirPath = "";
@@ -472,6 +476,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
 		CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jorgealegre/swift-core-location";
@@ -507,6 +519,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CF23A85F2F02328D0033C31B /* Collections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = Collections;
+		};
 		CF8E32FE2EFCC23D00255A11 /* CoreLocationClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CF8E32FD2EFCC23D00255A11 /* XCRemoteSwiftPackageReference "swift-core-location" */;
