@@ -193,6 +193,7 @@ struct TransactionsListView: View {
 #Preview {
     let _ = try! prepareDependencies {
         try $0.bootstrapDatabase()
+        try seedSampleData()
     }
     TransactionsListView(
         store: Store(initialState: TransactionsList.State(date: .now)) {

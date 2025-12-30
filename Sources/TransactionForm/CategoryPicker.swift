@@ -215,9 +215,7 @@ struct CategoryPickerView: View {
 #Preview {
     let _ = try! prepareDependencies {
         try $0.bootstrapDatabase()
-        try $0.defaultDatabase.write { db in
-            try db.seedSampleData()
-        }
+        try seedSampleData()
     }
 
     NavigationStack {

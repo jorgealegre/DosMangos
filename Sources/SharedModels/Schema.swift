@@ -219,74 +219,75 @@ extension Database {
 
 nonisolated private let logger = Logger(subsystem: "DosMangos", category: "Database")
 
-extension Database {
-    func seedSampleData() throws {
-        @Dependency(\.date.now) var now
-        @Dependency(\.uuid) var uuid
-        @Dependency(\.calendar) var calendar
+func seedSampleData() throws {
+    @Dependency(\.date.now) var now
+    @Dependency(\.uuid) var uuid
+    @Dependency(\.calendar) var calendar
+    @Dependency(\.defaultDatabase) var database
 
-        let nowLocal = now.localDateComponents()
-        let thisMonthStart = Date.localDate(year: nowLocal.year, month: nowLocal.month, day: 1) ?? now
-        let previousMonthStart = calendar.date(byAdding: .month, value: -1, to: thisMonthStart) ?? thisMonthStart
+    let nowLocal = now.localDateComponents()
+    let thisMonthStart = Date.localDate(year: nowLocal.year, month: nowLocal.month, day: 1) ?? now
+    let previousMonthStart = calendar.date(byAdding: .month, value: -1, to: thisMonthStart) ?? thisMonthStart
 
-        // Reference data
-        let tagIDs = ["weekend", "friends", "guilty_pleasure", "work", "recurring", "health"]
+    // Reference data
+    let tagIDs = ["weekend", "friends", "guilty_pleasure", "work", "recurring", "health"]
 
-        // Hierarchical categories
-        let parentCategories = ["Home", "Food & Drinks"]
-        let subcategories: [String: [String]] = [
-            "Home": ["Furniture", "Maintenance", "Utilities"],
-            "Food & Drinks": ["Restaurants", "Groceries"]
-        ]
-        let standaloneCategories = ["Entertainment", "Transport", "Salary", "Health"]
+    // Hierarchical categories
+    let parentCategories = ["Home", "Food & Drinks"]
+    let subcategories: [String: [String]] = [
+        "Home": ["Furniture", "Maintenance", "Utilities"],
+        "Food & Drinks": ["Restaurants", "Groceries"]
+    ]
+    let standaloneCategories = ["Entertainment", "Transport", "Salary", "Health"]
 
-        // Build flat list for transaction assignment
-        var categoryIDs: [String] = []
-        categoryIDs.append(contentsOf: parentCategories)
-        categoryIDs.append(contentsOf: standaloneCategories)
-        for (_, subs) in subcategories {
-            categoryIDs.append(contentsOf: subs)
+    // Build flat list for transaction assignment
+    var categoryIDs: [String] = []
+    categoryIDs.append(contentsOf: parentCategories)
+    categoryIDs.append(contentsOf: standaloneCategories)
+    for (_, subs) in subcategories {
+        categoryIDs.append(contentsOf: subs)
+    }
+
+    // We want ~10 transactions in the current month and a few in the previous month.
+    //
+    // Some months (early in the month) won't have enough past days yet, so if a "days ago" value
+    // would cross into the previous month we fall back to early-in-month days instead.
+    func dateInSameMonthAsNow(daysAgo: Int, hourOffset: Int) -> Date {
+        let candidate = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+        let candidateYM = calendar.dateComponents([.year, .month], from: candidate)
+        if candidateYM.year == nowLocal.year, candidateYM.month == nowLocal.month {
+            let base = calendar.startOfDay(for: candidate)
+            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? candidate
+        } else {
+            let fallback = calendar.date(byAdding: .day, value: min(daysAgo, 20), to: thisMonthStart) ?? thisMonthStart
+            let base = calendar.startOfDay(for: fallback)
+            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? fallback
         }
+    }
 
-        // We want ~10 transactions in the current month and a few in the previous month.
-        //
-        // Some months (early in the month) won't have enough past days yet, so if a "days ago" value
-        // would cross into the previous month we fall back to early-in-month days instead.
-        func dateInSameMonthAsNow(daysAgo: Int, hourOffset: Int) -> Date {
-            let candidate = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
-            let candidateYM = calendar.dateComponents([.year, .month], from: candidate)
-            if candidateYM.year == nowLocal.year, candidateYM.month == nowLocal.month {
-                let base = calendar.startOfDay(for: candidate)
-                return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? candidate
-            } else {
-                let fallback = calendar.date(byAdding: .day, value: min(daysAgo, 20), to: thisMonthStart) ?? thisMonthStart
-                let base = calendar.startOfDay(for: fallback)
-                return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? fallback
-            }
-        }
+    func dateInPreviousMonth(dayOffsetFromStart: Int, hourOffset: Int) -> Date {
+        let baseDay = calendar.date(byAdding: .day, value: dayOffsetFromStart, to: previousMonthStart) ?? previousMonthStart
+        let base = calendar.startOfDay(for: baseDay)
+        return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? baseDay
+    }
 
-        func dateInPreviousMonth(dayOffsetFromStart: Int, hourOffset: Int) -> Date {
-            let baseDay = calendar.date(byAdding: .day, value: dayOffsetFromStart, to: previousMonthStart) ?? previousMonthStart
-            let base = calendar.startOfDay(for: baseDay)
-            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? baseDay
-        }
+    // Create diverse locations
+    let locations: [(latitude: Double, longitude: Double, city: String, countryCode: String)] = [
+        (40.7128, -74.0060, "New York", "US"),
+        (-34.6037, -58.3816, "Buenos Aires", "AR"),
+        (51.5074, -0.1278, "London", "GB"),
+        (35.6762, 139.6503, "Tokyo", "JP"),
+        (-33.8688, 151.2093, "Sydney", "AU"),
+        (48.8566, 2.3522, "Paris", "FR"),
+        (19.0760, 72.8777, "Mumbai", "IN"),
+    ]
+    var locationIDs: [UUID] = []
+    for _ in locations {
+        locationIDs.append(uuid())
+    }
 
-        // Create diverse locations
-        let locations: [(latitude: Double, longitude: Double, city: String, countryCode: String)] = [
-            (40.7128, -74.0060, "New York", "US"),
-            (-34.6037, -58.3816, "Buenos Aires", "AR"),
-            (51.5074, -0.1278, "London", "GB"),
-            (35.6762, 139.6503, "Tokyo", "JP"),
-            (-33.8688, 151.2093, "Sydney", "AU"),
-            (48.8566, 2.3522, "Paris", "FR"),
-            (19.0760, 72.8777, "Mumbai", "IN"),
-        ]
-        var locationIDs: [UUID] = []
-        for _ in locations {
-            locationIDs.append(uuid())
-        }
-
-        try seed {
+    try database.write { db in
+        try db.seed {
             for tagID in tagIDs {
                 Tag(title: tagID)
             }

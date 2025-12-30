@@ -426,10 +426,8 @@ struct TransactionFormView: View {
 
 #Preview {
     let _ = try! prepareDependencies {
-        $0.defaultDatabase = try appDatabase()
-        try $0.defaultDatabase.write { db in
-            try db.seedSampleData()
-        }
+        try $0.bootstrapDatabase()
+        try seedSampleData()
     }
     Color.clear
         .ignoresSafeArea()

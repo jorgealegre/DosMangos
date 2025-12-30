@@ -31,9 +31,7 @@ struct DebugMenuView: View {
 
     private func seedDatabase() {
         withErrorReporting {
-            try database.write { db in
-                try db.seedSampleData()
-            }
+            try seedSampleData()
         }
         dismiss()
     }
