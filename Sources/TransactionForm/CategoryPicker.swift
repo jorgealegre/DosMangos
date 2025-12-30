@@ -48,7 +48,7 @@ struct CategoryPicker {
                 JOIN transactions ON transactionsCategories.transactionID = transactions.id
                 WHERE julianday('now') - julianday(transactions.createdAtUTC) <= 90
                 GROUP BY transactionsCategories.categoryID
-                ORDER BY weighted_count DESC
+                ORDER BY weighted_count DESC, categories.title
                 LIMIT 4
                 """,
                 as: Category.self
@@ -141,6 +141,7 @@ struct CategoryPicker {
                     return .none
 
                 case let .categoryTapped(category):
+                    print("jorge; tapped: \(category.displayName)")
                     return .send(.delegate(.categorySelected(category)))
                 }
             }
@@ -158,44 +159,42 @@ struct CategoryPickerView: View {
             if !store.filteredFrequentCategories.isEmpty {
                 Section("Frequently Used") {
                     ForEach(store.filteredFrequentCategories) { category in
-                        Text(category.displayName)
-//                            .bold()
-
-//                        CategoryRow(
-//                            category: category,
-//                            isSelected: store.selectedCategory?.id == category.id
-//                        ) {
-//                            send(.categoryTapped(category))
-//                        }
+                        Button {
+                            send(.categoryTapped(category))
+                        } label: {
+                            Label(category.displayName, systemImage: store.selectedCategory == category ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(store.selectedCategory == category ? Color.accentColor : .primary)
+                        }
                     }
                 }
             }
 
             // All Categories section
             if !store.filteredCategories.isEmpty {
-                ForEach(store.data.allCategories.elements, id: \.key) { parent, children in
-                    Section {
-                        Text(parent.title)
-                            .bold()
-                        //                            CategoryRow(
-                        //                                category: parent,
-                        //                                isSelected: store.selectedCategory?.id == parent.id
-                        //                            ) {
-                        //                                send(.categoryTapped(parent))
-                        //                            }
+                ForEach(store.filteredCategories.elements.enumerated(), id: \.1.key) { index, element in
+                    let parent = element.key
+                    let children = element.value
+                    Section(index == 0 ? "All Categories" : "") {
+                        Button {
+                            send(.categoryTapped(parent))
+                        } label: {
+                            Label(parent.title, systemImage: store.selectedCategory == parent ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(store.selectedCategory == parent ? Color.accentColor : .primary)
+                                .bold()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                         ForEach(children) { child in
-                            Text(child.title)
-                            //                                CategoryRow(
-                            //                                    category: child,
-                            //                                    isSelected: store.selectedCategory?.id == child.id,
-                            //                                    isChild: true
-                            //                                ) {
-                            //                                    send(.categoryTapped(child))
-                            //                                }
+                            Button {
+                                send(.categoryTapped(child))
+                            } label: {
+                                Label("\t" + child.title, systemImage: store.selectedCategory == child ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(store.selectedCategory == child ? Color.accentColor : .primary)
+                            }
                         }
                     }
                 }
+
             }
 
             if store.filteredCategories.isEmpty && store.filteredFrequentCategories.isEmpty {
@@ -203,30 +202,14 @@ struct CategoryPickerView: View {
             }
         }
         .searchable(text: $store.searchText, prompt: "Search categories")
+        .searchFocused($isSearchBarFocused)
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.immediately)
         .task { await send(.task).finish() }
+        .onAppear { isSearchBarFocused = true }
     }
-}
 
-private struct CategoryRow: View {
-    let category: Category
-    let isSelected: Bool
-    var isChild: Bool = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.tint)
-                }
-
-                Text(isChild ? "  \(category.title)" : category.title)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-            }
-        }
-    }
+    @FocusState var isSearchBarFocused: Bool
 }
 
 #Preview {
@@ -239,7 +222,7 @@ private struct CategoryRow: View {
 
     NavigationStack {
         CategoryPickerView(
-            store: Store(initialState: CategoryPicker.State()) {
+            store: Store(initialState: CategoryPicker.State(selectedCategory: Category(title: "Salary", parentCategoryID: nil))) {
                 CategoryPicker()
                     ._printChanges()
             }

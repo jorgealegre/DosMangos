@@ -83,23 +83,28 @@ struct TransactionFormReducer: Reducer {
             case let .view(view):
                 switch view {
                 case .categoriesButtonTapped:
+                    state.focus = nil
                     state.destination = .categoryPicker(CategoryPicker.State(selectedCategory: state.selectedCategory))
                     return .none
 
                 case .tagsButtonTapped:
+                    state.focus = nil
                     state.isPresentingTagsPopover.toggle()
                     return .none
 
                 case .dateButtonTapped:
+                    state.focus = nil
                     state.isDatePickerVisible.toggle()
                     return .none
 
                 case .nextDayButtonTapped:
+                    state.focus = nil
                     state.transaction.localDate = calendar
                         .date(byAdding: .day, value: 1, to: state.transaction.localDate)!
                     return .none
 
                 case .previousDayButtonTapped:
+                    state.focus = nil
                     state.transaction.localDate = calendar
                         .date(byAdding: .day, value: -1, to: state.transaction.localDate)!
                     return .none
@@ -196,6 +201,8 @@ struct TransactionFormView: View {
             locationSection
             saveButton
         }
+        .listSectionSpacing(12)
+        .scrollDismissesKeyboard(.immediately)
         .bind($store.focus, to: $focus)
         .onAppear {
             send(.onAppear)
@@ -279,10 +286,10 @@ struct TransactionFormView: View {
         Section {
             TextField(
                 "Description",
-                text: $store.transaction.description,
-                axis: .vertical
+                text: $store.transaction.description
             )
             .autocorrectionDisabled()
+            .keyboardType(.alphabet)
             .submitLabel(.done)
             .focused($focus, equals: .description)
             .onSubmit {
@@ -326,6 +333,7 @@ struct TransactionFormView: View {
                     .navigationTitle("Choose a category")
                 // \(store.transaction.description)
             }
+            .presentationDragIndicator(.visible)
         }
     }
 
