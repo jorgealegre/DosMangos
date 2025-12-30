@@ -246,6 +246,7 @@
 				INFOPLIST_FILE = DosMangos/iOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -403,6 +404,7 @@
 				INFOPLIST_FILE = DosMangos/iOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -434,6 +436,7 @@
 				INFOPLIST_FILE = DosMangos/iOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DosMangos;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tag your transactions with a location to get a geographical analysis of your finances.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
