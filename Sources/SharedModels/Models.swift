@@ -112,6 +112,14 @@ struct Category: Identifiable, Hashable, Sendable {
     var parentCategoryID: String?
 
     var id: String { title }
+
+    var displayName: String {
+        if let parentCategoryID {
+            "\(parentCategoryID) › \(title)"
+        } else {
+            title
+        }
+    }
 }
 @Table("transactionsCategories")
 struct TransactionCategory: Identifiable, Hashable, Sendable {

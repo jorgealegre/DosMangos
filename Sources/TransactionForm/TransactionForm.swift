@@ -1,10 +1,16 @@
 import ComposableArchitecture
+import CoreLocationClient
 import Foundation
 import Sharing
 import SwiftUI
 
 @Reducer
 struct TransactionFormReducer: Reducer {
+    @Reducer
+    enum Destination {
+        case categoryPicker(CategoryPicker)
+    }
+
     @ObservableState
     struct State: Equatable {
         enum Field {
@@ -12,12 +18,13 @@ struct TransactionFormReducer: Reducer {
         }
 
         var isDatePickerVisible: Bool = false
-        var isPresentingCategoriesPopover: Bool = false
         var isPresentingTagsPopover: Bool = false
         var focus: Field? = .value
         var transaction: Transaction.Draft
         var selectedCategory: Category?
         var selectedTags: [Tag] = []
+
+        @Presents var destination: Destination.State?
 
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
@@ -44,6 +51,7 @@ struct TransactionFormReducer: Reducer {
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
+        case destination(PresentationAction<Destination.Action>)
         case view(View)
     }
 
@@ -61,10 +69,21 @@ struct TransactionFormReducer: Reducer {
             case .delegate:
                 return .none
 
+            case let .destination(.presented(.categoryPicker(.delegate(delegateAction)))):
+                switch delegateAction {
+                case let .categorySelected(category):
+                    state.selectedCategory = category
+                    state.destination = nil
+                    return .none
+                }
+
+            case .destination:
+                return .none
+
             case let .view(view):
                 switch view {
                 case .categoriesButtonTapped:
-                    state.isPresentingCategoriesPopover.toggle()
+                    state.destination = .categoryPicker(CategoryPicker.State(selectedCategory: state.selectedCategory))
                     return .none
 
                 case .tagsButtonTapped:
@@ -153,8 +172,11 @@ struct TransactionFormReducer: Reducer {
                 }
             }
         }
+        .ifLet(\.$destination, action: \.destination)
     }
 }
+
+extension TransactionFormReducer.Destination.State: Equatable {}
 
 @ViewAction(for: TransactionFormReducer.self)
 struct TransactionFormView: View {
@@ -293,12 +315,16 @@ struct TransactionFormView: View {
                 }
             }
         }
-        .popover(isPresented: $store.isPresentingCategoriesPopover) {
+        .popover(
+            item: $store.scope(
+                state: \.destination?.categoryPicker,
+                action: \.destination.categoryPicker
+            )
+        ) { categoryPickerStore in
             NavigationStack {
-                CategoriesView(selectedCategories: Binding(
-                    get: { store.selectedCategory.map { [$0] } ?? [] },
-                    set: { store.selectedCategory = $0.first }
-                ))
+                CategoryPickerView(store: categoryPickerStore)
+                    .navigationTitle("Choose a category")
+                // \(store.transaction.description)
             }
         }
     }
@@ -393,6 +419,10 @@ struct TransactionFormView: View {
 #Preview {
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
+        try $0.defaultDatabase.write { db in
+            try db.seedSampleData()
+        }
+        _ = LocationManagerClient.live
     }
     Color.clear
         .ignoresSafeArea()
@@ -409,6 +439,7 @@ struct TransactionFormView: View {
                     }
                 )
                 .navigationTitle("New transaction")
+                .navigationBarTitleDisplayMode(.inline)
             }
             .tint(.purple)
         }
