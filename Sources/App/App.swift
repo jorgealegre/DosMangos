@@ -224,7 +224,6 @@ struct AppView: View {
     let _ = try! prepareDependencies {
         $0.defaultDatabase = try appDatabase()
         $0.locale = locale
-        _ = LocationManagerClient.live
     }
     AppView(
         store: Store(initialState: AppReducer.State()) {

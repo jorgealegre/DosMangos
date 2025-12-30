@@ -422,7 +422,6 @@ struct TransactionFormView: View {
         try $0.defaultDatabase.write { db in
             try db.seedSampleData()
         }
-        _ = LocationManagerClient.live
     }
     Color.clear
         .ignoresSafeArea()
