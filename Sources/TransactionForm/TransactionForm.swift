@@ -23,6 +23,8 @@ struct TransactionFormReducer: Reducer {
         var transaction: Transaction.Draft
         var selectedCategory: Category?
         var selectedTags: [Tag] = []
+        var loadedLocation: TransactionLocation?
+        var hasLoadedDetails = false
 
         @Presents var destination: Destination.State?
 
@@ -38,7 +40,6 @@ struct TransactionFormReducer: Reducer {
     enum Action: ViewAction, BindableAction {
         enum Delegate {
         }
-        @CasePathable
         enum View {
             case dateButtonTapped
             case categoriesButtonTapped
@@ -53,6 +54,7 @@ struct TransactionFormReducer: Reducer {
         case delegate(Delegate)
         case destination(PresentationAction<Destination.Action>)
         case view(View)
+        case detailsLoaded(Category?, [Tag], TransactionLocation?)
     }
 
     @Dependency(\.calendar) private var calendar
@@ -82,6 +84,39 @@ struct TransactionFormReducer: Reducer {
 
             case let .view(view):
                 switch view {
+                case .onAppear:
+                    guard !state.hasLoadedDetails else { return .none }
+                    state.hasLoadedDetails = true
+                    guard let transactionID = state.transaction.id else { return .none }
+                    return .run { [locationID = state.transaction.locationID] send in
+                        let result = try await database.read { db -> (Category?, [Tag], TransactionLocation?) in
+                            let categoryID = try TransactionCategory
+                                .where { $0.transactionID.eq(transactionID) }
+                                .select { $0.categoryID }
+                                .fetchOne(db)
+
+                            let category = try categoryID.flatMap {
+                                try Category.find($0).fetchOne(db)
+                            }
+
+                            let tagIDs = try TransactionTag
+                                .where { $0.transactionID.eq(transactionID) }
+                                .select { $0.tagID }
+                                .fetchAll(db)
+                            let tags = try tagIDs.compactMap {
+                                try Tag.find($0).fetchOne(db)
+                            }
+
+                            let location = try locationID.flatMap {
+                                try TransactionLocation.find($0).fetchOne(db)
+                            }
+
+                            return (category, tags, location)
+                        }
+
+                        await send(.detailsLoaded(result.0, result.1, result.2))
+                    }
+
                 case .categoriesButtonTapped:
                     state.focus = nil
                     state.destination = .categoryPicker(CategoryPicker.State(selectedCategory: state.selectedCategory))
@@ -114,23 +149,23 @@ struct TransactionFormReducer: Reducer {
                     let transaction = state.transaction
                     let selectedCategory = state.selectedCategory
                     let selectedTags = state.selectedTags
-
-                    let locationDraft: TransactionLocation.Draft?
-                    if let currentLocation = state.currentLocation {
-                        locationDraft = TransactionLocation.Draft(
-                            latitude: currentLocation.location.coordinate.latitude,
-                            longitude: currentLocation.location.coordinate.longitude,
-                            city: currentLocation.city,
-                            countryCode: currentLocation.countryCode
-                        )
-                    } else {
-                        locationDraft = nil
-                    }
+                    let loadedLocation = state.loadedLocation
+                    // If we already have a persisted location, prefer it over a newly captured one.
+                    let locationDraft: TransactionLocation.Draft? = loadedLocation == nil
+                        ? state.currentLocation.map {
+                            TransactionLocation.Draft(
+                                latitude: $0.location.coordinate.latitude,
+                                longitude: $0.location.coordinate.longitude,
+                                city: $0.city,
+                                countryCode: $0.countryCode
+                            )
+                        }
+                        : nil
 
                     return .run { _ in
                         withErrorReporting {
                             try database.write { db in
-                                var locationID: UUID? = nil
+                                var locationID: UUID? = loadedLocation?.id
                                 if let locationDraft = locationDraft {
                                     locationID = try TransactionLocation.insert { locationDraft }
                                         .returning(\.id)
@@ -171,10 +206,14 @@ struct TransactionFormReducer: Reducer {
                 case .valueInputFinished:
                     state.focus = .description
                     return .none
-
-                case .onAppear:
-                    return .none
                 }
+
+            case let .detailsLoaded(category, tags, location):
+                state.selectedCategory = category
+                state.selectedTags = tags
+                state.loadedLocation = location
+                return .none
+
             }
         }
         .ifLet(\.$destination, action: \.destination)
@@ -382,7 +421,13 @@ struct TransactionFormView: View {
                     .font(.title)
                     .foregroundStyle(.gray)
 
-                if store.$currentLocation.isLoading {
+                if let loadedLocation = store.loadedLocation {
+                    locationDetail(
+                        city: loadedLocation.city,
+                        countryName: loadedLocation.countryDisplayName,
+                        fallbackLabel: "Location on file"
+                    )
+                } else if store.$currentLocation.isLoading {
                     ProgressView()
                         .padding(.leading, 8)
                     Text("Getting location...")
@@ -391,25 +436,38 @@ struct TransactionFormView: View {
                     Text("Fetching your location failed")
                         .foregroundStyle(.secondary)
                 } else if let currentLocation = store.currentLocation {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let city = currentLocation.city,
-                           let countryName = currentLocation.countryDisplayName {
-                            Text("\(city), \(countryName)")
-                                .foregroundStyle(Color(.label))
-                        } else if currentLocation.city != nil {
-                            Text(currentLocation.city!)
-                                .foregroundStyle(Color(.label))
-                        } else {
-                            Text("Location captured")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    locationDetail(
+                        city: currentLocation.city,
+                        countryName: currentLocation.countryDisplayName,
+                        fallbackLabel: "Location captured"
+                    )
                 } else {
                     Text("Location unavailable")
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func locationDetail(
+        city: String?,
+        countryName: String?,
+        fallbackLabel: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let city = city,
+               let countryName = countryName {
+                Text("\(city), \(countryName)")
+                    .foregroundStyle(Color(.label))
+            } else if let city = city {
+                Text(city)
+                    .foregroundStyle(Color(.label))
+            } else {
+                Text(fallbackLabel)
+                    .foregroundStyle(.secondary)
             }
         }
     }
