@@ -8,8 +8,16 @@ import SwiftUI
 @Reducer
 struct TransactionsList: Reducer {
 
+    @Reducer
+    enum Destination {
+        case transactionForm(TransactionFormReducer)
+    }
+
     @ObservableState
     struct State: Equatable {
+
+        @Presents var destination: Destination.State?
+
         var date: Date
 
         @FetchAll(TransactionsListRow.none) // this query is dynamic
@@ -56,48 +64,72 @@ struct TransactionsList: Reducer {
         }
     }
 
-    enum Action: ViewAction {
+    enum Action: BindableAction, ViewAction {
         enum View {
             case nextMonthButtonTapped
             case onAppear
             case previousMonthButtonTapped
             case deleteTransactions([UUID])
+            case transactionTapped(Transaction)
+            case dismissTransactionDetailButtonTapped
         }
 
+        case binding(BindingAction<State>)
         case view(View)
+        case destination(PresentationAction<Destination.Action>)
     }
 
     @Dependency(\.calendar) private var calendar
     @Dependency(\.defaultDatabase) private var database
 
     var body: some ReducerOf<Self> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
-            case let .view(.deleteTransactions(ids)):
-                return .run { _ in
-                    await withErrorReporting {
-                        try await database.write { db in
-                            try Transaction
-                                .where { $0.id.in(ids) }
-                                .delete()
-                                .execute(db)
+            case .binding:
+                return .none
+
+            case .destination:
+                return .none
+
+            case let .view(viewAction):
+                switch viewAction {
+                case let .deleteTransactions(ids):
+                    return .run { _ in
+                        await withErrorReporting {
+                            try await database.write { db in
+                                try Transaction
+                                    .where { $0.id.in(ids) }
+                                    .delete()
+                                    .execute(db)
+                            }
                         }
                     }
+
+                case .nextMonthButtonTapped:
+                    state.date = calendar.date(byAdding: .month, value: 1, to: state.date)!
+                    return loadTransactions(state: state)
+
+                case .onAppear:
+                    return loadTransactions(state: state)
+
+                case .previousMonthButtonTapped:
+                    state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
+                    return loadTransactions(state: state)
+
+                case let .transactionTapped(transaction):
+                    state.destination = .transactionForm(TransactionFormReducer.State(
+                        transaction: Transaction.Draft(transaction)
+                    ))
+                    return .none
+
+                case .dismissTransactionDetailButtonTapped:
+                    state.destination = nil
+                    return .none
                 }
-
-            case .view(.nextMonthButtonTapped):
-                state.date = calendar.date(byAdding: .month, value: 1, to: state.date)!
-                return loadTransactions(state: state)
-
-            case .view(.onAppear):
-                return loadTransactions(state: state)
-
-            case .view(.previousMonthButtonTapped):
-                state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
-                return loadTransactions(state: state)
-
             }
         }
+        .ifLet(\.$destination, action: \.destination)
     }
 
     private func loadTransactions(state: State) -> Effect<Action> {
@@ -108,11 +140,12 @@ struct TransactionsList: Reducer {
         }
     }
 }
+extension TransactionsList.Destination.State: Equatable {}
 
 @ViewAction(for: TransactionsList.self)
 struct TransactionsListView: View {
 
-    let store: StoreOf<TransactionsList>
+    @Bindable var store: StoreOf<TransactionsList>
 
     var body: some View {
         NavigationStack {
@@ -121,12 +154,18 @@ struct TransactionsListView: View {
                     let rows = store.rowsByDay[day] ?? []
                     Section {
                         ForEach(rows) { row in
-                            TransactionView(
-                                transaction: row.transaction,
-                                category: row.category,
-                                tags: row.tags,
-                                location: row.location
-                            )
+                            Button {
+                                send(.transactionTapped(row.transaction))
+                            } label: {
+                                TransactionView(
+                                    transaction: row.transaction,
+                                    category: row.category,
+                                    tags: row.tags,
+                                    location: row.location
+                                )
+                                .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .onDelete { indexSet in
                             let ids = indexSet.map { rows[$0].transaction.id }
@@ -168,6 +207,27 @@ struct TransactionsListView: View {
                             .foregroundColor(.accentColor)
                             .padding(8)
                     }
+                }
+            }
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.transactionForm,
+                    action: \.destination.transactionForm
+                )
+            ) { transactionFormStore in
+                NavigationStack {
+                    TransactionFormView(store: transactionFormStore)
+                        .navigationTitle("Edit transaction")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button {
+                                    send(.dismissTransactionDetailButtonTapped)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                }
+                            }
+                        }
                 }
             }
         }
