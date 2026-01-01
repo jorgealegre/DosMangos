@@ -14,6 +14,7 @@ struct AppReducer: Reducer {
 
         var appDelegate = AppDelegateReducer.State()
         var transactionsList = TransactionsList.State(date: .now)
+        var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
     }
 
@@ -27,6 +28,7 @@ struct AppReducer: Reducer {
 
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
+        case transactionsMap(TransactionsMap.Action)
         case settings(SettingsReducer.Action)
 
         case destination(PresentationAction<Destination.Action>)
@@ -50,6 +52,10 @@ struct AppReducer: Reducer {
             TransactionsList()
         }
 
+        Scope(state: \.transactionsMap, action: \.transactionsMap) {
+            TransactionsMap()
+        }
+
         Scope(state: \.settings, action: \.settings) {
             SettingsReducer()
         }
@@ -66,6 +72,9 @@ struct AppReducer: Reducer {
                 return .none
 
             case .transactionsList:
+                return .none
+
+            case .transactionsMap:
                 return .none
 
             case .settings:
@@ -141,10 +150,15 @@ struct AppView: View {
                     Label("Recurring", systemImage: "repeat.circle")
                 }
 
-            Color.red
-                .tabItem {
-                    Label("Map", systemImage: "map.fill")
-                }
+            TransactionsMapView(
+                store: store.scope(
+                    state: \.transactionsMap,
+                    action: \.transactionsMap
+                )
+            )
+            .tabItem {
+                Label("Map", systemImage: "map.fill")
+            }
 
             SettingsView(
                 store: store.scope(

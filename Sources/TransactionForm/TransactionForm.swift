@@ -504,6 +504,5 @@ struct TransactionFormView: View {
                 .navigationTitle("New transaction")
                 .navigationBarTitleDisplayMode(.inline)
             }
-            .tint(.purple)
         }
 }
