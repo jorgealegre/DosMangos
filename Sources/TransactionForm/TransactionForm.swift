@@ -21,9 +21,10 @@ struct TransactionFormReducer: Reducer {
         var isPresentingTagsPopover: Bool = false
         var focus: Field? = .value
         var transaction: Transaction.Draft
-        var selectedCategory: Category?
-        var selectedTags: [Tag] = []
-        var loadedLocation: TransactionLocation?
+        var category: Category?
+        var tags: [Tag] = []
+        var location: TransactionLocation?
+        var isLocationEnabled: Bool = true
         var hasLoadedDetails = false
 
         @Presents var destination: Destination.State?
@@ -33,7 +34,6 @@ struct TransactionFormReducer: Reducer {
 
         init(transaction: Transaction.Draft) {
             self.transaction = transaction
-            // TODO: load the tags and categories for this transaction
         }
     }
 
@@ -65,6 +65,13 @@ struct TransactionFormReducer: Reducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding(\.isLocationEnabled):
+                if !state.isLocationEnabled {
+                    state.focus = nil
+                    state.location = nil
+                }
+                return .none
+
             case .binding:
                 return .none
 
@@ -74,7 +81,7 @@ struct TransactionFormReducer: Reducer {
             case let .destination(.presented(.categoryPicker(.delegate(delegateAction)))):
                 switch delegateAction {
                 case let .categorySelected(category):
-                    state.selectedCategory = category
+                    state.category = category
                     state.destination = nil
                     return .none
                 }
@@ -119,7 +126,9 @@ struct TransactionFormReducer: Reducer {
 
                 case .categoriesButtonTapped:
                     state.focus = nil
-                    state.destination = .categoryPicker(CategoryPicker.State(selectedCategory: state.selectedCategory))
+                    state.destination = .categoryPicker(CategoryPicker.State(
+                        selectedCategory: state.category
+                    ))
                     return .none
 
                 case .tagsButtonTapped:
@@ -146,45 +155,62 @@ struct TransactionFormReducer: Reducer {
 
                 case .saveButtonTapped:
                     state.focus = nil
-                    let transaction = state.transaction
-                    let selectedCategory = state.selectedCategory
-                    let selectedTags = state.selectedTags
-                    let loadedLocation = state.loadedLocation
-                    // If we already have a persisted location, prefer it over a newly captured one.
-                    let locationDraft: TransactionLocation.Draft? = loadedLocation == nil
-                        ? state.currentLocation.map {
-                            TransactionLocation.Draft(
-                                latitude: $0.location.coordinate.latitude,
-                                longitude: $0.location.coordinate.longitude,
-                                city: $0.city,
-                                countryCode: $0.countryCode
-                            )
-                        }
-                        : nil
 
-                    return .run { _ in
+                    // If we already have a persisted location, prefer it over a newly captured one.
+                    let newTransactionLocation: TransactionLocation.Draft?
+                    if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
+                        // If we don't have an existing location for this transaction
+                        // but location is enabled, create a new one
+                        newTransactionLocation = TransactionLocation.Draft(
+                            latitude: location.location.coordinate.latitude,
+                            longitude: location.location.coordinate.longitude,
+                            city: location.city,
+                            countryCode: location.countryCode
+                        )
+                    } else {
+                        newTransactionLocation = nil
+                    }
+
+                    return .run { [state = state] _ in
                         withErrorReporting {
                             try database.write { db in
-                                var locationID: UUID? = loadedLocation?.id
-                                if let locationDraft = locationDraft {
-                                    locationID = try TransactionLocation.insert { locationDraft }
-                                        .returning(\.id)
-                                        .fetchOne(db)
+                                // Delete any existing location if location is disabled or a new one should replace it
+                                if (!state.isLocationEnabled || newTransactionLocation != nil),
+                                    let oldID = state.transaction.locationID {
+                                    try TransactionLocation
+                                        .find(oldID)
+                                        .delete()
+                                        .execute(db)
                                 }
 
-                                var updatedTransaction = transaction
+                                let locationID: UUID?
+                                if let newTransactionLocation {
+                                    locationID = try TransactionLocation.insert { newTransactionLocation }
+                                        .returning(\.id)
+                                        .fetchOne(db)
+                                } else if state.isLocationEnabled {
+                                    locationID = state.transaction.locationID
+                                } else {
+                                    locationID = nil
+                                }
+
+                                var updatedTransaction = state.transaction
                                 updatedTransaction.locationID = locationID
 
                                 let transactionID = try Transaction.upsert { updatedTransaction }
                                     .returning(\.id)
                                     .fetchOne(db)!
+
                                 try TransactionCategory
                                     .where { $0.transactionID.eq(transactionID) }
                                     .delete()
                                     .execute(db)
-                                if let category = selectedCategory {
+                                if let category = state.category {
                                     try TransactionCategory.insert {
-                                        TransactionCategory.Draft(transactionID: transactionID, categoryID: category.id)
+                                        TransactionCategory.Draft(
+                                            transactionID: transactionID,
+                                            categoryID: category.id
+                                        )
                                     }
                                     .execute(db)
                                 }
@@ -193,8 +219,11 @@ struct TransactionFormReducer: Reducer {
                                     .delete()
                                     .execute(db)
                                 try TransactionTag.insert {
-                                    selectedTags.map { tag in
-                                        TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
+                                    state.tags.map { tag in
+                                        TransactionTag.Draft(
+                                            transactionID: transactionID,
+                                            tagID: tag.id
+                                        )
                                     }
                                 }
                                 .execute(db)
@@ -209,9 +238,9 @@ struct TransactionFormReducer: Reducer {
                 }
 
             case let .detailsLoaded(category, tags, location):
-                state.selectedCategory = category
-                state.selectedTags = tags
-                state.loadedLocation = location
+                state.category = category
+                state.tags = tags
+                state.location = location
                 return .none
 
             }
@@ -281,6 +310,10 @@ struct TransactionFormView: View {
     private var dateTimePicker: some View {
         Section {
             HStack {
+                Image(systemName: "calendar")
+                    .font(.title)
+                    .foregroundStyle(.foreground)
+
                 Button {
                     send(.dateButtonTapped, animation: .default)
                 } label: {
@@ -344,13 +377,13 @@ struct TransactionFormView: View {
                 send(.categoriesButtonTapped, animation: .default)
             } label: {
                 HStack {
-                    Image(systemName: "folder.fill")
+                    Image(systemName: "folder")
                         .font(.title)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.foreground)
                     Text("Categories")
                         .foregroundStyle(Color(.label))
                     Spacer()
-                    if let category = store.selectedCategory {
+                    if let category = store.category {
                         Text(category.title)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -383,9 +416,9 @@ struct TransactionFormView: View {
                 send(.tagsButtonTapped, animation: .default)
             } label: {
                 HStack {
-                    Image(systemName: "number.square.fill")
+                    Image(systemName: "number.square")
                         .font(.title)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.foreground)
                     Text("Tags")
                         .foregroundStyle(Color(.label))
                     Spacer()
@@ -402,14 +435,14 @@ struct TransactionFormView: View {
         }
         .popover(isPresented: $store.isPresentingTagsPopover) {
             NavigationStack {
-                TagsView(selectedTags: $store.selectedTags)
+                TagsView(selectedTags: $store.tags)
             }
         }
     }
 
     private var tagsDetail: Text? {
-        guard !store.selectedTags.isEmpty else { return nil }
-        let allTags = store.selectedTags.map { "#\($0.title)" }.joined(separator: " ")
+        guard !store.tags.isEmpty else { return nil }
+        let allTags = store.tags.map { "#\($0.title)" }.joined(separator: " ")
         return Text(allTags)
     }
 
@@ -417,58 +450,63 @@ struct TransactionFormView: View {
     private var locationSection: some View {
         Section {
             HStack {
-                Image(systemName: "location.fill")
+                Image(systemName: "location")
                     .font(.title)
-                    .foregroundStyle(.gray)
-
-                if let loadedLocation = store.loadedLocation {
-                    locationDetail(
-                        city: loadedLocation.city,
-                        countryName: loadedLocation.countryDisplayName,
-                        fallbackLabel: "Location on file"
-                    )
-                } else if store.$currentLocation.isLoading {
-                    ProgressView()
-                        .padding(.leading, 8)
-                    Text("Getting location...")
-                        .foregroundStyle(.secondary)
-                } else if store.$currentLocation.loadError != nil {
-                    Text("Fetching your location failed")
-                        .foregroundStyle(.secondary)
-                } else if let currentLocation = store.currentLocation {
-                    locationDetail(
-                        city: currentLocation.city,
-                        countryName: currentLocation.countryDisplayName,
-                        fallbackLabel: "Location captured"
-                    )
-                } else {
-                    Text("Location unavailable")
-                        .foregroundStyle(.secondary)
-                }
+                    .foregroundStyle(.foreground)
 
                 Spacer()
+
+                Toggle(isOn: $store.isLocationEnabled.animation()) {
+                    VStack(alignment: .leading) {
+                        Text("Location")
+                            .font(store.isLocationEnabled ? .caption : nil)
+                            .fontWeight(store.isLocationEnabled ? .light : nil)
+
+                        if store.isLocationEnabled {
+                            Group {
+                                if let loadedLocation = store.location {
+                                    locationTitle(
+                                        city: loadedLocation.city,
+                                        countryName: loadedLocation.countryDisplayName,
+                                        fallbackLabel: "Location on file"
+                                    )
+                                } else if store.$currentLocation.isLoading {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                        Text("Getting location...")
+                                    }
+                                } else if store.$currentLocation.loadError != nil {
+                                    Text("Fetching your location failed")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else if let currentLocation = store.currentLocation {
+                                    locationTitle(
+                                        city: currentLocation.city,
+                                        countryName: currentLocation.countryDisplayName,
+                                        fallbackLabel: "Current location"
+                                    )
+                                }
+                            }
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        }
+                    }
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private func locationDetail(
+    private func locationTitle(
         city: String?,
         countryName: String?,
         fallbackLabel: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let city = city,
-               let countryName = countryName {
-                Text("\(city), \(countryName)")
-                    .foregroundStyle(Color(.label))
-            } else if let city = city {
-                Text(city)
-                    .foregroundStyle(Color(.label))
-            } else {
-                Text(fallbackLabel)
-                    .foregroundStyle(.secondary)
-            }
+    ) -> Text {
+        if let city, let countryName {
+            Text("\(city), \(countryName)")
+        } else if let city {
+            Text(city)
+        } else {
+            Text(fallbackLabel)
         }
     }
 
@@ -483,9 +521,20 @@ struct TransactionFormView: View {
 }
 
 #Preview {
-    let _ = try! prepareDependencies {
+    let transaction = try! prepareDependencies {
         try $0.bootstrapDatabase()
         try seedSampleData()
+
+        $0.geocodingClient.reverseGeocode = { _ in
+            try await Task.sleep(for: .seconds(2))
+            return ("Córdoba", "AR")
+        }
+
+        return try $0.defaultDatabase.read { db in
+            try Transaction
+                .order(by: \.createdAtUTC)
+                .fetchOne(db)!
+        }
     }
     Color.clear
         .ignoresSafeArea()
@@ -494,7 +543,7 @@ struct TransactionFormView: View {
                 TransactionFormView(
                     store: Store(
                         initialState: TransactionFormReducer.State(
-                            transaction: Transaction.Draft()
+                            transaction: Transaction.Draft(transaction)
                         )
                     ) {
                         TransactionFormReducer()

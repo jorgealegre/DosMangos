@@ -14,11 +14,10 @@ private final class LiveLocationManager {
     self.manager.delegate = locationDelegate
   }
 
-  var delegateStream: AsyncPublisher<AnyPublisher<LocationManagerClient.Action, Never>> {
+  var delegateStream: AnyPublisher<LocationManagerClient.Action, Never> {
     delegateSubject
       .share()
       .eraseToAnyPublisher()
-      .values
   }
 
   func accuracyAuthorization() -> AccuracyAuthorization? {

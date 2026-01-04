@@ -14,7 +14,7 @@ extension LocationManagerClient {
     /// ```swift
     /// let client = withDependencies {
     ///   $0.locationManager.authorizationStatus = { .authorizedAlways }
-    ///   $0.locationManager.delegate = { AsyncPublisher(...) }
+    ///   $0.locationManager.delegate = { Empty<LocationManagerClient.Action, Never>().eraseToAnyPublisher() }
     ///   $0.locationManager.requestLocation = { }
     /// } operation: {
     ///   LocationManagerClient.failing
@@ -31,7 +31,7 @@ extension LocationManagerClient {
         ),
         delegate: unimplemented(
             "LocationManagerClient.delegate",
-            placeholder: AsyncPublisher(Empty<LocationManagerClient.Action, Never>().eraseToAnyPublisher())
+            placeholder: Empty<LocationManagerClient.Action, Never>().eraseToAnyPublisher()
         ),
         dismissHeadingCalibrationDisplay: unimplemented(
             "LocationManagerClient.dismissHeadingCalibrationDisplay"

@@ -5,6 +5,13 @@ import SwiftUI
 
 @Reducer
 struct AppReducer: Reducer {
+
+    @Reducer
+    enum Destination {
+        case transactionForm(TransactionFormReducer)
+        case debugMenu
+    }
+
     @ObservableState
     struct State: Equatable {
         @Presents var destination: Destination.State?
@@ -33,12 +40,6 @@ struct AppReducer: Reducer {
 
         case destination(PresentationAction<Destination.Action>)
         case view(View)
-    }
-
-    @Reducer
-    enum Destination {
-        case transactionForm(TransactionFormReducer)
-        case debugMenu
     }
 
     @Dependency(\.locationManager) private var locationManager

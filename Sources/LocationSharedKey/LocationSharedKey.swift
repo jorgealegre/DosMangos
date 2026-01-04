@@ -62,7 +62,7 @@ final class LocationSharedKey: SharedReaderKey {
                     )
                 }
 
-                let delegateStream = await locationManager.delegate()
+                let delegateStream = await locationManager.delegate().values
 
                 logger.debug("Requesting location update")
                 await locationManager.requestLocation()
