@@ -70,6 +70,9 @@ struct CategoryPicker {
         var searchText: String = ""
         var selectedCategory: Category?
 
+        var newCategoryTitle: String = ""
+        var newSubcategoryTitles: [String: String] = [:]
+
         var filteredCategories: OrderedDictionary<Category, [Category]> {
             guard !searchText.isEmpty else {
                 return data.allCategories
@@ -118,12 +121,16 @@ struct CategoryPicker {
         enum View {
             case task
             case categoryTapped(Category)
+            case createCategorySubmitted(title: String)
+            case createSubcategorySubmitted(title: String, parentID: String)
         }
 
         case binding(BindingAction<State>)
         case delegate(Delegate)
         case view(View)
     }
+
+    @Dependency(\.defaultDatabase) private var database
 
     var body: some ReducerOf<Self> {
         BindingReducer()
@@ -141,9 +148,48 @@ struct CategoryPicker {
                     return .none
 
                 case let .categoryTapped(category):
-                    print("jorge; tapped: \(category.displayName)")
                     return .send(.delegate(.categorySelected(category)))
+
+                case let .createCategorySubmitted(title):
+                    let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !title.isEmpty else { return .none }
+
+                    return createAndSelectCategory(title: title, parentID: nil)
+
+                case let .createSubcategorySubmitted(title, parentID):
+                    let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !title.isEmpty else { return .none }
+
+                    return createAndSelectCategory(title: title, parentID: parentID)
                 }
+            }
+        }
+    }
+
+    private func createAndSelectCategory(
+        title: String,
+        parentID: String?
+    ) -> Effect<Action> {
+        return .run { send in
+            do {
+                let category = try await database.write { db in
+                    try Category
+                        .insert {
+                            Category.Draft(
+                                title: title,
+                                parentCategoryID: parentID
+                            )
+                        }
+                        .returning(\.self)
+                        .fetchOne(db)!
+                }
+                await send(.delegate(.categorySelected(category)))
+            } catch let error as DatabaseError
+                        where error.extendedResultCode == .SQLITE_CONSTRAINT_PRIMARYKEY
+            {
+                reportIssue(error)
+            } catch {
+                reportIssue(error)
             }
         }
     }
@@ -152,6 +198,8 @@ struct CategoryPicker {
 @ViewAction(for: CategoryPicker.self)
 struct CategoryPickerView: View {
     @Bindable var store: StoreOf<CategoryPicker>
+
+    @FocusState private var isSearchBarFocused: Bool
 
     var body: some View {
         List {
@@ -171,10 +219,12 @@ struct CategoryPickerView: View {
 
             // All Categories section
             if !store.filteredCategories.isEmpty {
-                ForEach(store.filteredCategories.elements.enumerated(), id: \.1.key) { index, element in
-                    let parent = element.key
-                    let children = element.value
-                    Section(index == 0 ? "All Categories" : "") {
+                Section("All Categories") {
+                    newCategoryTextField
+                }
+
+                ForEach(store.filteredCategories.elements, id: \.key) { parent, children in
+                    Section {
                         Button {
                             send(.categoryTapped(parent))
                         } label: {
@@ -192,15 +242,26 @@ struct CategoryPickerView: View {
                                     .foregroundStyle(store.selectedCategory == child ? Color.accentColor : .primary)
                             }
                         }
+
+                        newSubcategoryTextField(parent: parent)
                     }
                 }
-
-            }
-
-            if store.filteredCategories.isEmpty && store.filteredFrequentCategories.isEmpty {
-                ContentUnavailableView.search
+            } else {
+                ContentUnavailableView {
+                    Label("No Results for \"\(store.searchText)\"", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Check the spelling, try a new search or create a new category called \"\(store.searchText)\".")
+                } actions: {
+                    Button {
+                        send(.createCategorySubmitted(title: store.searchText))
+                    } label: {
+                        Text("Create category \(Text("\"\(store.searchText)\"").bold())")
+                    }
+                    .buttonStyle(.glassProminent)
+                }
             }
         }
+        .listSectionSpacing(.compact)
         .searchable(text: $store.searchText, prompt: "Search categories")
         .searchFocused($isSearchBarFocused)
         .navigationBarTitleDisplayMode(.inline)
@@ -209,7 +270,38 @@ struct CategoryPickerView: View {
         .onAppear { isSearchBarFocused = true }
     }
 
-    @FocusState var isSearchBarFocused: Bool
+    private var newCategoryTextField: some View {
+        TextField("New category", text: $store.newCategoryTitle)
+            .bold()
+            .submitLabel(.done)
+            .autocorrectionDisabled()
+            .onSubmit {
+                send(.createCategorySubmitted(title: store.newCategoryTitle))
+            }
+    }
+
+    private func newSubcategoryTextField(parent: Category) -> some View {
+        TextField(
+            "New subcategory for \(parent.title)",
+            text: Binding(
+                get: { store.newSubcategoryTitles[parent.id] ?? "" },
+                set: { newValue in
+                    var dict = store.newSubcategoryTitles
+                    dict[parent.id] = newValue
+                    store.newSubcategoryTitles = dict
+                }
+            )
+        )
+        .padding(.leading)
+        .autocorrectionDisabled()
+        .submitLabel(.done)
+        .onSubmit {
+            send(.createSubcategorySubmitted(
+                title: store.newSubcategoryTitles[parent.id] ?? "",
+                parentID: parent.id
+            ))
+        }
+    }
 }
 
 #Preview {

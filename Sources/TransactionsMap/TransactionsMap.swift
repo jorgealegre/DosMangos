@@ -59,9 +59,14 @@ private struct TransactionsMKMapView: UIViewRepresentable {
         let mapView = MKMapView(frame: .zero)
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
-        mapView.pointOfInterestFilter = .excludingAll
-        mapView.register(TransactionAnnotationView.self, forAnnotationViewWithReuseIdentifier: TransactionAnnotationView.reuseIdentifier)
-        mapView.register(TransactionClusterAnnotationView.self, forAnnotationViewWithReuseIdentifier: TransactionClusterAnnotationView.reuseIdentifier)
+        mapView.register(
+            TransactionAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: TransactionAnnotationView.reuseIdentifier
+        )
+        mapView.register(
+            TransactionClusterAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: TransactionClusterAnnotationView.reuseIdentifier
+        )
         return mapView
     }
 

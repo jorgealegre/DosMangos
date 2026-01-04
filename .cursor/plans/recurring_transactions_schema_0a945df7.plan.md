@@ -216,7 +216,3 @@ func virtualInstances(
     // Return occurrences that don't have a real transaction yet
 }
 ```
-
----
-
-## Summary
