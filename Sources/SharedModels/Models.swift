@@ -1,3 +1,4 @@
+import CoreLocation
 import Currency
 import Dependencies
 import Foundation
@@ -182,12 +183,22 @@ struct TransactionLocation: Identifiable, Hashable, Sendable {
         return locale.localizedString(forRegionCode: countryCode)
     }
 }
+extension TransactionLocation {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
 extension TransactionLocation.Draft: Equatable {}
 extension TransactionLocation.Draft {
     var countryDisplayName: String? {
         guard let countryCode = countryCode else { return nil }
         @Dependency(\.locale) var locale
         return locale.localizedString(forRegionCode: countryCode)
+    }
+}
+extension TransactionLocation.Draft {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
 

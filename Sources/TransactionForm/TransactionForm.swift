@@ -10,6 +10,7 @@ struct TransactionFormReducer: Reducer {
     @Reducer
     enum Destination {
         case categoryPicker(CategoryPicker)
+        case locationPicker(LocationPickerReducer)
     }
 
     @ObservableState
@@ -25,6 +26,7 @@ struct TransactionFormReducer: Reducer {
         var category: Category?
         var tags: [Tag] = []
         var location: TransactionLocation?
+        var locationDraft: TransactionLocation.Draft?
         var isLocationEnabled: Bool = true
         var hasLoadedDetails = false
 
@@ -35,6 +37,12 @@ struct TransactionFormReducer: Reducer {
 
         init(transaction: Transaction.Draft) {
             self.transaction = transaction
+        }
+
+        var locationPickerCenter: CLLocationCoordinate2D? {
+            locationDraft?.coordinate
+            ?? location?.coordinate
+            ?? currentLocation?.location.coordinate
         }
     }
 
@@ -47,6 +55,7 @@ struct TransactionFormReducer: Reducer {
             case tagsButtonTapped
             case nextDayButtonTapped
             case previousDayButtonTapped
+            case locationMiniMapTapped
             case saveButtonTapped
             case valueInputFinished
             case onAppear
@@ -70,6 +79,7 @@ struct TransactionFormReducer: Reducer {
                 if !state.isLocationEnabled {
                     state.focus = nil
                     state.location = nil
+                    state.locationDraft = nil
                 }
                 return .none
 
@@ -83,6 +93,16 @@ struct TransactionFormReducer: Reducer {
                 switch delegateAction {
                 case let .categorySelected(category):
                     state.category = category
+                    state.destination = nil
+                    return .none
+                }
+
+            case let .destination(.presented(.locationPicker(.delegate(delegateAction)))):
+                switch delegateAction {
+                case let .didPick(locationDraft):
+                    state.focus = nil
+                    state.locationDraft = locationDraft
+                    state.location = nil
                     state.destination = nil
                     return .none
                 }
@@ -154,12 +174,24 @@ struct TransactionFormReducer: Reducer {
                         .date(byAdding: .day, value: -1, to: state.transaction.localDate)!
                     return .none
 
+                case .locationMiniMapTapped:
+                    state.focus = nil
+                    guard state.isLocationEnabled, let center = state.locationPickerCenter else {
+                        return .none
+                    }
+                    state.destination = .locationPicker(
+                        LocationPickerReducer.State(center: center)
+                    )
+                    return .none
+
                 case .saveButtonTapped:
                     state.focus = nil
 
                     // If we already have a persisted location, prefer it over a newly captured one.
                     let newTransactionLocation: TransactionLocation.Draft?
-                    if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
+                    if state.isLocationEnabled, let locationDraft = state.locationDraft {
+                        newTransactionLocation = locationDraft
+                    } else if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
                         // If we don't have an existing location for this transaction
                         // but location is enabled, create a new one
                         newTransactionLocation = TransactionLocation.Draft(
@@ -277,6 +309,17 @@ struct TransactionFormView: View {
         .bind($store.focus, to: $focus)
         .onAppear {
             send(.onAppear)
+        }
+        .sheet(
+            item: $store.scope(
+                state: \.destination?.locationPicker,
+                action: \.destination.locationPicker
+            )
+        ) { store in
+            NavigationStack {
+                LocationPickerView(store: store)
+            }
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -467,7 +510,13 @@ struct TransactionFormView: View {
 
                         if store.isLocationEnabled {
                             Group {
-                                if let loadedLocation = store.location {
+                                if let locationDraft = store.locationDraft {
+                                    locationTitle(
+                                        city: locationDraft.city,
+                                        countryName: locationDraft.countryDisplayName,
+                                        fallbackLabel: "Chosen location"
+                                    )
+                                } else if let loadedLocation = store.location {
                                     locationTitle(
                                         city: loadedLocation.city,
                                         countryName: loadedLocation.countryDisplayName,
@@ -503,19 +552,8 @@ struct TransactionFormView: View {
         }
     }
 
-    private var transactionCoordinate: Location? {
-        if let location = store.location {
-            return Location(
-                coordinate: CLLocationCoordinate2D(
-                    latitude: location.latitude,
-                    longitude: location.longitude
-                )
-            )
-        } else if let currentLocation = store.currentLocation {
-            return currentLocation.location
-        } else {
-            return nil
-        }
+    private var locationPickerCenterLocation: Location? {
+        store.locationPickerCenter.map { Location(coordinate: $0) }
     }
 
     private func region(for coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
@@ -532,7 +570,7 @@ struct TransactionFormView: View {
             position: $mapPosition,
             interactionModes: []
         ) {
-            if let coordinate = transactionCoordinate?.coordinate {
+            if let coordinate = locationPickerCenterLocation?.coordinate {
                 Marker("", coordinate: coordinate)
             }
         }
@@ -549,13 +587,17 @@ struct TransactionFormView: View {
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .onAppear {
-            if let coordinate = transactionCoordinate?.coordinate {
+            if let coordinate = locationPickerCenterLocation?.coordinate {
                 mapPosition = .region(region(for: coordinate))
             }
         }
-        .onChange(of: transactionCoordinate) { _, newValue in
-            guard let newValue else { return }
-            mapPosition = .region(region(for: newValue.coordinate))
+        .onChange(of: locationPickerCenterLocation) { _, newValue in
+            guard let coordinate = newValue?.coordinate else { return }
+            mapPosition = .region(region(for: coordinate))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            send(.locationMiniMapTapped)
         }
     }
 
