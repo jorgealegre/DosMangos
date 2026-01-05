@@ -23,24 +23,29 @@ struct TransactionFormReducer: Reducer {
         var isPresentingTagsPopover: Bool = false
         var focus: Field? = .value
         var transaction: Transaction.Draft
+        var isLoadingDetails = false
         var category: Category?
         var tags: [Tag] = []
+
+        var isLocationEnabled: Bool
+        /// The location of the transaction we load when editing an existing transaction.
         var location: TransactionLocation?
-        var locationDraft: TransactionLocation.Draft?
-        var isLocationEnabled: Bool = true
-        var hasLoadedDetails = false
+        /// A location the user picked in this session, not yet persisted.
+        var pickedLocation: TransactionLocation.Draft?
+        /// The current location of the user, for automatically filling in the location.
+        @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
 
         @Presents var destination: Destination.State?
 
-        @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
 
         init(transaction: Transaction.Draft) {
             self.transaction = transaction
+            self.isLocationEnabled = transaction.id == nil || transaction.locationID != nil
         }
 
         var locationPickerCenter: CLLocationCoordinate2D? {
-            locationDraft?.coordinate
+            pickedLocation?.coordinate
             ?? location?.coordinate
             ?? currentLocation?.location.coordinate
         }
@@ -58,7 +63,7 @@ struct TransactionFormReducer: Reducer {
             case locationMiniMapTapped
             case saveButtonTapped
             case valueInputFinished
-            case onAppear
+            case task
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
@@ -79,7 +84,7 @@ struct TransactionFormReducer: Reducer {
                 if !state.isLocationEnabled {
                     state.focus = nil
                     state.location = nil
-                    state.locationDraft = nil
+                    state.pickedLocation = nil
                 }
                 return .none
 
@@ -99,9 +104,9 @@ struct TransactionFormReducer: Reducer {
 
             case let .destination(.presented(.locationPicker(.delegate(delegateAction)))):
                 switch delegateAction {
-                case let .didPick(locationDraft):
+                case let .didPick(pickedLocation):
                     state.focus = nil
-                    state.locationDraft = locationDraft
+                    state.pickedLocation = pickedLocation
                     state.location = nil
                     state.destination = nil
                     return .none
@@ -112,10 +117,10 @@ struct TransactionFormReducer: Reducer {
 
             case let .view(view):
                 switch view {
-                case .onAppear:
-                    guard !state.hasLoadedDetails else { return .none }
-                    state.hasLoadedDetails = true
+                case .task:
+                    guard !state.isLoadingDetails else { return .none }
                     guard let transactionID = state.transaction.id else { return .none }
+                    state.isLoadingDetails = true
                     return .run { [locationID = state.transaction.locationID] send in
                         let result = try await database.read { db -> (Category?, [Tag], TransactionLocation?) in
                             let categoryID = try TransactionCategory
@@ -189,8 +194,8 @@ struct TransactionFormReducer: Reducer {
 
                     // If we already have a persisted location, prefer it over a newly captured one.
                     let newTransactionLocation: TransactionLocation.Draft?
-                    if state.isLocationEnabled, let locationDraft = state.locationDraft {
-                        newTransactionLocation = locationDraft
+                    if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
+                        newTransactionLocation = pickedLocation
                     } else if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
                         // If we don't have an existing location for this transaction
                         // but location is enabled, create a new one
@@ -274,6 +279,7 @@ struct TransactionFormReducer: Reducer {
                 state.category = category
                 state.tags = tags
                 state.location = location
+                state.isLoadingDetails = false
                 return .none
 
             }
@@ -306,9 +312,7 @@ struct TransactionFormView: View {
         .listSectionSpacing(12)
         .scrollDismissesKeyboard(.immediately)
         .bind($store.focus, to: $focus)
-        .onAppear {
-            send(.onAppear)
-        }
+        .task { await send(.task).finish() }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button {
@@ -520,10 +524,10 @@ struct TransactionFormView: View {
 
                         if store.isLocationEnabled {
                             Group {
-                                if let locationDraft = store.locationDraft {
+                                if let pickedLocation = store.pickedLocation {
                                     locationTitle(
-                                        city: locationDraft.city,
-                                        countryName: locationDraft.countryDisplayName,
+                                        city: pickedLocation.city,
+                                        countryName: pickedLocation.countryDisplayName,
                                         fallbackLabel: "Chosen location"
                                     )
                                 } else if let loadedLocation = store.location {
