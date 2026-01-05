@@ -302,13 +302,23 @@ struct TransactionFormView: View {
             categoriesSection
             tagsSection
             locationSection
-            saveButton
         }
         .listSectionSpacing(12)
         .scrollDismissesKeyboard(.immediately)
         .bind($store.focus, to: $focus)
         .onAppear {
             send(.onAppear)
+        }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    send(.saveButtonTapped)
+                } label: {
+                    Image(systemName: "checkmark")
+                }
+                .accessibilityLabel("Save")
+                .buttonStyle(.glassProminent)
+            }
         }
         .sheet(
             item: $store.scope(
@@ -615,14 +625,6 @@ struct TransactionFormView: View {
         }
     }
 
-    @ViewBuilder
-    private var saveButton: some View {
-        Section {
-            Button("Save") {
-                send(.saveButtonTapped)
-            }
-        }
-    }
 }
 
 #Preview {

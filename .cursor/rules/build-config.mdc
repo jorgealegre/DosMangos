@@ -4,6 +4,8 @@ alwaysApply: false
 ---
 # Build Configuration for DosMangos
 
+Only run builds when the user explicitly asks; otherwise they will rely on SwiftUI previews and static checks.
+
 ## Xcode Project Details
 - **Project Path**: `/Users/jorge/Developer/DosMangos/DosMangos.xcodeproj`
 - **Scheme**: `DosMangos`
