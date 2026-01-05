@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import CoreLocationClient
 import Foundation
+import MapKit
 import Sharing
 import SwiftUI
 
@@ -258,6 +259,8 @@ struct TransactionFormView: View {
 
     @Bindable var store: StoreOf<TransactionFormReducer>
 
+    @State private var mapPosition: MapCameraPosition = .automatic
+
     var body: some View {
         Form {
             valueInput
@@ -493,6 +496,66 @@ struct TransactionFormView: View {
                     }
                 }
             }
+
+            if store.isLocationEnabled {
+                locationMiniMap
+            }
+        }
+    }
+
+    private var transactionCoordinate: Location? {
+        if let location = store.location {
+            return Location(
+                coordinate: CLLocationCoordinate2D(
+                    latitude: location.latitude,
+                    longitude: location.longitude
+                )
+            )
+        } else if let currentLocation = store.currentLocation {
+            return currentLocation.location
+        } else {
+            return nil
+        }
+    }
+
+    private func region(for coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: 50,
+            longitudinalMeters: 50
+        )
+    }
+
+    @ViewBuilder
+    private var locationMiniMap: some View {
+        Map(
+            position: $mapPosition,
+            interactionModes: []
+        ) {
+            if let coordinate = transactionCoordinate?.coordinate {
+                Marker("", coordinate: coordinate)
+            }
+        }
+        .mapStyle(
+            .standard(
+                elevation: .realistic,
+                emphasis: .automatic,
+                pointsOfInterest: .all,
+                showsTraffic: false
+            )
+        )
+        .frame(height: 120)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .onAppear {
+            if let coordinate = transactionCoordinate?.coordinate {
+                mapPosition = .region(region(for: coordinate))
+            }
+        }
+        .onChange(of: transactionCoordinate) { _, newValue in
+            guard let newValue else { return }
+            mapPosition = .region(region(for: newValue.coordinate))
         }
     }
 
