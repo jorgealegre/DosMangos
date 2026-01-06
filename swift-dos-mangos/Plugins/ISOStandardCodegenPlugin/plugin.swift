@@ -3,10 +3,11 @@ import PackagePlugin
 @main
 struct ISOCurrencies: BuildToolPlugin {
     func createBuildCommands(context: PluginContext, target: Target) async throws -> [Command] {
-        let dataInputURL = context.package.directoryURL.appending(path: "ISO4217.json")
+        let dataInputURL = context.package.directoryURL.appending(path: "currencies.xml")
 
         let currencyDefinitionURL = context.pluginWorkDirectoryURL.appending(path: "ISOCurrencies.swift")
-        let mintDefinitionURL = context.pluginWorkDirectoryURL.appending(path: "CurrencyMint+ISOCurrencyLookup.swift")
+        let mintLookupURL = context.pluginWorkDirectoryURL.appending(path: "CurrencyMint+ISOCurrencyLookup.swift")
+        let allCurrenciesURL = context.pluginWorkDirectoryURL.appending(path: "CurrencyMint+AllCurrencies.swift")
 
         return [
             .buildCommand(
@@ -15,7 +16,8 @@ struct ISOCurrencies: BuildToolPlugin {
                 arguments: [
                     dataInputURL.path(),
                     currencyDefinitionURL.path(),
-                    mintDefinitionURL.path()
+                    mintLookupURL.path(),
+                    allCurrenciesURL.path()
                 ],
                 environment: [:],
                 inputFiles: [
@@ -23,7 +25,8 @@ struct ISOCurrencies: BuildToolPlugin {
                 ],
                 outputFiles: [
                     currencyDefinitionURL,
-                    mintDefinitionURL
+                    mintLookupURL,
+                    allCurrenciesURL
                 ]
             )
         ]

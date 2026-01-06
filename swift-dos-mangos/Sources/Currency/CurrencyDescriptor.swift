@@ -1,17 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This source file is part of the SwiftCurrency open source project
-//
-// Copyright (c) 2024 SwiftCurrency project authors
-// Licensed under MIT License
-//
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftCurrency project authors
-//
-// SPDX-License-Identifier: MIT
-//
-//===----------------------------------------------------------------------===//
-
 import struct Foundation.Decimal
 
 /// A type that provides information describing a currency in terms as defined by ISO 4217.
@@ -34,6 +20,11 @@ public protocol CurrencyDescriptor {
   ///
   /// However, the Japanese Yen has no minor unit, so it has `0` minorUnits.
   static var minorUnits: UInt8 { get }
+  /// The countries that use this currency.
+  ///
+  /// A currency may be used in multiple countries. For example, the Euro (EUR) is used
+  /// in many European Union member states, and the US Dollar (USD) is used in several countries.
+  static var countries: [Country] { get }
 }
 
 // MARK: Minor Units conversions

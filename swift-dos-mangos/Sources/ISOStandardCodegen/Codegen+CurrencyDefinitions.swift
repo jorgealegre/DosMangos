@@ -1,17 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
-// This source file is part of the SwiftCurrency open source project
-//
-// Copyright (c) 2024 SwiftCurrency project authors
-// Licensed under MIT License
-//
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftCurrency project authors
-//
-// SPDX-License-Identifier: MIT
-//
-//===----------------------------------------------------------------------===//
-
 import Foundation
 
 func makeISOCurrencyDefinitionFile(at destinationURL: URL, from source: [CurrencyDefinition]) throws {
@@ -20,9 +6,9 @@ func makeISOCurrencyDefinitionFile(at destinationURL: URL, from source: [Currenc
 
   let fileContent = """
   \(makeFileHeader())
-  
+
   import struct Foundation.Decimal
-  
+
   \(typeDefinitions)
   """
 
@@ -64,6 +50,23 @@ private func makeTypeDefinitions(from definitions: [CurrencyDefinition]) -> [Str
 #endif
     }()
 
+    // Generate countries array
+    let countriesArray: String = {
+      if definition.countries.isEmpty {
+        return "[]"
+      }
+
+      let countryLines = definition.countries.map { country in
+        "      Country(name: \"\(country.name)\", flag: \"\(country.flag)\")"
+      }
+
+      return """
+      [
+      \(countryLines.joined(separator: ",\n"))
+          ]
+      """
+    }()
+
     return """
     \(summary)
     \(documentationFlag)
@@ -72,6 +75,9 @@ private func makeTypeDefinitions(from definitions: [CurrencyDefinition]) -> [Str
       public static var alphabeticCode: String { "\(definition.identifiers.alphabetic)" }
       public static var numericCode: UInt16 { \(definition.identifiers.numeric) }
       public static var minorUnits: UInt8 { \(definition.minorUnits) }
+      public static var countries: [Country] {
+        \(countriesArray)
+      }
 
       public let exactAmount: Decimal
 

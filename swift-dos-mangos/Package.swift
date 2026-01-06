@@ -5,10 +5,10 @@ import PackageDescription
 let package = Package(
     name: "swift-dos-mangos",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14),
-        .tvOS(.v17),
-        .watchOS(.v10),
+        .iOS(.v26),
+        .macOS(.v15),
+        .tvOS(.v26),
+        .watchOS(.v26),
     ],
     products: [
         .library(name: "CoreLocationClient", targets: ["CoreLocationClient"]),
