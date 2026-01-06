@@ -11,15 +11,11 @@ let package = Package(
         .watchOS(.v10),
     ],
     products: [
-        .library(
-            name: "CoreLocationClient",
-            targets: ["CoreLocationClient"]
-        )
+        .library(name: "CoreLocationClient", targets: ["CoreLocationClient"]),
+        .library(name: "Currency", targets: ["Currency"]),
     ],
     dependencies: [
-        .package(
-            url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.10.0")
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.10.0"),
     ],
     targets: [
         .target(
@@ -32,5 +28,17 @@ let package = Package(
             name: "CoreLocationClientTests",
             dependencies: ["CoreLocationClient"]
         ),
+        .target(
+            name: "Currency",
+            dependencies: [],
+            plugins: ["ISOStandardCodegenPlugin"]
+        ),
+        .testTarget(name: "CurrencyTests", dependencies: ["Currency"]),
+        .executableTarget(name: "ISOStandardCodegen"),
+        .plugin(
+            name: "ISOStandardCodegenPlugin",
+            capability: .buildTool(),
+            dependencies: ["ISOStandardCodegen"]
+        )
     ]
 )

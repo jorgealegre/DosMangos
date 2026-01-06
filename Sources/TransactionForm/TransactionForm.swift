@@ -340,10 +340,15 @@ struct TransactionFormView: View {
     @ViewBuilder
     private var valueInput: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(store.transaction.currencyCode)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Currency")
+            Button {
+
+            } label: {
+                Text(store.transaction.currencyCode)
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel("Currency")
+            }
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.roundedRectangle)
 
             TextField("0", text: $store.transaction.valueText)
                 .font(.system(size: 80).bold())

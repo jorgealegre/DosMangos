@@ -1,5 +1,5 @@
 {
-  "originHash" : "ec36b27680ddc4cf8a244489ced32b35084eaf379b2ac24fa5b53222b8ae92f1",
+  "originHash" : "c235035b3471238c49839cecc944a340a1d148a3c0c0b9cd3dd3ef519cb6428b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -71,15 +71,6 @@
       "state" : {
         "revision" : "5a3825302b1a0d744183200915a47b508c828e6f",
         "version" : "1.3.2"
-      }
-    },
-    {
-      "identity" : "swift-currency",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/peek-travel/swift-currency",
-      "state" : {
-        "revision" : "cb6704c48f6f5ea4d5e63b0df9857b3c34ed3ffd",
-        "version" : "1.1.0"
       }
     },
     {
