@@ -12,14 +12,19 @@ struct Transaction: Identifiable, Hashable, Sendable {
 
     var valueMinorUnits: Int
     var currencyCode: String
-    var value: USD {
-        // TODO: hardcoded currency
-        //        CurrencyMint.standard.make(identifier: .alphaCode(currencyCode), minorUnits: Int64(valueMinorUnits))!
-        return USD(minorUnits: Int64(valueMinorUnits))
+
+    var money: Money {
+        get {
+            Money(value: Int64(valueMinorUnits), currencyCode: currencyCode)
+        }
+        set {
+            self.valueMinorUnits = Int(newValue.value)
+            self.currencyCode = newValue.currencyCode
+        }
     }
 
-    var signedValue: USD {
-        type == .expense ? value.negated() : value
+    var signedMoney: Money {
+        type == .expense ? money.negated() : money
     }
 
     enum TransactionType: Int, QueryBindable, Sendable {
@@ -55,9 +60,14 @@ struct Transaction: Identifiable, Hashable, Sendable {
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
-    var value: USD {
-        // TODO: hardcoded currency
-        return USD(minorUnits: Int64(valueMinorUnits))
+    var money: Money {
+        get {
+            Money(value: Int64(valueMinorUnits), currencyCode: currencyCode)
+        }
+        set {
+            self.valueMinorUnits = Int(newValue.value)
+            self.currencyCode = newValue.currencyCode
+        }
     }
 }
 
@@ -92,13 +102,20 @@ extension Transaction.Draft {
 
     // 12300 <> "123"
     var valueText: String {
-        get { valueMinorUnits != 0 ? String(valueMinorUnits / 100) : "" }
+        get {
+            let currency = CurrencyRegistry.currency(for: currencyCode)
+            let divisor = pow(10.0, Double(currency.minorUnits))
+            let wholeUnits = Double(valueMinorUnits) / divisor
+            return wholeUnits != 0 ? String(Int(wholeUnits)) : ""
+        }
         set {
             guard let value = Int(newValue) else {
                 valueMinorUnits = 0
                 return
             }
-            valueMinorUnits = value * 100
+            let currency = CurrencyRegistry.currency(for: currencyCode)
+            let multiplier = pow(10.0, Double(currency.minorUnits))
+            valueMinorUnits = Int(Double(value) * multiplier)
         }
     }
 }

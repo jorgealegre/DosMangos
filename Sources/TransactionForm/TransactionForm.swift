@@ -11,6 +11,7 @@ struct TransactionFormReducer: Reducer {
     @Reducer
     enum Destination {
         case categoryPicker(CategoryPicker)
+        case currencyPicker(CurrencyPicker)
         case locationPicker(LocationPickerReducer)
     }
 
@@ -58,6 +59,7 @@ struct TransactionFormReducer: Reducer {
         enum View {
             case dateButtonTapped
             case categoriesButtonTapped
+            case currencyButtonTapped
             case tagsButtonTapped
             case nextDayButtonTapped
             case previousDayButtonTapped
@@ -99,6 +101,14 @@ struct TransactionFormReducer: Reducer {
                 switch delegateAction {
                 case let .categorySelected(category):
                     state.category = category
+                    state.destination = nil
+                    return .none
+                }
+
+            case let .destination(.presented(.currencyPicker(.delegate(delegateAction)))):
+                switch delegateAction {
+                case let .currencySelected(currencyCode):
+                    state.transaction.currencyCode = currencyCode
                     state.destination = nil
                     return .none
                 }
@@ -155,6 +165,13 @@ struct TransactionFormReducer: Reducer {
                     state.focus = nil
                     state.destination = .categoryPicker(CategoryPicker.State(
                         selectedCategory: state.category
+                    ))
+                    return .none
+
+                case .currencyButtonTapped:
+                    state.focus = nil
+                    state.destination = .currencyPicker(CurrencyPicker.State(
+                        selectedCurrencyCode: state.transaction.currencyCode
                     ))
                     return .none
 
@@ -327,6 +344,17 @@ struct TransactionFormView: View {
         }
         .sheet(
             item: $store.scope(
+                state: \.destination?.currencyPicker,
+                action: \.destination.currencyPicker
+            )
+        ) { store in
+            NavigationStack {
+                CurrencyPickerView(store: store)
+            }
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(
+            item: $store.scope(
                 state: \.destination?.locationPicker,
                 action: \.destination.locationPicker
             )
@@ -342,7 +370,7 @@ struct TransactionFormView: View {
     private var valueInput: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Button {
-
+                send(.currencyButtonTapped)
             } label: {
                 Text(store.transaction.currencyCode)
                     .font(.subheadline.weight(.semibold))

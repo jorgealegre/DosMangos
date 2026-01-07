@@ -6,20 +6,13 @@ import SwiftUI
 struct CurrencyPicker {
     @ObservableState
     struct State: Equatable {
-        struct CurrencyInfo: Identifiable, Hashable {
-            let code: String
-            let name: String
-            let countries: [Country]
-
-            var id: String { code }
-        }
 
         struct FilteredCurrency: Identifiable, Hashable {
-            let currency: CurrencyInfo
+            let currency: Currency
             let matchedCountry: Country?
             let priority: Int // 0 = country match, 1 = currency match, 2 = no match
 
-            var id: String { currency.id }
+            var id: String { currency.code }
 
             var orderedCountries: [Country] {
                 guard let matchedCountry else {
@@ -45,7 +38,7 @@ struct CurrencyPicker {
 
         var searchText: String = ""
         var selectedCurrencyCode: String
-        var allCurrencies: [CurrencyInfo]
+        var allCurrencies: [Currency]
 
         var filteredCurrencies: [FilteredCurrency] {
             let searchLower = searchText.lowercased()
@@ -79,28 +72,15 @@ struct CurrencyPicker {
             return results
         }
 
-        var selectedCurrency: CurrencyInfo? {
+        var selectedCurrency: Currency? {
             allCurrencies.first { $0.code == selectedCurrencyCode }
         }
 
         init(selectedCurrencyCode: String) {
             self.selectedCurrencyCode = selectedCurrencyCode
 
-            // Build list of unique currencies with their countries
-            var currencies: [CurrencyInfo] = []
-
-            for currency in CurrencyMint.allCurrencies {
-                currencies.append(
-                    CurrencyInfo(
-                        code: currency.alphabeticCode,
-                        name: currency.name,
-                        countries: currency.countries
-                    )
-                )
-            }
-
-            // Sort alphabetically by currency name
-            self.allCurrencies = currencies.sorted { $0.name < $1.name }
+            // Get all currencies from the registry and sort by name
+            self.allCurrencies = CurrencyRegistry.all.values.sorted { $0.name < $1.name }
         }
     }
 

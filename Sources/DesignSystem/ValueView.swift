@@ -3,13 +3,13 @@ import Dependencies
 import SwiftUI
 
 struct ValueView: View {
-    let value: USD
+    let money: Money
 
     var body: some View {
-        Text("\(value.roundedAmount.description) \(type(of: value).alphabeticCode)")
+        Text("\(money.amount.description) \(money.currencyCode)")
             .monospacedDigit()
             .bold()
-            .foregroundStyle(value < 0 ? Color.expense : .income)
+            .foregroundStyle(money.value < 0 ? Color.expense : .income)
             .contentTransition(.numericText())
     }
 }

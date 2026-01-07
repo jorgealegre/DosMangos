@@ -43,14 +43,19 @@ struct TransactionsList: Reducer {
             return byDay
         }
 
-        var balanceByDay: [Int: USD] {
-            var balanceByDay: [Int: USD] = [:]
+        var balanceByDay: [Int: Money] {
+            var balanceByDay: [Int: Money] = [:]
             for (day, rows) in rowsByDay {
+                // Group by currency and calculate balances
+                let transactionsByCurrency = Dictionary(grouping: rows) { $0.transaction.currencyCode }
+
+                // For simplicity, use the first currency found or USD as default
+                let primaryCurrency = transactionsByCurrency.keys.first ?? "USD"
+
                 balanceByDay[day] = rows
-                    .map { $0.transaction.signedValue }
-                    .reduce(USD(integerLiteral: 0)) { total, value in
-                        total.adding(value)
-                    }
+                    .filter { $0.transaction.currencyCode == primaryCurrency }
+                    .map { $0.transaction.signedMoney }
+                    .sum() ?? Money(value: 0, currencyCode: primaryCurrency)
             }
             return balanceByDay
         }
@@ -242,7 +247,7 @@ struct TransactionsListView: View {
                         .font(.caption.bold())
                         .textCase(nil)
                     Spacer()
-                    ValueView(value: store.balanceByDay[day]!)
+                    ValueView(money: store.balanceByDay[day]!)
                         .font(.footnote)
                 }
             }

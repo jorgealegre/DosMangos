@@ -33,7 +33,6 @@ let package = Package(
             dependencies: [],
             plugins: ["ISOStandardCodegenPlugin"]
         ),
-        .testTarget(name: "CurrencyTests", dependencies: ["Currency"]),
         .executableTarget(name: "ISOStandardCodegen"),
         .plugin(
             name: "ISOStandardCodegenPlugin",
