@@ -48,7 +48,7 @@ private class CurrencyXMLParser: NSObject, XMLParserDelegate {
     // Convert grouped entries to CurrencyDefinitions
     currencyDefinitions = entriesByCurrency.map { currencyCode, info in
       let countries = info.countries.sorted().map { countryName in
-        CountryInfo(name: countryName, flag: generateFlagEmoji(for: countryName))
+        CountryInfo(name: toTitleCase(countryName), flag: generateFlagEmoji(for: countryName))
       }
 
       return CurrencyDefinition(
@@ -120,6 +120,42 @@ private class CurrencyXMLParser: NSObject, XMLParserDelegate {
 }
 
 // MARK: - Flag Emoji Generation
+
+private func toTitleCase(_ text: String) -> String {
+  // Handle special cases and proper nouns
+  let specialWords = [
+    "and", "the", "of", "da", "de", "di",  // Keep lowercase
+    "US", "UK", "UAE",                       // Keep uppercase
+    "McDonald"                               // Special casing
+  ]
+
+  let words = text.split(separator: " ")
+  let titleCased = words.enumerated().map { index, word -> String in
+    let lowercased = word.lowercased()
+
+    // Check if it's a special word that should stay lowercase (but not first word)
+    if index > 0 && specialWords.contains(lowercased) {
+      return lowercased
+    }
+
+    // Special case for McDonald
+    if lowercased == "mcdonald" {
+      return "McDonald"
+    }
+
+    // Handle words in parentheses
+    if word.hasPrefix("(") {
+      let withoutParen = word.dropFirst()
+      let titleWord = withoutParen.prefix(1).uppercased() + withoutParen.dropFirst().lowercased()
+      return "(" + titleWord
+    }
+
+    // Regular title case
+    return word.prefix(1).uppercased() + word.dropFirst().lowercased()
+  }
+
+  return titleCased.joined(separator: " ")
+}
 
 private func generateFlagEmoji(for countryName: String) -> String {
   let countryCode = mapCountryNameToCode(countryName)

@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import CoreLocationClient
+import Currency
 import Foundation
 import MapKit
 import Sharing
