@@ -163,6 +163,61 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Add currency conversion support") { db in
+        // Add conversion columns to transactions
+        try #sql(
+        """
+        ALTER TABLE "transactions"
+        ADD COLUMN "convertedValueMinorUnits" INTEGER NOT NULL DEFAULT 0
+        """
+        )
+        .execute(db)
+
+        try #sql(
+        """
+        ALTER TABLE "transactions"
+        ADD COLUMN "convertedCurrencyCode" TEXT NOT NULL DEFAULT 'USD'
+        """
+        )
+        .execute(db)
+
+        // Create exchange_rates table for caching
+        try #sql(
+        """
+        CREATE TABLE "exchangeRates" (
+          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+          "fromCurrency" TEXT NOT NULL,
+          "toCurrency" TEXT NOT NULL,
+          "rate" REAL NOT NULL,
+          "date" TEXT NOT NULL,
+          "fetchedAt" TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE("fromCurrency", "toCurrency", "date") ON CONFLICT REPLACE
+        ) STRICT
+        """
+        )
+        .execute(db)
+
+        // Index for fast rate lookups
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_exchangeRates_lookup"
+        ON "exchangeRates"("fromCurrency", "toCurrency", "date")
+        """
+        )
+        .execute(db)
+
+        // Backfill existing transactions (all USD so same values)
+        try #sql(
+        """
+        UPDATE "transactions"
+        SET "convertedValueMinorUnits" = "valueMinorUnits",
+            "convertedCurrencyCode" = "currencyCode"
+        WHERE "convertedValueMinorUnits" = 0
+        """
+        )
+        .execute(db)
+    }
+
     try migrator.migrate(database)
 
     try database.write { db in
@@ -343,6 +398,8 @@ func seedSampleData() throws {
                     description: seed.description,
                     valueMinorUnits: seed.valueMinorUnits,
                     currencyCode: "USD",
+                    convertedValueMinorUnits: seed.valueMinorUnits,
+                    convertedCurrencyCode: "USD",
                     type: seed.type,
                     createdAtUTC: date,
                     localYear: local.year,
@@ -375,6 +432,8 @@ func seedSampleData() throws {
                     description: seed.description,
                     valueMinorUnits: seed.valueMinorUnits,
                     currencyCode: "USD",
+                    convertedValueMinorUnits: seed.valueMinorUnits,
+                    convertedCurrencyCode: "USD",
                     type: seed.type,
                     createdAtUTC: date,
                     localYear: local.year,

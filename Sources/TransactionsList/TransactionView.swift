@@ -45,7 +45,18 @@ struct TransactionView: View {
             }
             Spacer()
 
-            ValueView(money: transaction.signedMoney)
+            VStack(alignment: .trailing, spacing: 2) {
+                // Always show converted value (prominent)
+                ValueView(money: transaction.signedConvertedMoney)
+
+                // Show original currency if different (subtle)
+                if transaction.currencyCode != transaction.convertedCurrencyCode {
+                    Text("\(transaction.money.amount.description) \(transaction.currencyCode)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    // TODO: Display actual exchange rate by joining with exchange_rates table
+                }
+            }
         }
     }
 }

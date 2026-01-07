@@ -10,8 +10,13 @@ struct Transaction: Identifiable, Hashable, Sendable {
 
     var description: String
 
+    // Original values (what user entered)
     var valueMinorUnits: Int
     var currencyCode: String
+
+    // Converted values (for summaries/totals in default currency)
+    var convertedValueMinorUnits: Int
+    var convertedCurrencyCode: String
 
     var money: Money {
         get {
@@ -23,9 +28,21 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
+    var convertedMoney: Money {
+        Money(value: Int64(convertedValueMinorUnits), currencyCode: convertedCurrencyCode)
+    }
+
     var signedMoney: Money {
         type == .expense ? money.negated() : money
     }
+
+    var signedConvertedMoney: Money {
+        type == .expense ? convertedMoney.negated() : convertedMoney
+    }
+
+    // TODO: To display the actual exchange rate used, we should join with the exchange_rates table
+    // using the transaction's localDate and currency codes. The calculated rate from
+    // convertedValue/originalValue is not reliable due to rounding of integer minor units.
 
     enum TransactionType: Int, QueryBindable, Sendable {
         case expense
@@ -69,6 +86,10 @@ extension Transaction.Draft {
             self.currencyCode = newValue.currencyCode
         }
     }
+
+    var convertedMoney: Money {
+        Money(value: Int64(convertedValueMinorUnits), currencyCode: convertedCurrencyCode)
+    }
 }
 
 extension Transaction.Draft {
@@ -80,6 +101,8 @@ extension Transaction.Draft {
             description: "",
             valueMinorUnits: 0,
             currencyCode: "USD",
+            convertedValueMinorUnits: 0,
+            convertedCurrencyCode: "USD",
             type: .expense,
             createdAtUTC: now,
             localYear: nowLocal.year,
@@ -119,6 +142,19 @@ extension Transaction.Draft {
         }
     }
 }
+
+// MARK: - Exchange Rate
+
+@Table
+struct ExchangeRate: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var fromCurrency: String
+    var toCurrency: String
+    var rate: Double
+    var date: Date  // The day this rate is for
+    var fetchedAt: Date  // When we got it from API
+}
+extension ExchangeRate.Draft: Equatable {}
 
 // MARK: - Category
 
