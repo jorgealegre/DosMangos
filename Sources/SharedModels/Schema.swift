@@ -164,11 +164,12 @@ func appDatabase() throws -> any DatabaseWriter {
     }
 
     migrator.registerMigration("Add currency conversion support") { db in
-        // Add conversion columns to transactions
+        // Add conversion columns as NULLABLE
+        // NULL = conversion not yet available (offline, rate not found, etc.)
         try #sql(
         """
         ALTER TABLE "transactions"
-        ADD COLUMN "convertedValueMinorUnits" INTEGER NOT NULL DEFAULT 0
+        ADD COLUMN "convertedValueMinorUnits" INTEGER
         """
         )
         .execute(db)
@@ -176,7 +177,7 @@ func appDatabase() throws -> any DatabaseWriter {
         try #sql(
         """
         ALTER TABLE "transactions"
-        ADD COLUMN "convertedCurrencyCode" TEXT NOT NULL DEFAULT 'USD'
+        ADD COLUMN "convertedCurrencyCode" TEXT
         """
         )
         .execute(db)
@@ -206,16 +207,18 @@ func appDatabase() throws -> any DatabaseWriter {
         )
         .execute(db)
 
-        // Backfill existing transactions (all USD so same values)
+        // Backfill existing USD transactions (same currency, no conversion needed)
         try #sql(
         """
         UPDATE "transactions"
         SET "convertedValueMinorUnits" = "valueMinorUnits",
             "convertedCurrencyCode" = "currencyCode"
-        WHERE "convertedValueMinorUnits" = 0
+        WHERE "currencyCode" = 'USD'
         """
         )
         .execute(db)
+
+        // Non-USD transactions remain NULL (we don't know historical rates)
     }
 
     try migrator.migrate(database)

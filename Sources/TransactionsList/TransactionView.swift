@@ -46,15 +46,27 @@ struct TransactionView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                // Always show converted value (prominent)
-                ValueView(money: transaction.signedConvertedMoney)
+                if let convertedMoney = transaction.signedConvertedMoney {
+                    // Show converted value (prominent)
+                    ValueView(money: convertedMoney)
 
-                // Show original currency if different (subtle)
-                if transaction.currencyCode != transaction.convertedCurrencyCode {
-                    Text("\(transaction.money.amount.description) \(transaction.currencyCode)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    // TODO: Display actual exchange rate by joining with exchange_rates table
+                    // Show original currency if different (subtle)
+                    if transaction.currencyCode != transaction.convertedCurrencyCode {
+                        Text("\(transaction.money.amount.description) \(transaction.currencyCode)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        // TODO: Display actual exchange rate by joining with exchange_rates table
+                    }
+                } else {
+                    // No conversion available - show original with indicator
+                    ValueView(money: transaction.signedMoney)
+                    HStack(spacing: 2) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("Pending conversion")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.orange)
                 }
             }
         }

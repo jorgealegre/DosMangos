@@ -15,8 +15,9 @@ struct Transaction: Identifiable, Hashable, Sendable {
     var currencyCode: String
 
     // Converted values (for summaries/totals in default currency)
-    var convertedValueMinorUnits: Int
-    var convertedCurrencyCode: String
+    // NULL = conversion not yet available (offline, rate not found, pending background job, etc.)
+    var convertedValueMinorUnits: Int?
+    var convertedCurrencyCode: String?
 
     var money: Money {
         get {
@@ -28,16 +29,20 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
-    var convertedMoney: Money {
-        Money(value: Int64(convertedValueMinorUnits), currencyCode: convertedCurrencyCode)
+    /// Returns the converted money if available, nil otherwise
+    var convertedMoney: Money? {
+        guard let converted = convertedValueMinorUnits, let code = convertedCurrencyCode else {
+            return nil
+        }
+        return Money(value: Int64(converted), currencyCode: code)
     }
 
     var signedMoney: Money {
         type == .expense ? money.negated() : money
     }
 
-    var signedConvertedMoney: Money {
-        type == .expense ? convertedMoney.negated() : convertedMoney
+    var signedConvertedMoney: Money? {
+        convertedMoney.map { type == .expense ? $0.negated() : $0 }
     }
 
     // TODO: To display the actual exchange rate used, we should join with the exchange_rates table
@@ -87,8 +92,11 @@ extension Transaction.Draft {
         }
     }
 
-    var convertedMoney: Money {
-        Money(value: Int64(convertedValueMinorUnits), currencyCode: convertedCurrencyCode)
+    var convertedMoney: Money? {
+        guard let converted = convertedValueMinorUnits, let code = convertedCurrencyCode else {
+            return nil
+        }
+        return Money(value: Int64(converted), currencyCode: code)
     }
 }
 
@@ -101,8 +109,8 @@ extension Transaction.Draft {
             description: "",
             valueMinorUnits: 0,
             currencyCode: "USD",
-            convertedValueMinorUnits: 0,
-            convertedCurrencyCode: "USD",
+            convertedValueMinorUnits: nil,  // Will be filled when saved
+            convertedCurrencyCode: nil,
             type: .expense,
             createdAtUTC: now,
             localYear: nowLocal.year,

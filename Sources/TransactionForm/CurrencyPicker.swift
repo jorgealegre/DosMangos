@@ -152,7 +152,7 @@ struct CurrencyPickerView: View {
             }
         }
         .listSectionSpacing(.compact)
-        .searchable(text: $store.searchText, prompt: "Search by country or currency...")
+        .searchable(text: $store.searchText, prompt: "Search by country or currency")
         .searchFocused($isSearchBarFocused)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("Select Currency")

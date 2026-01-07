@@ -13,7 +13,6 @@ struct TransactionFormReducer: Reducer {
         case categoryPicker(CategoryPicker)
         case currencyPicker(CurrencyPicker)
         case locationPicker(LocationPickerReducer)
-        case alert(AlertState<TransactionFormReducer.Action.Alert>)
     }
 
     @ObservableState
@@ -69,15 +68,11 @@ struct TransactionFormReducer: Reducer {
             case valueInputFinished
             case task
         }
-        enum Alert {
-            case dismissAlert
-        }
         case binding(BindingAction<State>)
         case delegate(Delegate)
         case destination(PresentationAction<Destination.Action>)
         case view(View)
         case detailsLoaded(Category?, [Tag], TransactionLocation?)
-        case rateNotAvailable(Error)
     }
 
     @Dependency(\.calendar) private var calendar
@@ -175,7 +170,6 @@ struct TransactionFormReducer: Reducer {
                     return .none
 
                 case .currencyButtonTapped:
-                    state.focus = nil
                     state.destination = .currencyPicker(CurrencyPicker.State(
                         selectedCurrencyCode: state.transaction.currencyCode
                     ))
@@ -251,8 +245,10 @@ struct TransactionFormReducer: Reducer {
                                 )
                                 updatedTransaction.convertedCurrencyCode = defaultCurrency
                             } catch {
-                                await send(.rateNotAvailable(error))
-                                return
+                                // Don't block save - just leave conversion as NULL
+                                // Can be filled in later by a background job
+                                updatedTransaction.convertedValueMinorUnits = nil
+                                updatedTransaction.convertedCurrencyCode = nil
                             }
                         } else {
                             // Same currency - just copy values
@@ -331,20 +327,6 @@ struct TransactionFormReducer: Reducer {
                 state.isLoadingDetails = false
                 return .none
 
-            case let .rateNotAvailable(error):
-                state.destination = .alert(
-                    AlertState {
-                        TextState("Exchange Rate Not Available")
-                    } actions: {
-                        ButtonState(role: .cancel) {
-                            TextState("OK")
-                        }
-                    } message: {
-                        TextState(error.localizedDescription)
-                    }
-                )
-                return .none
-
             }
         }
         .ifLet(\.$destination, action: \.destination)
@@ -376,7 +358,6 @@ struct TransactionFormView: View {
         .scrollDismissesKeyboard(.immediately)
         .bind($store.focus, to: $focus)
         .task { await send(.task).finish() }
-        .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button {

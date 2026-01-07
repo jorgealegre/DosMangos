@@ -45,11 +45,12 @@ struct TransactionsList: Reducer {
 
         var balanceByDay: [Int: Money] {
             var balanceByDay: [Int: Money] = [:]
+
             for (day, rows) in rowsByDay {
                 // Always use converted values (default currency) for totals
-
+                // Skip transactions without conversion (they'll need background processing)
                 balanceByDay[day] = rows
-                    .map { $0.transaction.signedConvertedMoney }
+                    .compactMap { $0.transaction.signedConvertedMoney }
                     .sum()
             }
             return balanceByDay
