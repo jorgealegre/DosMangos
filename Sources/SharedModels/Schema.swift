@@ -344,6 +344,142 @@ func seedSampleData() throws {
         locationIDs.append(uuid())
     }
 
+    // Current month (~10)
+    let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+        (0, 19, "Dinner at Alto El Fuego", 8050, "USD", .expense, 1, [0, 1]),
+        (0, 9, "Coffee", 450, "USD", .expense, 1, [4]),
+        (0, 15, "Empanadas", 15000_00, "ARS", .expense, 1, [0]),  // ~$10 USD
+        (1, 18, "Groceries", 12490, "USD", .expense, 0, [4]),
+        (2, 12, "Gym", 3999, "USD", .expense, 4, [5, 4]),
+        (3, 8, "Taxi", 1890, "USD", .expense, 5, []),
+        (5, 13, "Movie night", 1650, "USD", .expense, 2, [0]),
+        (7, 10, "Lunch with friends", 2350, "USD", .expense, 1, [1]),
+        (9, 16, "Salary", 250_000, "USD", .income, 6, [3, 4]),
+        (12, 11, "Streaming subscription", 1299, "USD", .expense, 2, [4]),
+        (15, 14, "Pharmacy", 2190, "USD", .expense, 4, [5]),
+    ]
+
+    // Pre-calculate transaction data outside seed block
+    var currentMonthTransactions: [(
+        id: UUID,
+        description: String,
+        valueMinorUnits: Int,
+        currencyCode: String,
+        convertedValueMinorUnits: Int?,
+        convertedCurrencyCode: String?,
+        type: Transaction.TransactionType,
+        createdAtUTC: Date,
+        localYear: Int,
+        localMonth: Int,
+        localDay: Int,
+        locationID: UUID,
+        categoryID: String,
+        tagIndices: [Int]
+    )] = []
+
+    for (index, seed) in currentMonthSeed.enumerated() {
+        let id = uuid()
+        let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo, hourOffset: seed.hour + index % 2)
+        let local = date.localDateComponents()
+        let locationID = locationIDs[index % locationIDs.count]
+
+        // Calculate converted values
+        let convertedValueMinorUnits: Int?
+        let convertedCurrencyCode: String?
+        if seed.currencyCode == "USD" {
+            convertedValueMinorUnits = seed.valueMinorUnits
+            convertedCurrencyCode = "USD"
+        } else if seed.currencyCode == "ARS" {
+            // 1 USD = 1500 ARS, so ARS to USD rate = 1/1500
+            convertedValueMinorUnits = Int(Double(seed.valueMinorUnits) / 1500.0)
+            convertedCurrencyCode = "USD"
+        } else {
+            convertedValueMinorUnits = nil
+            convertedCurrencyCode = nil
+        }
+
+        currentMonthTransactions.append((
+            id: id,
+            description: seed.description,
+            valueMinorUnits: seed.valueMinorUnits,
+            currencyCode: seed.currencyCode,
+            convertedValueMinorUnits: convertedValueMinorUnits,
+            convertedCurrencyCode: convertedCurrencyCode,
+            type: seed.type,
+            createdAtUTC: date,
+            localYear: local.year,
+            localMonth: local.month,
+            localDay: local.day,
+            locationID: locationID,
+            categoryID: categoryIDs[seed.categoryIndex],
+            tagIndices: seed.tagIndices
+        ))
+    }
+
+    // Previous month (a few)
+    let previousMonthSeed: [(dayOffset: Int, hour: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+        (2, 9, "Book", 1899, "USD", .expense, 3, []),
+        (6, 20, "Dinner out", 5400, "USD", .expense, 1, [0]),
+        (14, 12, "Internet bill", 5999, "USD", .expense, 0, [4]),
+        (21, 10, "Side project", 42000, "USD", .income, 6, [3]),
+    ]
+
+    // Pre-calculate transaction data outside seed block
+    var previousMonthTransactions: [(
+        id: UUID,
+        description: String,
+        valueMinorUnits: Int,
+        currencyCode: String,
+        convertedValueMinorUnits: Int?,
+        convertedCurrencyCode: String?,
+        type: Transaction.TransactionType,
+        createdAtUTC: Date,
+        localYear: Int,
+        localMonth: Int,
+        localDay: Int,
+        locationID: UUID,
+        categoryID: String,
+        tagIndices: [Int]
+    )] = []
+
+    for (index, seed) in previousMonthSeed.enumerated() {
+        let id = uuid()
+        let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset, hourOffset: seed.hour)
+        let local = date.localDateComponents()
+        let locationID = locationIDs[(index + 3) % locationIDs.count]
+
+        // Calculate converted values
+        let convertedValueMinorUnits: Int?
+        let convertedCurrencyCode: String?
+        if seed.currencyCode == "USD" {
+            convertedValueMinorUnits = seed.valueMinorUnits
+            convertedCurrencyCode = "USD"
+        } else if seed.currencyCode == "ARS" {
+            convertedValueMinorUnits = Int(Double(seed.valueMinorUnits) / 1500.0)
+            convertedCurrencyCode = "USD"
+        } else {
+            convertedValueMinorUnits = nil
+            convertedCurrencyCode = nil
+        }
+
+        previousMonthTransactions.append((
+            id: id,
+            description: seed.description,
+            valueMinorUnits: seed.valueMinorUnits,
+            currencyCode: seed.currencyCode,
+            convertedValueMinorUnits: convertedValueMinorUnits,
+            convertedCurrencyCode: convertedCurrencyCode,
+            type: seed.type,
+            createdAtUTC: date,
+            localYear: local.year,
+            localMonth: local.month,
+            localDay: local.day,
+            locationID: locationID,
+            categoryID: categoryIDs[seed.categoryIndex],
+            tagIndices: seed.tagIndices
+        ))
+    }
+
     try database.write { db in
         try db.seed {
             for tagID in tagIDs {
@@ -377,79 +513,70 @@ func seedSampleData() throws {
                 )
             }
 
-            // Current month (~10)
-            let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-                (0, 19, "Dinner at Alto El Fuego", 8050, .expense, 1, [0, 1]),
-                (0, 9, "Coffee", 450, .expense, 1, [4]),
-                (1, 18, "Groceries", 12490, .expense, 0, [4]),
-                (2, 12, "Gym", 3999, .expense, 4, [5, 4]),
-                (3, 8, "Taxi", 1890, .expense, 5, []),
-                (5, 13, "Movie night", 1650, .expense, 2, [0]),
-                (7, 10, "Lunch with friends", 2350, .expense, 1, [1]),
-                (9, 16, "Salary", 250_000, .income, 6, [3, 4]),
-                (12, 11, "Streaming subscription", 1299, .expense, 2, [4]),
-                (15, 14, "Pharmacy", 2190, .expense, 4, [5]),
-            ]
-
-            for (index, seed) in currentMonthSeed.enumerated() {
-                let id = uuid()
-                let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo, hourOffset: seed.hour + index % 2)
-                let local = date.localDateComponents()
-                let locationID = locationIDs[index % locationIDs.count]
+            // Insert current month transactions
+            for t in currentMonthTransactions {
                 Transaction(
-                    id: id,
-                    description: seed.description,
-                    valueMinorUnits: seed.valueMinorUnits,
-                    currencyCode: "USD",
-                    convertedValueMinorUnits: seed.valueMinorUnits,
-                    convertedCurrencyCode: "USD",
-                    type: seed.type,
-                    createdAtUTC: date,
-                    localYear: local.year,
-                    localMonth: local.month,
-                    localDay: local.day,
-                    locationID: locationID
+                    id: t.id,
+                    description: t.description,
+                    valueMinorUnits: t.valueMinorUnits,
+                    currencyCode: t.currencyCode,
+                    convertedValueMinorUnits: t.convertedValueMinorUnits,
+                    convertedCurrencyCode: t.convertedCurrencyCode,
+                    type: t.type,
+                    createdAtUTC: t.createdAtUTC,
+                    localYear: t.localYear,
+                    localMonth: t.localMonth,
+                    localDay: t.localDay,
+                    locationID: t.locationID
                 )
 
-                TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])
-                for tagIndex in seed.tagIndices {
-                    TransactionTag.Draft(transactionID: id, tagID: tagIDs[tagIndex])
+                TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)
+                for tagIndex in t.tagIndices {
+                    TransactionTag.Draft(transactionID: t.id, tagID: tagIDs[tagIndex])
                 }
             }
 
-            // Previous month (a few)
-            let previousMonthSeed: [(dayOffset: Int, hour: Int, description: String, valueMinorUnits: Int, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-                (2, 9, "Book", 1899, .expense, 3, []),
-                (6, 20, "Dinner out", 5400, .expense, 1, [0]),
-                (14, 12, "Internet bill", 5999, .expense, 0, [4]),
-                (21, 10, "Side project", 42000, .income, 6, [3]),
-            ]
-
-            for (index, seed) in previousMonthSeed.enumerated() {
-                let id = uuid()
-                let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset, hourOffset: seed.hour)
-                let local = date.localDateComponents()
-                let locationID = locationIDs[(index + 3) % locationIDs.count]
+            // Insert previous month transactions
+            for t in previousMonthTransactions {
                 Transaction(
-                    id: id,
-                    description: seed.description,
-                    valueMinorUnits: seed.valueMinorUnits,
-                    currencyCode: "USD",
-                    convertedValueMinorUnits: seed.valueMinorUnits,
-                    convertedCurrencyCode: "USD",
-                    type: seed.type,
-                    createdAtUTC: date,
-                    localYear: local.year,
-                    localMonth: local.month,
-                    localDay: local.day,
-                    locationID: locationID
+                    id: t.id,
+                    description: t.description,
+                    valueMinorUnits: t.valueMinorUnits,
+                    currencyCode: t.currencyCode,
+                    convertedValueMinorUnits: t.convertedValueMinorUnits,
+                    convertedCurrencyCode: t.convertedCurrencyCode,
+                    type: t.type,
+                    createdAtUTC: t.createdAtUTC,
+                    localYear: t.localYear,
+                    localMonth: t.localMonth,
+                    localDay: t.localDay,
+                    locationID: t.locationID
                 )
 
-                TransactionCategory.Draft(transactionID: id, categoryID: categoryIDs[seed.categoryIndex])
-                for tagIndex in seed.tagIndices {
-                    TransactionTag.Draft(transactionID: id, tagID: tagIDs[tagIndex])
+                TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)
+                for tagIndex in t.tagIndices {
+                    TransactionTag.Draft(transactionID: t.id, tagID: tagIDs[tagIndex])
                 }
             }
+
+            // Add exchange rates for ARS -> USD (today)
+            let today = calendar.startOfDay(for: now)
+            ExchangeRate(
+                id: uuid(),
+                fromCurrency: "ARS",
+                toCurrency: "USD",
+                rate: 1.0 / 1500.0,  // 1 USD = 1500 ARS
+                date: today,
+                fetchedAt: now
+            )
+            ExchangeRate(
+                id: uuid(),
+                fromCurrency: "USD",
+                toCurrency: "ARS",
+                rate: 1500.0,  // 1 ARS = 0.000667 USD
+                date: today,
+                fetchedAt: now
+            )
         }
     }
 }
