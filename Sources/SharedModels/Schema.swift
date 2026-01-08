@@ -310,23 +310,21 @@ func seedSampleData() throws {
     //
     // Some months (early in the month) won't have enough past days yet, so if a "days ago" value
     // would cross into the previous month we fall back to early-in-month days instead.
-    func dateInSameMonthAsNow(daysAgo: Int, hourOffset: Int) -> Date {
-        let candidate = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+    func dateInSameMonthAsNow(daysAgo: Int) -> Date {
+        let candidate = calendar.startOfDay(for: now.addingTimeInterval(TimeInterval(-daysAgo * 24 * 60 * 60)))
         let candidateYM = calendar.dateComponents([.year, .month], from: candidate)
         if candidateYM.year == nowLocal.year, candidateYM.month == nowLocal.month {
             let base = calendar.startOfDay(for: candidate)
-            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? candidate
+            return base
         } else {
-            let fallback = calendar.date(byAdding: .day, value: min(daysAgo, 20), to: thisMonthStart) ?? thisMonthStart
-            let base = calendar.startOfDay(for: fallback)
-            return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? fallback
+            let fallback = calendar.startOfDay(for: thisMonthStart.addingTimeInterval(TimeInterval(min(daysAgo, 20) * 24 * 60 * 60)))
+            return fallback
         }
     }
 
-    func dateInPreviousMonth(dayOffsetFromStart: Int, hourOffset: Int) -> Date {
-        let baseDay = calendar.date(byAdding: .day, value: dayOffsetFromStart, to: previousMonthStart) ?? previousMonthStart
-        let base = calendar.startOfDay(for: baseDay)
-        return calendar.date(byAdding: .hour, value: hourOffset, to: base) ?? baseDay
+    func dateInPreviousMonth(dayOffsetFromStart: Int) -> Date {
+        let base = calendar.startOfDay(for: previousMonthStart.addingTimeInterval(TimeInterval(dayOffsetFromStart * 24 * 60 * 60)))
+        return base
     }
 
     // Create diverse locations
@@ -344,19 +342,15 @@ func seedSampleData() throws {
         locationIDs.append(uuid())
     }
 
-    // Current month (~10)
-    let currentMonthSeed: [(daysAgo: Int, hour: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-        (0, 19, "Dinner at Alto El Fuego", 8050, "USD", .expense, 1, [0, 1]),
-        (0, 9, "Coffee", 450, "USD", .expense, 1, [4]),
-        (0, 15, "Empanadas", 15000_00, "ARS", .expense, 1, [0]),  // ~$10 USD
-        (1, 18, "Groceries", 12490, "USD", .expense, 0, [4]),
-        (2, 12, "Gym", 3999, "USD", .expense, 4, [5, 4]),
-        (3, 8, "Taxi", 1890, "USD", .expense, 5, []),
-        (5, 13, "Movie night", 1650, "USD", .expense, 2, [0]),
-        (7, 10, "Lunch with friends", 2350, "USD", .expense, 1, [1]),
-        (9, 16, "Salary", 250_000, "USD", .income, 6, [3, 4]),
-        (12, 11, "Streaming subscription", 1299, "USD", .expense, 2, [4]),
-        (15, 14, "Pharmacy", 2190, "USD", .expense, 4, [5]),
+    // Current month (~7 transactions, all within last 5 days to avoid future dates)
+    let currentMonthSeed: [(daysAgo: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+        (0, "Dinner at Alto El Fuego", 80_00, "USD", .expense, 1, [0, 1]),
+        (0, "Coffee", 5_00, "USD", .expense, 1, [4]),
+        (0, "Empanadas", 15000_00, "ARS", .expense, 1, [0]),  // ~$10 USD
+        (1, "Groceries", 125_00, "USD", .expense, 0, [4]),
+        (2, "Gym", 40_00, "USD", .expense, 4, [5, 4]),
+        (3, "Taxi", 19_00, "USD", .expense, 5, []),
+        (5, "Movie night", 17_00, "USD", .expense, 2, [0]),
     ]
 
     // Pre-calculate transaction data outside seed block
@@ -379,7 +373,7 @@ func seedSampleData() throws {
 
     for (index, seed) in currentMonthSeed.enumerated() {
         let id = uuid()
-        let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo, hourOffset: seed.hour + index % 2)
+        let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo)
         let local = date.localDateComponents()
         let locationID = locationIDs[index % locationIDs.count]
 
@@ -417,11 +411,11 @@ func seedSampleData() throws {
     }
 
     // Previous month (a few)
-    let previousMonthSeed: [(dayOffset: Int, hour: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-        (2, 9, "Book", 1899, "USD", .expense, 3, []),
-        (6, 20, "Dinner out", 5400, "USD", .expense, 1, [0]),
-        (14, 12, "Internet bill", 5999, "USD", .expense, 0, [4]),
-        (21, 10, "Side project", 42000, "USD", .income, 6, [3]),
+    let previousMonthSeed: [(dayOffset: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
+        (2, "Book", 19_00, "USD", .expense, 3, []),
+        (6, "Dinner out", 54_00, "USD", .expense, 1, [0]),
+        (14, "Internet bill", 60_00, "USD", .expense, 0, [4]),
+        (21, "Side project", 420_00, "USD", .income, 6, [3]),
     ]
 
     // Pre-calculate transaction data outside seed block
@@ -444,7 +438,7 @@ func seedSampleData() throws {
 
     for (index, seed) in previousMonthSeed.enumerated() {
         let id = uuid()
-        let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset, hourOffset: seed.hour)
+        let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset)
         let local = date.localDateComponents()
         let locationID = locationIDs[(index + 3) % locationIDs.count]
 
