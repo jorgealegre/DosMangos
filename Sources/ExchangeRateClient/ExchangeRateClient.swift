@@ -41,17 +41,52 @@ extension ExchangeRateClient: DependencyKey {
     static let liveValue: Self = {
         @Dependency(\.defaultDatabase) var database
 
+        // Backend API URL (TODO: Move to configuration)
+        let backendURL = "http://localhost:8000"  // Change to your backend URL
+
         @Sendable func fetchRate(from: String, to: String, date: Date) async throws -> Double {
             // Same currency = 1.0
             guard from != to else { return 1.0 }
-            if from == "ARS" && to == "USD" {
-                return 1.0 / 1500.0
-            }
-            if from == "USD" && to == "ARS" {
-                return 1500.0
+
+            // Format date as YYYY-MM-DD
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            let dateStr = formatter.string(from: date)
+
+            // Build API URL: GET /rates?base=FROM&symbols=TO&date=YYYY-MM-DD
+            var components = URLComponents(string: "\(backendURL)/rates")!
+            components.queryItems = [
+                URLQueryItem(name: "base", value: from),
+                URLQueryItem(name: "symbols", value: to),
+                URLQueryItem(name: "date", value: dateStr)
+            ]
+
+            guard let url = components.url else {
+                throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
             }
 
-            throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
+            // Make HTTP request
+            let (data, response) = try await URLSession.shared.data(from: url)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
+            }
+
+            // Parse JSON response
+            struct RatesResponse: Codable {
+                let base: String
+                let date: String
+                let rates: [String: Double]
+            }
+
+            let ratesResponse = try JSONDecoder().decode(RatesResponse.self, from: data)
+
+            guard let rate = ratesResponse.rates[to] else {
+                throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
+            }
+
+            return rate
         }
 
         return Self(
@@ -81,10 +116,10 @@ extension ExchangeRateClient: DependencyKey {
                     return cached.rate
                 }
 
-                // Not cached, fetch from API
+                // Not cached, fetch from backend API
                 let rate = try await fetchRate(from: from, to: to, date: normalizedDate)
 
-                // Cache it
+                // Cache it locally
                 try await database.write { db in
                     try ExchangeRate.insert {
                         ExchangeRate.Draft(
@@ -92,7 +127,7 @@ extension ExchangeRateClient: DependencyKey {
                             toCurrency: to,
                             rate: rate,
                             date: normalizedDate,
-                            fetchedAt: Date() // TODO: pretty sure this is not needed
+                            fetchedAt: Date()
                         )
                     }.execute(db)
                 }
@@ -140,4 +175,3 @@ extension DependencyValues {
         set { self[ExchangeRateClient.self] = newValue }
     }
 }
-
