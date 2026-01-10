@@ -182,7 +182,7 @@ func appDatabase() throws -> any DatabaseWriter {
         )
         .execute(db)
 
-        // Create exchange_rates table for caching
+        // Create exchangeRates table for caching
         try #sql(
         """
         CREATE TABLE "exchangeRates" (

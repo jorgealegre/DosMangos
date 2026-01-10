@@ -1,6 +1,7 @@
 import Dependencies
 import DependenciesMacros
 import Foundation
+import OSLog
 import SQLiteData
 
 @DependencyClient
@@ -41,8 +42,11 @@ extension ExchangeRateClient: DependencyKey {
     static let liveValue: Self = {
         @Dependency(\.defaultDatabase) var database
 
-        // Backend API URL (TODO: Move to configuration)
-        let backendURL = "http://localhost:8000"  // Change to your backend URL
+        #if DEBUG
+        let backendURL = "http://localhost:8000"
+        #else
+        let backendURL = "https://dosmangos.alegre.dev"
+        #endif
 
         @Sendable func fetchRate(from: String, to: String, date: Date) async throws -> Double {
             // Same currency = 1.0
@@ -52,6 +56,8 @@ extension ExchangeRateClient: DependencyKey {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withFullDate]
             let dateStr = formatter.string(from: date)
+
+            logger.debug("Fetching rate: \(from) → \(to) for \(dateStr)")
 
             // Build API URL: GET /rates?base=FROM&symbols=TO&date=YYYY-MM-DD
             var components = URLComponents(string: "\(backendURL)/rates")!
@@ -77,15 +83,25 @@ extension ExchangeRateClient: DependencyKey {
             struct RatesResponse: Codable {
                 let base: String
                 let date: String
-                let rates: [String: Double]
+                let rates: [String: [String: Double]]
             }
 
-            let ratesResponse = try JSONDecoder().decode(RatesResponse.self, from: data)
-
-            guard let rate = ratesResponse.rates[to] else {
+            logger.debug("Response received: \(String(data: data, encoding: .utf8) ?? "")")
+            let ratesResponse: RatesResponse
+            do {
+                ratesResponse = try JSONDecoder().decode(RatesResponse.self, from: data)
+            } catch {
+                reportIssue(error)
                 throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
             }
 
+            // TODO: support more than just official rates
+            guard let rate = ratesResponse.rates[to]?["official"] else {
+                logger.error("Rate not found in response: \(from) → \(to)")
+                throw ExchangeRateError.rateNotAvailable(from: from, to: to, date: date)
+            }
+
+            logger.debug("Fetched rate: \(from) → \(to) = \(rate)")
             return rate
         }
 
@@ -113,9 +129,11 @@ extension ExchangeRateClient: DependencyKey {
                 }
 
                 if let cached {
+                    logger.debug("Cache hit: \(from) → \(to) = \(cached.rate)")
                     return cached.rate
                 }
 
+                logger.debug("Cache miss: \(from) → \(to), fetching...")
                 // Not cached, fetch from backend API
                 let rate = try await fetchRate(from: from, to: to, date: normalizedDate)
 
@@ -175,3 +193,5 @@ extension DependencyValues {
         set { self[ExchangeRateClient.self] = newValue }
     }
 }
+
+nonisolated private let logger = Logger(subsystem: "DosMangos", category: "ExchangeRateClient")
