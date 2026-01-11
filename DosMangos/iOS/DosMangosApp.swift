@@ -34,6 +34,8 @@ struct DosMangosApp: App {
 final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
     @Dependency(\.context) var context
 
+    static weak var shared: AppDelegate?
+
     lazy var store = Store(initialState: AppReducer.State()) {
         AppReducer()
 #if DEBUG
@@ -45,6 +47,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        AppDelegate.shared = self
         if context == .live {
             store.send(.appDelegate(.didFinishLaunching))
         }
@@ -68,6 +71,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 //    @Dependency(\.defaultSyncEngine) var syncEngine
     var window: UIWindow?
+    weak var store: StoreOf<AppReducer>?
+
+    func scene(
+        _ scene: UIScene,
+        willConnectTo session: UISceneSession,
+        options connectionOptions: UIScene.ConnectionOptions
+    ) {
+        // Get store reference from static property
+        self.store = AppDelegate.shared?.store
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        store?.send(.appDelegate(.sceneDelegate(.willEnterForeground)))
+    }
 
 //    func windowScene(
 //        _ windowScene: UIWindowScene,
