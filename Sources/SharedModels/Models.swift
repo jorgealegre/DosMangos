@@ -79,6 +79,7 @@ struct Transaction: Identifiable, Hashable, Sendable {
     }
 
     var locationID: UUID?
+    var recurringTransactionID: UUID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -262,6 +263,89 @@ extension TransactionLocation.Draft {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
+
+// MARK: - Recurring Transaction
+
+enum RecurringTransactionStatus: Int, QueryBindable, Sendable {
+    case active = 0
+    case paused = 1
+    case completed = 2
+    case deleted = 3
+}
+
+@Table("recurringTransactions")
+struct RecurringTransaction: Identifiable, Hashable, Sendable {
+    let id: UUID
+
+    var description: String
+    var valueMinorUnits: Int
+    var currencyCode: String
+    var type: Transaction.TransactionType
+
+    // MARK: Recurrence Rule (flattened)
+
+    /// 0 = daily, 1 = weekly, 2 = monthly, 3 = yearly
+    var frequency: Int
+    /// Repeat every N units (e.g., every 2 weeks)
+    var interval: Int
+    /// Comma-separated weekday values: "2,4,6" for Mon, Wed, Fri (1=Sun, 2=Mon, ..., 7=Sat)
+    var weeklyDays: String?
+    /// 0 = each (specific days), 1 = onThe (ordinal weekday like "first Monday")
+    var monthlyMode: Int?
+    /// Comma-separated day numbers: "1,15" for 1st and 15th of month
+    var monthlyDays: String?
+    /// 1 = first, 2 = second, 3 = third, 4 = fourth, -1 = last
+    var monthlyOrdinal: Int?
+    /// 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    var monthlyWeekday: Int?
+    /// Comma-separated month numbers: "1,7" for January and July
+    var yearlyMonths: String?
+    /// 0 = false, 1 = true — when true, uses ordinal + weekday (e.g., "first Sunday of January")
+    var yearlyDaysOfWeekEnabled: Int
+    /// 1 = first, 2 = second, 3 = third, 4 = fourth, -1 = last
+    var yearlyOrdinal: Int?
+    /// 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    var yearlyWeekday: Int?
+    /// 0 = never, 1 = onDate, 2 = afterOccurrences
+    var endMode: Int
+    /// End date when endMode = 1 (onDate)
+    var endDate: Date?
+    /// Number of occurrences when endMode = 2 (afterOccurrences)
+    var endAfterOccurrences: Int?
+
+    // MARK: State
+
+    /// When this recurrence begins
+    var startDate: Date
+    /// The next occurrence to show as a virtual instance
+    var nextDueDate: Date
+    /// How many transactions have been posted from this template
+    var postedCount: Int
+    /// 0 = active, 1 = paused, 2 = completed, 3 = deleted
+    var status: RecurringTransactionStatus
+
+    // MARK: Metadata
+
+    var createdAtUTC: Date
+    var updatedAtUTC: Date
+}
+extension RecurringTransaction.Draft: Equatable {}
+
+@Table("recurringTransactionsCategories")
+struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var categoryID: String
+}
+extension RecurringTransactionCategory.Draft: Equatable {}
+
+@Table("recurringTransactionsTags")
+struct RecurringTransactionTag: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var tagID: String
+}
+extension RecurringTransactionTag.Draft: Equatable {}
 
 // MARK: - TransactionsListRow
 

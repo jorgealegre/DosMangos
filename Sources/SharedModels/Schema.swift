@@ -221,6 +221,133 @@ func appDatabase() throws -> any DatabaseWriter {
         // Non-USD transactions remain NULL (we don't know historical rates)
     }
 
+    migrator.registerMigration("Add recurring transactions support") { db in
+        // Create recurringTransactions table
+        try #sql(
+        """
+        CREATE TABLE "recurringTransactions" (
+          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+          "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+          "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT 'USD',
+          "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+
+          -- Recurrence Rule (flattened)
+          "frequency" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "interval" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 1,
+          "weeklyDays" TEXT,
+          "monthlyMode" INTEGER,
+          "monthlyDays" TEXT,
+          "monthlyOrdinal" INTEGER,
+          "monthlyWeekday" INTEGER,
+          "yearlyMonths" TEXT,
+          "yearlyDaysOfWeekEnabled" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "yearlyOrdinal" INTEGER,
+          "yearlyWeekday" INTEGER,
+          "endMode" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "endDate" TEXT,
+          "endAfterOccurrences" INTEGER,
+
+          -- State
+          "startDate" TEXT NOT NULL DEFAULT (date('now')),
+          "nextDueDate" TEXT NOT NULL DEFAULT (date('now')),
+          "postedCount" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "status" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+
+          -- Metadata
+          "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
+          "updatedAtUTC" TEXT NOT NULL DEFAULT (datetime('now'))
+        ) STRICT
+        """
+        )
+        .execute(db)
+
+        // Create recurringTransactionsCategories join table
+        try #sql(
+        """
+        CREATE TABLE "recurringTransactionsCategories" (
+          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+          "recurringTransactionID" TEXT NOT NULL REFERENCES "recurringTransactions"("id") ON DELETE CASCADE,
+          "categoryID" TEXT NOT NULL REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE("recurringTransactionID", "categoryID") ON CONFLICT IGNORE
+        ) STRICT
+        """
+        )
+        .execute(db)
+
+        // Create recurringTransactionsTags join table
+        try #sql(
+        """
+        CREATE TABLE "recurringTransactionsTags" (
+          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+          "recurringTransactionID" TEXT NOT NULL REFERENCES "recurringTransactions"("id") ON DELETE CASCADE,
+          "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE("recurringTransactionID", "tagID") ON CONFLICT IGNORE
+        ) STRICT
+        """
+        )
+        .execute(db)
+
+        // Add recurringTransactionID to transactions table
+        try #sql(
+        """
+        ALTER TABLE "transactions"
+        ADD COLUMN "recurringTransactionID" TEXT REFERENCES "recurringTransactions"("id") ON DELETE SET NULL
+        """
+        )
+        .execute(db)
+
+        // Create indexes for foreign keys
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_recurringTransactionID"
+        ON "recurringTransactionsCategories"("recurringTransactionID")
+        """
+        )
+        .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_categoryID"
+        ON "recurringTransactionsCategories"("categoryID")
+        """
+        )
+        .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsTags_recurringTransactionID"
+        ON "recurringTransactionsTags"("recurringTransactionID")
+        """
+        )
+        .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsTags_tagID"
+        ON "recurringTransactionsTags"("tagID")
+        """
+        )
+        .execute(db)
+
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_transactions_recurringTransactionID"
+        ON "transactions"("recurringTransactionID")
+        """
+        )
+        .execute(db)
+
+        // Index for querying active recurring transactions by next due date
+        try #sql(
+        """
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactions_status_nextDueDate"
+        ON "recurringTransactions"("status", "nextDueDate")
+        """
+        )
+        .execute(db)
+    }
+
     try migrator.migrate(database)
 
     try database.write { db in
