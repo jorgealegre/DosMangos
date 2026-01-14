@@ -328,13 +328,13 @@ func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
 - [x] Create indexes for foreign keys
 - [x] Recurrence rule stored as flattened columns (frequency, interval, weeklyDays, etc.)
 
-### Phase 2: Recurring Tab — List of Templates
-- [ ] Create `RecurringTransactionsList` reducer
-- [ ] Create `RecurringTransactionsListView`
-- [ ] Query and display all recurring transactions grouped by status
-- [ ] Display: description, amount, frequency summary, next due date
-- [ ] Add button to create new recurring transaction
-- [ ] Wire into App.swift (replace RecurrencePicker playground)
+### Phase 2: Recurring Tab — List of Templates ✅
+- [x] Create `RecurringTransactionsList` reducer
+- [x] Create `RecurringTransactionsListView`
+- [x] Query and display all recurring transactions grouped by status
+- [x] Display: description, amount, frequency summary, next due date
+- [x] Add button to create new recurring transaction
+- [x] Wire into App.swift (replace RecurrencePicker playground)
 
 ### Phase 3: Recurring Transaction Form
 - [ ] Create `RecurringTransactionForm` reducer

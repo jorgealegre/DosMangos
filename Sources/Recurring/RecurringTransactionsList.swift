@@ -1,0 +1,244 @@
+import ComposableArchitecture
+import Currency
+import Dependencies
+import SQLiteData
+import SwiftUI
+
+@Reducer
+struct RecurringTransactionsList: Reducer {
+
+    @ObservableState
+    struct State: Equatable {
+        @FetchAll(
+            RecurringTransaction
+                .where { $0.status.in([RecurringTransactionStatus.active, .paused]) }
+                .order(by: \.nextDueDate),
+            animation: .default
+        )
+        var recurringTransactions: [RecurringTransaction]
+
+        var groupedByStatus: [RecurringTransactionStatus: [RecurringTransaction]] {
+            Dictionary(grouping: recurringTransactions, by: \.status)
+        }
+    }
+
+    enum Action: ViewAction {
+        enum View {
+            case onAppear
+            case addButtonTapped
+            case transactionTapped(RecurringTransaction)
+        }
+        case view(View)
+    }
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .view(.onAppear):
+                return .none
+
+            case .view(.addButtonTapped):
+                // TODO: Phase 3 - Present form
+                return .none
+
+            case .view(.transactionTapped):
+                // TODO: Phase 3 - Present form for editing
+                return .none
+            }
+        }
+    }
+}
+
+@ViewAction(for: RecurringTransactionsList.self)
+struct RecurringTransactionsListView: View {
+    let store: StoreOf<RecurringTransactionsList>
+
+    var body: some View {
+        NavigationStack {
+            List {
+                let grouped = store.groupedByStatus
+
+                if let active = grouped[.active], !active.isEmpty {
+                    Section {
+                        ForEach(active) { transaction in
+                            RecurringTransactionRow(transaction: transaction)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    send(.transactionTapped(transaction))
+                                }
+                        }
+                    } header: {
+                        Text("Active", bundle: .main)
+                    }
+                }
+
+                if let paused = grouped[.paused], !paused.isEmpty {
+                    Section {
+                        ForEach(paused) { transaction in
+                            RecurringTransactionRow(transaction: transaction)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    send(.transactionTapped(transaction))
+                                }
+                        }
+                    } header: {
+                        Text("Paused", bundle: .main)
+                    }
+                }
+
+                if store.recurringTransactions.isEmpty {
+                    ContentUnavailableView {
+                        Label {
+                            Text("No Recurring Transactions", bundle: .main)
+                        } icon: {
+                            Image(systemName: "repeat.circle")
+                        }
+                    } description: {
+                        Text("Tap + to create a recurring transaction template.", bundle: .main)
+                    }
+                }
+            }
+            .navigationTitle(Text("Recurring", bundle: .main))
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        send(.addButtonTapped)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .onAppear {
+                send(.onAppear)
+            }
+        }
+    }
+}
+
+// MARK: - Row View
+
+private struct RecurringTransactionRow: View {
+    let transaction: RecurringTransaction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(transaction.description.isEmpty ? "Untitled" : transaction.description)
+                    .font(.headline)
+
+                Spacer()
+
+                Text(formattedAmount)
+                    .font(.headline)
+                    .foregroundStyle(transaction.type == .income ? .green : .primary)
+            }
+
+            HStack {
+                Text(frequencySummary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if transaction.status == .paused {
+                    Label {
+                        Text("Paused", bundle: .main)
+                    } icon: {
+                        Image(systemName: "pause.circle.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    Label {
+                        Text(nextDueText)
+                    } icon: {
+                        Image(systemName: "calendar")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var formattedAmount: String {
+        let money = Money(
+            value: Int64(transaction.valueMinorUnits),
+            currencyCode: transaction.currencyCode
+        )
+        return "\(money.amount.description) \(money.currencyCode)"
+    }
+
+    private var frequencySummary: String {
+        let rule = recurrenceRule
+        return rule.summaryDescription
+    }
+
+    private var nextDueText: String {
+        @Dependency(\.date.now) var now
+        @Dependency(\.calendar) var calendar
+
+        let nextDue = transaction.nextDueDate
+
+        if calendar.isDateInToday(nextDue) {
+            return String(localized: "Due today", bundle: .main)
+        } else if calendar.isDateInTomorrow(nextDue) {
+            return String(localized: "Due tomorrow", bundle: .main)
+        } else if nextDue < now {
+            return String(localized: "Overdue", bundle: .main)
+        } else {
+            return nextDue.formatted(date: .abbreviated, time: .omitted)
+        }
+    }
+
+    private var recurrenceRule: RecurrenceRule {
+        RecurrenceRule(
+            frequency: RecurrenceFrequency(rawValue: transaction.frequency) ?? .monthly,
+            interval: transaction.interval,
+            weeklyDays: parseWeekdays(transaction.weeklyDays),
+            monthlyMode: MonthlyMode(rawValue: transaction.monthlyMode ?? 0) ?? .each,
+            monthlyDays: parseDays(transaction.monthlyDays),
+            monthlyOrdinal: WeekdayOrdinal(rawValue: transaction.monthlyOrdinal ?? 1) ?? .first,
+            monthlyWeekday: Weekday(rawValue: transaction.monthlyWeekday ?? 2) ?? .monday,
+            yearlyMonths: parseMonths(transaction.yearlyMonths),
+            yearlyDaysOfWeekEnabled: transaction.yearlyDaysOfWeekEnabled == 1,
+            yearlyOrdinal: WeekdayOrdinal(rawValue: transaction.yearlyOrdinal ?? 1) ?? .first,
+            yearlyWeekday: Weekday(rawValue: transaction.yearlyWeekday ?? 2) ?? .monday,
+            endMode: RecurrenceEndMode(rawValue: transaction.endMode) ?? .never,
+            endDate: transaction.endDate,
+            endAfterOccurrences: transaction.endAfterOccurrences ?? 1
+        )
+    }
+
+    private func parseWeekdays(_ string: String?) -> Set<Weekday> {
+        guard let string, !string.isEmpty else { return [] }
+        let values = string.split(separator: ",").compactMap { Int($0) }
+        return Set(values.compactMap { Weekday(rawValue: $0) })
+    }
+
+    private func parseDays(_ string: String?) -> Set<Int> {
+        guard let string, !string.isEmpty else { return [] }
+        return Set(string.split(separator: ",").compactMap { Int($0) })
+    }
+
+    private func parseMonths(_ string: String?) -> Set<Month> {
+        guard let string, !string.isEmpty else { return [] }
+        let values = string.split(separator: ",").compactMap { Int($0) }
+        return Set(values.compactMap { Month(rawValue: $0) })
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    let _ = try! prepareDependencies {
+        try $0.bootstrapDatabase()
+        try seedSampleData()
+    }
+    RecurringTransactionsListView(
+        store: Store(initialState: RecurringTransactionsList.State()) {
+            RecurringTransactionsList()
+        }
+    )
+}

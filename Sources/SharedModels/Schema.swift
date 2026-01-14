@@ -698,6 +698,126 @@ func seedSampleData() throws {
                 date: today,
                 fetchedAt: now
             )
+
+            // MARK: - Recurring Transactions
+
+            // 1. Monthly rent - due today
+            RecurringTransaction(
+                id: uuid(),
+                description: "Rent",
+                valueMinorUnits: 1500_00,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.monthly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: MonthlyMode.each.rawValue,
+                monthlyDays: "1",
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startDate: previousMonthStart,
+                nextDueDate: today,
+                postedCount: 1,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 2. Weekly gym - overdue (3 days ago)
+            let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: today)!
+            RecurringTransaction(
+                id: uuid(),
+                description: "Gym Membership",
+                valueMinorUnits: 40_00,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.weekly.rawValue,
+                interval: 1,
+                weeklyDays: "2,4,6", // Mon, Wed, Fri
+                monthlyMode: nil,
+                monthlyDays: nil,
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startDate: previousMonthStart,
+                nextDueDate: threeDaysAgo,
+                postedCount: 4,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 3. Yearly subscription - due next week
+            let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+            RecurringTransaction(
+                id: uuid(),
+                description: "iCloud Storage",
+                valueMinorUnits: 2_99,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.yearly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: nil,
+                monthlyDays: nil,
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: "1", // January
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startDate: previousMonthStart,
+                nextDueDate: nextWeek,
+                postedCount: 0,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 4. Paused Netflix subscription
+            RecurringTransaction(
+                id: uuid(),
+                description: "Netflix",
+                valueMinorUnits: 15_99,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.monthly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: MonthlyMode.onThe.rawValue,
+                monthlyDays: nil,
+                monthlyOrdinal: WeekdayOrdinal.first.rawValue,
+                monthlyWeekday: Weekday.monday.rawValue,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startDate: previousMonthStart,
+                nextDueDate: today,
+                postedCount: 2,
+                status: .paused,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
         }
     }
 }
