@@ -23,6 +23,7 @@ struct AppReducer: Reducer {
         var transactionsList = TransactionsList.State(date: .now)
         var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
+        var recurrencePicker = RecurrencePickerReducer.State()
     }
 
     enum Action: ViewAction {
@@ -37,6 +38,7 @@ struct AppReducer: Reducer {
         case transactionsList(TransactionsList.Action)
         case transactionsMap(TransactionsMap.Action)
         case settings(SettingsReducer.Action)
+        case recurrencePicker(RecurrencePickerReducer.Action)
 
         case destination(PresentationAction<Destination.Action>)
         case view(View)
@@ -61,6 +63,10 @@ struct AppReducer: Reducer {
             SettingsReducer()
         }
 
+        Scope(state: \.recurrencePicker, action: \.recurrencePicker) {
+            RecurrencePickerReducer()
+        }
+
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
@@ -79,6 +85,9 @@ struct AppReducer: Reducer {
                 return .none
 
             case .settings:
+                return .none
+
+            case .recurrencePicker:
                 return .none
 
             case let .view(view):
@@ -146,10 +155,15 @@ struct AppView: View {
                 Label("Transactions", systemImage: "list.bullet.rectangle.portrait")
             }
 
-            Color.red
-                .tabItem {
-                    Label("Recurring", systemImage: "repeat.circle")
-                }
+            RecurrencePickerView(
+                store: store.scope(
+                    state: \.recurrencePicker,
+                    action: \.recurrencePicker
+                )
+            )
+            .tabItem {
+                Label("Recurring", systemImage: "repeat.circle")
+            }
 
             TransactionsMapView(
                 store: store.scope(
