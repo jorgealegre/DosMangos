@@ -33,10 +33,13 @@ struct RecurringTransactionsList: Reducer {
             case onAppear
             case addButtonTapped
             case transactionTapped(RecurringTransaction)
+            case deleteRecurringTransactions([UUID])
         }
         case view(View)
         case destination(PresentationAction<Destination.Action>)
     }
+
+    @Dependency(\.defaultDatabase) private var database
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -70,6 +73,19 @@ struct RecurringTransactionsList: Reducer {
                 )
                 return .none
 
+            case let .view(.deleteRecurringTransactions(ids)):
+                return .run { _ in
+                    await withErrorReporting {
+                        try await database.write { db in
+                            // Soft delete: set status to deleted
+                            try RecurringTransaction
+                                .where { $0.id.in(ids) }
+                                .update { $0.status = .deleted }
+                                .execute(db)
+                        }
+                    }
+                }
+
             case .destination:
                 return .none
             }
@@ -98,6 +114,10 @@ struct RecurringTransactionsListView: View {
                                     send(.transactionTapped(transaction))
                                 }
                         }
+                        .onDelete { indexSet in
+                            let ids = indexSet.map { active[$0].id }
+                            send(.deleteRecurringTransactions(ids), animation: .default)
+                        }
                     } header: {
                         Text("Active", bundle: .main)
                     }
@@ -111,6 +131,10 @@ struct RecurringTransactionsListView: View {
                                 .onTapGesture {
                                     send(.transactionTapped(transaction))
                                 }
+                        }
+                        .onDelete { indexSet in
+                            let ids = indexSet.map { paused[$0].id }
+                            send(.deleteRecurringTransactions(ids), animation: .default)
                         }
                     } header: {
                         Text("Paused", bundle: .main)
@@ -224,10 +248,11 @@ private struct RecurringTransactionRow: View {
         @Dependency(\.calendar) var calendar
 
         let nextDue = transaction.nextDueDate
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
 
-        if calendar.isDateInToday(nextDue) {
+        if calendar.isDate(nextDue, inSameDayAs: now) {
             return String(localized: "Due today", bundle: .main)
-        } else if calendar.isDateInTomorrow(nextDue) {
+        } else if calendar.isDate(nextDue, inSameDayAs: tomorrow) {
             return String(localized: "Due tomorrow", bundle: .main)
         } else if nextDue < now {
             return String(localized: "Overdue", bundle: .main)

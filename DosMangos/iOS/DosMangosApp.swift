@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import CoreLocationClient
 import Dependencies
+import Sharing
 import SwiftUI
 
 @main
@@ -13,7 +14,14 @@ struct DosMangosApp: App {
         if context == .live {
             try! prepareDependencies {
                 try $0.bootstrapDatabase()
-                $0.date = DateGenerator { .now.addingTimeInterval(24.0 * 60.0 * 60.0) }
+
+                #if DEBUG || TESTFLIGHT
+                // Apply debug date override if set
+                @Shared(.debugDateOverride) var debugDate
+                if let debugDate {
+                    $0.date = DateGenerator { debugDate }
+                }
+                #endif
             }
 
             // Need to touch the location client so that it starts up in the main thread.

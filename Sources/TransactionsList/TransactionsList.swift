@@ -470,10 +470,11 @@ private struct VirtualInstanceRow: View {
         @Dependency(\.calendar) var calendar
 
         let dueDate = instance.dueDate
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
 
-        if calendar.isDateInToday(dueDate) {
+        if calendar.isDate(dueDate, inSameDayAs: now) {
             return String(localized: "Due today", bundle: .main)
-        } else if calendar.isDateInYesterday(dueDate) {
+        } else if calendar.isDate(dueDate, inSameDayAs: yesterday) {
             return String(localized: "Due yesterday", bundle: .main)
         } else {
             let days = calendar.dateComponents([.day], from: dueDate, to: now).day ?? 0

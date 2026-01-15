@@ -435,7 +435,7 @@ func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
   - [x] If startDate ≤ today: auto-post first instance with current location
   - [x] Advance nextDueDate to next occurrence
 - [x] Handle edit recurring template (update template only, no new transaction)
-- [ ] ~~Handle delete (soft delete → set status to deleted)~~ (deferred)
+- [x] Handle delete (soft delete → set status to deleted)
 - [ ] ~~Handle pause/resume actions from recurring list~~ (deferred)
 
 ### Phase 4: Virtual Instances in Transactions List ✅
