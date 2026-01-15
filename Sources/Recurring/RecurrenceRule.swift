@@ -227,6 +227,45 @@ struct RecurrenceRule: Sendable, Equatable {
     }
 }
 
+// MARK: - Construction from RecurringTransaction
+
+extension RecurrenceRule {
+    /// Creates a RecurrenceRule from a database RecurringTransaction model
+    static func from(recurringTransaction rt: RecurringTransaction) -> RecurrenceRule {
+        RecurrenceRule(
+            frequency: RecurrenceFrequency(rawValue: rt.frequency) ?? .monthly,
+            interval: rt.interval,
+            weeklyDays: parseWeekdays(rt.weeklyDays),
+            monthlyMode: MonthlyMode(rawValue: rt.monthlyMode ?? 0) ?? .each,
+            monthlyDays: parseDays(rt.monthlyDays),
+            monthlyOrdinal: WeekdayOrdinal(rawValue: rt.monthlyOrdinal ?? 1) ?? .first,
+            monthlyWeekday: Weekday(rawValue: rt.monthlyWeekday ?? 2) ?? .monday,
+            yearlyMonths: parseMonths(rt.yearlyMonths),
+            yearlyDaysOfWeekEnabled: rt.yearlyDaysOfWeekEnabled == 1,
+            yearlyOrdinal: WeekdayOrdinal(rawValue: rt.yearlyOrdinal ?? 1) ?? .first,
+            yearlyWeekday: Weekday(rawValue: rt.yearlyWeekday ?? 2) ?? .monday,
+            endMode: RecurrenceEndMode(rawValue: rt.endMode) ?? .never,
+            endDate: rt.endDate,
+            endAfterOccurrences: rt.endAfterOccurrences ?? 1
+        )
+    }
+
+    private static func parseWeekdays(_ string: String?) -> Set<Weekday> {
+        guard let string, !string.isEmpty else { return [] }
+        return Set(string.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }.compactMap { Weekday(rawValue: $0) })
+    }
+
+    private static func parseDays(_ string: String?) -> Set<Int> {
+        guard let string, !string.isEmpty else { return [] }
+        return Set(string.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) })
+    }
+
+    private static func parseMonths(_ string: String?) -> Set<Month> {
+        guard let string, !string.isEmpty else { return [] }
+        return Set(string.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }.compactMap { Month(rawValue: $0) })
+    }
+}
+
 // MARK: - Preset Conversion
 
 extension RecurrenceRule {

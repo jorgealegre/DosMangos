@@ -114,6 +114,88 @@ recurringTransactionID  UUID? (FK to recurringTransactions)
 
 ---
 
+## Unified Transaction Form
+
+The app uses a **single unified form** for both regular and recurring transactions. This provides a consistent experience and allows users to easily convert a one-time transaction into a recurring one.
+
+### Form Behavior
+
+| Context | Recurring Toggle | Result |
+|---------|-----------------|--------|
+| New transaction from Transactions List | OFF (default) | Creates single transaction |
+| New transaction from Transactions List | ON | Creates recurring template + first instance |
+| New transaction from Recurring Tab | ON (locked) | Creates recurring template + first instance if startDate ≤ today |
+| Edit existing transaction | Hidden | Edits the single transaction |
+| Edit recurring template | ON (locked) | Edits the template (no transaction created) |
+
+### Form Sections
+
+```
+┌─────────────────────────────────────────┐
+│  Amount & Type                          │  ← Always visible
+│  [$100.00]  [Expense ▼]                │
+├─────────────────────────────────────────┤
+│  Description                            │  ← Always visible
+│  [Rent payment]                         │
+├─────────────────────────────────────────┤
+│  🔄 Recurring                    [ON]   │  ← Toggle (hidden when editing transaction)
+├─────────────────────────────────────────┤
+│  ┌─ IF RECURRING OFF ─────────────┐     │
+│  │  📅 Date                       │     │
+│  │  [January 14, 2026]            │     │
+│  │                                │     │
+│  │  📍 Location              [ON] │     │  ← Captures current GPS
+│  │  [123 Main St, City]           │     │
+│  └────────────────────────────────┘     │
+│                                         │
+│  ┌─ IF RECURRING ON ──────────────┐     │
+│  │  📅 Start Date                 │     │
+│  │  [January 14, 2026]            │     │
+│  │                                │     │
+│  │  🔁 Repeat                     │     │
+│  │  [Monthly ▼]                   │     │
+│  │  [on the 1st ▼]               │     │
+│  │                                │     │
+│  │  🏁 End                        │     │
+│  │  [Never ▼]                     │     │
+│  └────────────────────────────────┘     │
+├─────────────────────────────────────────┤
+│  Categories                             │  ← Always visible
+│  [🏠 Housing] [+]                       │
+├─────────────────────────────────────────┤
+│  Tags                                   │  ← Always visible
+│  [#bills] [+]                           │
+└─────────────────────────────────────────┘
+```
+
+### Auto-Post First Instance
+
+When creating a recurring transaction with `startDate ≤ today`:
+
+1. **Create RecurringTransaction template**
+2. **Create Transaction instance for TODAY** (with current location if available)
+3. Link transaction to template via `recurringTransactionID`
+4. Set template's `nextDueDate` to next occurrence AFTER today
+5. Set template's `postedCount = 1`
+
+When creating with `startDate > today`:
+
+1. **Create RecurringTransaction template only**
+2. Set template's `nextDueDate = startDate`
+3. Set template's `postedCount = 0`
+4. First virtual instance appears on that future date
+
+**Rationale**: If the user creates a recurring transaction with today as the start date, their intent is clear: "I'm paying this today AND want it to recur." Auto-posting the first instance eliminates the extra step of having to post it from the Due section.
+
+### Location Handling
+
+- **Regular transaction**: Location captured from current GPS when toggle is ON
+- **Recurring template**: No location stored (templates don't have locations)
+- **Auto-posted first instance**: Location captured from current GPS at creation time
+- **Virtual instance → Post**: Location captured when user opens form to post
+
+---
+
 ## UI Flows
 
 ### Transactions List (Home Tab)
@@ -179,11 +261,12 @@ Shows all recurring transaction templates.
 ### Posting a Virtual Instance
 
 1. User taps **Post** on a virtual instance
-2. Transaction form opens, pre-filled with:
-   - All values from the recurring template (description, amount, currency, type)
+2. **Unified transaction form** opens with:
+   - Recurring toggle **hidden** (posting creates a regular transaction)
+   - All values pre-filled from template (description, amount, currency, type)
    - Date defaulting to the **intended occurrence date** (user can change)
    - Category, tags from template
-   - Location from **user's current location** (not from template)
+   - Location from **user's current location** (captured when form opens)
 3. User can modify any field before saving
 4. On save:
    - Real transaction is created with `recurringTransactionID` set
@@ -336,19 +419,24 @@ func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
 - [x] Add button to create new recurring transaction
 - [x] Wire into App.swift (replace RecurrencePicker playground)
 
-### Phase 3: Recurring Transaction Form
-- [ ] Create `RecurringTransactionForm` reducer
-- [ ] Create `RecurringTransactionFormView`
-- [ ] Include all transaction fields (amount, description, currency, type)
-- [ ] Include RecurrencePicker (already built!)
-- [ ] Include category picker
-- [ ] Include tags picker
-- [ ] Handle create operation
-- [ ] Handle edit operation
+### Phase 3: Unified Transaction Form ✅
+- [x] Add `isRecurring` toggle to `TransactionForm.State`
+- [x] Add `startDate` field (used when recurring)
+- [x] Add `recurrenceRule` to state
+- [x] Show/hide date vs startDate based on toggle
+- [x] Show/hide location section based on toggle (hidden when recurring)
+- [x] Integrate RecurrencePicker (already built!)
+- [x] Lock toggle ON when opened from Recurring tab
+- [x] Lock toggle hidden when editing existing transaction
+- [x] Update save logic for recurring:
+  - [x] Create RecurringTransaction template
+  - [x] Create categories join records
+  - [x] Create tags join records
+  - [x] If startDate ≤ today: auto-post first instance with current location
+  - [x] Advance nextDueDate to next occurrence
+- [ ] Handle edit recurring template (update template only, no new transaction)
 - [ ] Handle delete (soft delete → set status to deleted)
-- [ ] Handle pause/resume
-
-Note: No location picker — location is captured from current location when posting.
+- [ ] Handle pause/resume actions from recurring list
 
 ### Phase 4: Virtual Instances in Transactions List
 - [ ] Create `VirtualInstance` model (non-persisted)
@@ -360,10 +448,13 @@ Note: No location picker — location is captured from current location when pos
 - [ ] Implement "Skip" action → advances `nextDueDate`
 - [ ] Update `nextDueDate` after post/skip
 
-### Phase 5: Transaction Form Integration
-- [ ] Pre-fill transaction form from virtual instance
+### Phase 5: Post from Virtual Instance
+- [ ] Pre-fill transaction form from virtual instance data
+- [ ] Set intended date as default (user can change)
+- [ ] Capture current location when form opens
 - [ ] Set `recurringTransactionID` when saving posted transaction
 - [ ] Increment `postedCount` on recurring template
+- [ ] Advance `nextDueDate` to next occurrence
 - [ ] Check and handle end conditions after posting
 
 ### Phase 6: Polish & Linking

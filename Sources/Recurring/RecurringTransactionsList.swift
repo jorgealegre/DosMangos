@@ -6,6 +6,10 @@ import SwiftUI
 
 @Reducer
 struct RecurringTransactionsList: Reducer {
+    @Reducer
+    enum Destination {
+        case transactionForm(TransactionFormReducer)
+    }
 
     @ObservableState
     struct State: Equatable {
@@ -16,6 +20,8 @@ struct RecurringTransactionsList: Reducer {
             animation: .default
         )
         var recurringTransactions: [RecurringTransaction]
+
+        @Presents var destination: Destination.State?
 
         var groupedByStatus: [RecurringTransactionStatus: [RecurringTransaction]] {
             Dictionary(grouping: recurringTransactions, by: \.status)
@@ -29,6 +35,7 @@ struct RecurringTransactionsList: Reducer {
             case transactionTapped(RecurringTransaction)
         }
         case view(View)
+        case destination(PresentationAction<Destination.Action>)
     }
 
     var body: some ReducerOf<Self> {
@@ -38,20 +45,44 @@ struct RecurringTransactionsList: Reducer {
                 return .none
 
             case .view(.addButtonTapped):
-                // TODO: Phase 3 - Present form
+                var draft = Transaction.Draft()
+                state.destination = .transactionForm(
+                    TransactionFormReducer.State(
+                        transaction: draft,
+                        formMode: .newRecurring
+                    )
+                )
                 return .none
 
-            case .view(.transactionTapped):
-                // TODO: Phase 3 - Present form for editing
+            case let .view(.transactionTapped(recurringTransaction)):
+                // Create a draft from the recurring transaction
+                var draft = Transaction.Draft()
+                draft.description = recurringTransaction.description
+                draft.valueMinorUnits = recurringTransaction.valueMinorUnits
+                draft.currencyCode = recurringTransaction.currencyCode
+                draft.type = recurringTransaction.type
+
+                state.destination = .transactionForm(
+                    TransactionFormReducer.State(
+                        transaction: draft,
+                        formMode: .editRecurring(recurringTransaction)
+                    )
+                )
+                return .none
+
+            case .destination:
                 return .none
             }
         }
+        .ifLet(\.$destination, action: \.destination)
     }
 }
 
+extension RecurringTransactionsList.Destination.State: Equatable {}
+
 @ViewAction(for: RecurringTransactionsList.self)
 struct RecurringTransactionsListView: View {
-    let store: StoreOf<RecurringTransactionsList>
+    @Bindable var store: StoreOf<RecurringTransactionsList>
 
     var body: some View {
         NavigationStack {
@@ -110,6 +141,19 @@ struct RecurringTransactionsListView: View {
             }
             .onAppear {
                 send(.onAppear)
+            }
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.transactionForm,
+                    action: \.destination.transactionForm
+                )
+            ) { formStore in
+                NavigationStack {
+                    TransactionFormView(store: formStore)
+                        .navigationTitle(Text("New Recurring", bundle: .main))
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationDragIndicator(.visible)
             }
         }
     }

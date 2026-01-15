@@ -8,11 +8,24 @@ import SwiftUI
 
 @Reducer
 struct TransactionFormReducer: Reducer {
+    /// Controls how the form behaves regarding recurring options
+    enum FormMode: Equatable {
+        /// Creating a new transaction from Transactions List - toggle is available
+        case newTransaction
+        /// Creating a new recurring template from Recurring Tab - toggle locked ON
+        case newRecurring
+        /// Editing an existing transaction - toggle hidden
+        case editTransaction
+        /// Editing an existing recurring template - toggle locked ON
+        case editRecurring(RecurringTransaction)
+    }
+
     @Reducer
     enum Destination {
         case categoryPicker(CategoryPicker)
         case currencyPicker(CurrencyPicker)
         case locationPicker(LocationPickerReducer)
+        case recurrencePicker(RecurrencePickerReducer)
     }
 
     @ObservableState
@@ -21,6 +34,7 @@ struct TransactionFormReducer: Reducer {
             case value, description
         }
 
+        var formMode: FormMode
         var isDatePickerVisible: Bool = false
         var isPresentingTagsPopover: Bool = false
         var focus: Field? = .value
@@ -28,6 +42,12 @@ struct TransactionFormReducer: Reducer {
         var isLoadingDetails = false
         var category: Category?
         var tags: [Tag] = []
+
+        // Recurring-specific state
+        var isRecurring: Bool
+        var startDate: Date
+        var recurrenceRule: RecurrenceRule?
+        var recurrencePreset: RecurrencePreset = .never
 
         var isLocationEnabled: Bool
         /// The location of the transaction we load when editing an existing transaction.
@@ -41,9 +61,42 @@ struct TransactionFormReducer: Reducer {
 
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
 
-        init(transaction: Transaction.Draft) {
+        /// Whether the recurring toggle should be shown
+        var showsRecurringToggle: Bool {
+            switch formMode {
+            case .newTransaction: true
+            case .newRecurring: false  // Locked ON, don't show toggle
+            case .editTransaction: false  // Hidden
+            case .editRecurring: false  // Locked ON, don't show toggle
+            }
+        }
+
+        /// Whether the location section should be shown (hidden when recurring)
+        var showsLocationSection: Bool {
+            !isRecurring
+        }
+
+        init(transaction: Transaction.Draft, formMode: FormMode = .newTransaction) {
+            self.formMode = formMode
             self.transaction = transaction
-            self.isLocationEnabled = transaction.id == nil || transaction.locationID != nil
+            self.startDate = transaction.localDate
+
+            switch formMode {
+            case .newTransaction:
+                self.isRecurring = false
+                self.isLocationEnabled = transaction.id == nil || transaction.locationID != nil
+            case .newRecurring:
+                self.isRecurring = true
+                self.isLocationEnabled = false
+            case .editTransaction:
+                self.isRecurring = false
+                self.isLocationEnabled = transaction.locationID != nil
+            case let .editRecurring(recurringTransaction):
+                self.isRecurring = true
+                self.isLocationEnabled = false
+                self.recurrenceRule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
+                self.recurrencePreset = self.recurrenceRule?.matchingPreset ?? .never
+            }
         }
 
         var locationPickerCenter: CLLocationCoordinate2D? {
@@ -67,6 +120,7 @@ struct TransactionFormReducer: Reducer {
             case saveButtonTapped
             case valueInputFinished
             case task
+            case recurrenceButtonTapped
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
@@ -84,6 +138,15 @@ struct TransactionFormReducer: Reducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding(\.isRecurring):
+                // When recurring is toggled ON, disable location
+                if state.isRecurring {
+                    state.isLocationEnabled = false
+                    state.location = nil
+                    state.pickedLocation = nil
+                }
+                return .none
+
             case .binding(\.isLocationEnabled):
                 if !state.isLocationEnabled {
                     state.focus = nil
@@ -96,6 +159,23 @@ struct TransactionFormReducer: Reducer {
                 return .none
 
             case .delegate:
+                return .none
+
+            case let .destination(.presented(.recurrencePicker(.view(.presetSelected(preset))))):
+                state.recurrencePreset = preset
+                return .none
+
+            case let .destination(.presented(.recurrencePicker(.destination(.presented(.customEditor(.delegate(.ruleUpdated(rule)))))))):
+                state.recurrenceRule = rule
+                state.recurrencePreset = rule.matchingPreset
+                return .none
+
+            case .destination(.dismiss):
+                // When recurrence picker is dismissed, sync the rule from the picker
+                if case let .recurrencePicker(pickerState) = state.destination {
+                    state.recurrenceRule = pickerState.rule
+                    state.recurrencePreset = pickerState.selectedPreset
+                }
                 return .none
 
             case let .destination(.presented(.categoryPicker(.delegate(delegateAction)))):
@@ -210,113 +290,24 @@ struct TransactionFormReducer: Reducer {
                 case .saveButtonTapped:
                     state.focus = nil
 
-                    // If we already have a persisted location, prefer it over a newly captured one.
-                    let newTransactionLocation: TransactionLocation.Draft?
-                    if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
-                        newTransactionLocation = pickedLocation
-                    } else if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
-                        // If we don't have an existing location for this transaction
-                        // but location is enabled, create a new one
-                        newTransactionLocation = TransactionLocation.Draft(
-                            latitude: location.location.coordinate.latitude,
-                            longitude: location.location.coordinate.longitude,
-                            city: location.city,
-                            countryCode: location.countryCode
-                        )
+                    if state.isRecurring {
+                        return saveRecurringTransaction(&state)
                     } else {
-                        newTransactionLocation = nil
-                    }
-
-                    return .run { [state = state] send in
-                        // Perform currency conversion
-                        var updatedTransaction = state.transaction
-                        let defaultCurrency = "USD" // TODO: Get from app settings
-
-                        if updatedTransaction.currencyCode != defaultCurrency {
-                            do {
-                                let rate = try await exchangeRate.getRate(
-                                    updatedTransaction.currencyCode,
-                                    defaultCurrency,
-                                    updatedTransaction.localDate
-                                )
-
-                                updatedTransaction.convertedValueMinorUnits = Int(
-                                    Double(updatedTransaction.valueMinorUnits) * rate
-                                )
-                                updatedTransaction.convertedCurrencyCode = defaultCurrency
-                            } catch {
-                                // Don't block save - just leave conversion as NULL
-                                // Can be filled in later by a background job
-                                updatedTransaction.convertedValueMinorUnits = nil
-                                updatedTransaction.convertedCurrencyCode = nil
-                            }
-                        } else {
-                            // Same currency - just copy values
-                            updatedTransaction.convertedValueMinorUnits = updatedTransaction.valueMinorUnits
-                            updatedTransaction.convertedCurrencyCode = updatedTransaction.currencyCode
-                        }
-
-                        withErrorReporting {
-                            try database.write { db in
-                                // Delete any existing location if location is disabled or a new one should replace it
-                                if (!state.isLocationEnabled || newTransactionLocation != nil),
-                                    let oldID = state.transaction.locationID {
-                                    try TransactionLocation
-                                        .find(oldID)
-                                        .delete()
-                                        .execute(db)
-                                }
-
-                                let locationID: UUID?
-                                if let newTransactionLocation {
-                                    locationID = try TransactionLocation.insert { newTransactionLocation }
-                                        .returning(\.id)
-                                        .fetchOne(db)
-                                } else if state.isLocationEnabled {
-                                    locationID = state.transaction.locationID
-                                } else {
-                                    locationID = nil
-                                }
-
-                                updatedTransaction.locationID = locationID
-
-                                let transactionID = try Transaction.upsert { updatedTransaction }
-                                    .returning(\.id)
-                                    .fetchOne(db)!
-
-                                try TransactionCategory
-                                    .where { $0.transactionID.eq(transactionID) }
-                                    .delete()
-                                    .execute(db)
-                                if let category = state.category {
-                                    try TransactionCategory.insert {
-                                        TransactionCategory.Draft(
-                                            transactionID: transactionID,
-                                            categoryID: category.id
-                                        )
-                                    }
-                                    .execute(db)
-                                }
-                                try TransactionTag
-                                    .where { $0.transactionID.eq(transactionID) }
-                                    .delete()
-                                    .execute(db)
-                                try TransactionTag.insert {
-                                    state.tags.map { tag in
-                                        TransactionTag.Draft(
-                                            transactionID: transactionID,
-                                            tagID: tag.id
-                                        )
-                                    }
-                                }
-                                .execute(db)
-                            }
-                        }
-                        await dismiss()
+                        return saveRegularTransaction(&state)
                     }
 
                 case .valueInputFinished:
                     state.focus = .description
+                    return .none
+
+                case .recurrenceButtonTapped:
+                    state.focus = nil
+                    state.destination = .recurrencePicker(
+                        RecurrencePickerReducer.State(
+                            selectedPreset: state.recurrencePreset,
+                            rule: state.recurrenceRule
+                        )
+                    )
                     return .none
                 }
 
@@ -330,6 +321,250 @@ struct TransactionFormReducer: Reducer {
             }
         }
         .ifLet(\.$destination, action: \.destination)
+    }
+
+    // MARK: - Save Helpers
+
+    private func saveRegularTransaction(_ state: inout State) -> Effect<Action> {
+        // If we already have a persisted location, prefer it over a newly captured one.
+        let newTransactionLocation: TransactionLocation.Draft?
+        if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
+            newTransactionLocation = pickedLocation
+        } else if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
+            newTransactionLocation = TransactionLocation.Draft(
+                latitude: location.location.coordinate.latitude,
+                longitude: location.location.coordinate.longitude,
+                city: location.city,
+                countryCode: location.countryCode
+            )
+        } else {
+            newTransactionLocation = nil
+        }
+
+        return .run { [state = state] send in
+            var updatedTransaction = state.transaction
+            let defaultCurrency = "USD" // TODO: Get from app settings
+
+            if updatedTransaction.currencyCode != defaultCurrency {
+                do {
+                    let rate = try await exchangeRate.getRate(
+                        updatedTransaction.currencyCode,
+                        defaultCurrency,
+                        updatedTransaction.localDate
+                    )
+                    updatedTransaction.convertedValueMinorUnits = Int(
+                        Double(updatedTransaction.valueMinorUnits) * rate
+                    )
+                    updatedTransaction.convertedCurrencyCode = defaultCurrency
+                } catch {
+                    updatedTransaction.convertedValueMinorUnits = nil
+                    updatedTransaction.convertedCurrencyCode = nil
+                }
+            } else {
+                updatedTransaction.convertedValueMinorUnits = updatedTransaction.valueMinorUnits
+                updatedTransaction.convertedCurrencyCode = updatedTransaction.currencyCode
+            }
+
+            withErrorReporting {
+                try database.write { db in
+                    if (!state.isLocationEnabled || newTransactionLocation != nil),
+                        let oldID = state.transaction.locationID {
+                        try TransactionLocation.find(oldID).delete().execute(db)
+                    }
+
+                    let locationID: UUID?
+                    if let newTransactionLocation {
+                        locationID = try TransactionLocation.insert { newTransactionLocation }
+                            .returning(\.id)
+                            .fetchOne(db)
+                    } else if state.isLocationEnabled {
+                        locationID = state.transaction.locationID
+                    } else {
+                        locationID = nil
+                    }
+
+                    updatedTransaction.locationID = locationID
+
+                    let transactionID = try Transaction.upsert { updatedTransaction }
+                        .returning(\.id)
+                        .fetchOne(db)!
+
+                    try TransactionCategory
+                        .where { $0.transactionID.eq(transactionID) }
+                        .delete()
+                        .execute(db)
+                    if let category = state.category {
+                        try TransactionCategory.insert {
+                            TransactionCategory.Draft(
+                                transactionID: transactionID,
+                                categoryID: category.id
+                            )
+                        }
+                        .execute(db)
+                    }
+                    try TransactionTag
+                        .where { $0.transactionID.eq(transactionID) }
+                        .delete()
+                        .execute(db)
+                    try TransactionTag.insert {
+                        state.tags.map { tag in
+                            TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
+                        }
+                    }
+                    .execute(db)
+                }
+            }
+            await dismiss()
+        }
+    }
+
+    private func saveRecurringTransaction(_ state: inout State) -> Effect<Action> {
+        @Dependency(\.date.now) var now
+
+        let rule = state.recurrenceRule ?? RecurrenceRule()
+        let startDateIsToday = calendar.isDate(state.startDate, inSameDayAs: now) || state.startDate < now
+        let nextDueDate = startDateIsToday
+            ? nextOccurrence(after: now, rule: rule)
+            : state.startDate
+
+        // Capture current location for auto-posting first instance
+        let currentLocation = state.currentLocation
+
+        // Pre-build the recurring transaction draft to help the compiler
+        var rtDraft = RecurringTransaction.Draft(
+            description: state.transaction.description,
+            valueMinorUnits: state.transaction.valueMinorUnits,
+            currencyCode: state.transaction.currencyCode,
+            type: state.transaction.type,
+            frequency: rule.frequency.rawValue,
+            interval: rule.interval,
+            yearlyDaysOfWeekEnabled: rule.yearlyDaysOfWeekEnabled ? 1 : 0,
+            endMode: rule.endMode.rawValue,
+            startDate: state.startDate,
+            nextDueDate: nextDueDate,
+            postedCount: startDateIsToday ? 1 : 0,
+            status: .active,
+            createdAtUTC: now,
+            updatedAtUTC: now
+        )
+        rtDraft.weeklyDays = rule.weeklyDays.isEmpty ? nil : rule.weeklyDays.map { String($0.rawValue) }.joined(separator: ",")
+        rtDraft.monthlyMode = rule.monthlyMode.rawValue
+        rtDraft.monthlyDays = rule.monthlyDays.isEmpty ? nil : rule.monthlyDays.sorted().map { String($0) }.joined(separator: ",")
+        rtDraft.monthlyOrdinal = rule.monthlyOrdinal.rawValue
+        rtDraft.monthlyWeekday = rule.monthlyWeekday.rawValue
+        rtDraft.yearlyMonths = rule.yearlyMonths.isEmpty ? nil : rule.yearlyMonths.map { String($0.rawValue) }.sorted().joined(separator: ",")
+        rtDraft.yearlyOrdinal = rule.yearlyOrdinal.rawValue
+        rtDraft.yearlyWeekday = rule.yearlyWeekday.rawValue
+        rtDraft.endDate = rule.endDate
+        rtDraft.endAfterOccurrences = rule.endAfterOccurrences
+
+        return .run { [state = state, rtDraft = rtDraft] send in
+            withErrorReporting {
+                try database.write { db in
+                    // Create the recurring transaction template
+                    let recurringTransactionID = try RecurringTransaction.insert { rtDraft }
+                        .returning(\.id)
+                        .fetchOne(db)!
+
+                    // Create category join record
+                    if let category = state.category {
+                        try RecurringTransactionCategory.insert {
+                            RecurringTransactionCategory.Draft(
+                                recurringTransactionID: recurringTransactionID,
+                                categoryID: category.id
+                            )
+                        }
+                        .execute(db)
+                    }
+
+                    // Create tag join records
+                    try RecurringTransactionTag.insert {
+                        state.tags.map { tag in
+                            RecurringTransactionTag.Draft(
+                                recurringTransactionID: recurringTransactionID,
+                                tagID: tag.id
+                            )
+                        }
+                    }
+                    .execute(db)
+
+                    // If start date is today or in the past, auto-post the first instance
+                    if startDateIsToday {
+                        // Create location if available
+                        let locationID: UUID?
+                        if let location = currentLocation {
+                            locationID = try TransactionLocation.insert {
+                                TransactionLocation.Draft(
+                                    latitude: location.location.coordinate.latitude,
+                                    longitude: location.location.coordinate.longitude,
+                                    city: location.city,
+                                    countryCode: location.countryCode
+                                )
+                            }
+                            .returning(\.id)
+                            .fetchOne(db)
+                        } else {
+                            locationID = nil
+                        }
+
+                        // Create the first transaction instance
+                        let nowLocal = now.localDateComponents()
+                        var txDraft = Transaction.Draft(
+                            description: state.transaction.description,
+                            valueMinorUnits: state.transaction.valueMinorUnits,
+                            currencyCode: state.transaction.currencyCode,
+                            convertedValueMinorUnits: state.transaction.valueMinorUnits,
+                            convertedCurrencyCode: state.transaction.currencyCode,
+                            type: state.transaction.type,
+                            createdAtUTC: now,
+                            localYear: nowLocal.year,
+                            localMonth: nowLocal.month,
+                            localDay: nowLocal.day
+                        )
+                        txDraft.locationID = locationID
+                        txDraft.recurringTransactionID = recurringTransactionID
+
+                        let transactionID = try Transaction.insert { txDraft }
+                            .returning(\.id)
+                            .fetchOne(db)!
+
+                        // Create category join record for the transaction
+                        if let category = state.category {
+                            try TransactionCategory.insert {
+                                TransactionCategory.Draft(
+                                    transactionID: transactionID,
+                                    categoryID: category.id
+                                )
+                            }
+                            .execute(db)
+                        }
+
+                        // Create tag join records for the transaction
+                        try TransactionTag.insert {
+                            state.tags.map { tag in
+                                TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
+                            }
+                        }
+                        .execute(db)
+                    }
+                }
+            }
+            await dismiss()
+        }
+    }
+
+    /// Placeholder for next occurrence calculation - to be implemented in Phase 7
+    private func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
+        switch rule.frequency {
+        case .daily:
+            return calendar.date(byAdding: .day, value: rule.interval, to: date) ?? date
+        case .weekly:
+            return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
+        case .monthly:
+            return calendar.date(byAdding: .month, value: rule.interval, to: date) ?? date
+        case .yearly:
+            return calendar.date(byAdding: .year, value: rule.interval, to: date) ?? date
+        }
     }
 }
 
@@ -349,10 +584,18 @@ struct TransactionFormView: View {
             valueInput
             typePicker
             descriptionInput
-            dateTimePicker
+            recurringSection
+            if store.isRecurring {
+                startDateSection
+                recurrenceSection
+            } else {
+                dateTimePicker
+            }
             categoriesSection
             tagsSection
-            locationSection
+            if store.showsLocationSection {
+                locationSection
+            }
         }
         .listSectionSpacing(12)
         .scrollDismissesKeyboard(.immediately)
@@ -391,6 +634,15 @@ struct TransactionFormView: View {
             }
             .presentationDragIndicator(.visible)
         }
+        .sheet(
+            item: $store.scope(
+                state: \.destination?.recurrencePicker,
+                action: \.destination.recurrencePicker
+            )
+        ) { pickerStore in
+            RecurrencePickerView(store: pickerStore)
+                .presentationDragIndicator(.visible)
+        }
     }
 
     @ViewBuilder
@@ -425,6 +677,70 @@ struct TransactionFormView: View {
             Text("Income").tag(Transaction.TransactionType.income)
         }
         .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var recurringSection: some View {
+        if store.showsRecurringToggle {
+            Section {
+                HStack {
+                    Image(systemName: "repeat")
+                        .font(.title)
+                        .foregroundStyle(.foreground)
+
+                    Toggle(isOn: $store.isRecurring.animation()) {
+                        VStack(alignment: .leading) {
+                            Text("Recurring")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var startDateSection: some View {
+        Section {
+            HStack {
+                Image(systemName: "calendar")
+                    .font(.title)
+                    .foregroundStyle(.foreground)
+
+                DatePicker(
+                    "Start Date",
+                    selection: $store.startDate,
+                    displayedComponents: .date
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recurrenceSection: some View {
+        Section {
+            Button {
+                send(.recurrenceButtonTapped)
+            } label: {
+                HStack {
+                    Image(systemName: "clock.arrow.2.circlepath")
+                        .font(.title)
+                        .foregroundStyle(.foreground)
+                    Text("Repeat")
+                        .foregroundStyle(Color(.label))
+                    Spacer()
+                    Text(store.recurrencePreset.displayName)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let rule = store.recurrenceRule {
+                Text(rule.summaryDescription)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder

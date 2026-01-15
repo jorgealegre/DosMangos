@@ -161,9 +161,9 @@ struct AppView: View {
                     action: \.recurringTransactionsList
                 )
             )
-            .tabItem {
-                Label("Recurring", systemImage: "repeat.circle")
-            }
+                .tabItem {
+                    Label("Recurring", systemImage: "repeat.circle")
+                }
 
             TransactionsMapView(
                 store: store.scope(
