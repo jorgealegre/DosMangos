@@ -1,196 +1,6 @@
 import ComposableArchitecture
 import SwiftUI
 
-@Reducer
-struct RecurrencePickerReducer: Reducer {
-    @Reducer
-    enum Destination {
-        case customEditor(CustomRecurrenceEditorReducer)
-    }
-
-    @ObservableState
-    struct State: Equatable {
-        var selectedPreset: RecurrencePreset = .never
-        var rule: RecurrenceRule?
-        @Presents var destination: Destination.State?
-    }
-
-    enum Action: ViewAction, BindableAction {
-        enum View {
-            case presetSelected(RecurrencePreset)
-        }
-        case binding(BindingAction<State>)
-        case destination(PresentationAction<Destination.Action>)
-        case view(View)
-    }
-
-    var body: some ReducerOf<Self> {
-        BindingReducer()
-        Reduce { state, action in
-            switch action {
-            case .binding:
-                return .none
-
-            case let .destination(.presented(.customEditor(.delegate(delegateAction)))):
-                switch delegateAction {
-                case let .ruleUpdated(rule):
-                    state.rule = rule
-                    state.selectedPreset = rule.matchingPreset
-                    return .none
-                }
-
-            case .destination(.dismiss):
-                return .none
-
-            case .destination:
-                return .none
-
-            case let .view(view):
-                switch view {
-                case let .presetSelected(preset):
-                    state.selectedPreset = preset
-                    if preset == .custom {
-                        let initialRule = state.rule ?? RecurrenceRule()
-                        state.destination = .customEditor(
-                            CustomRecurrenceEditorReducer.State(rule: initialRule)
-                        )
-                    } else {
-                        state.rule = RecurrenceRule.from(preset: preset)
-                    }
-                    return .none
-                }
-            }
-        }
-        .ifLet(\.$destination, action: \.destination)
-    }
-}
-
-extension RecurrencePickerReducer.Destination.State: Equatable {}
-
-@ViewAction(for: RecurrencePickerReducer.self)
-struct RecurrencePickerView: View {
-    @Bindable var store: StoreOf<RecurrencePickerReducer>
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    presetSection
-                }
-
-                if let rule = store.rule {
-                    Section {
-                        Text(rule.summaryDescription)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } header: {
-                        Text("Summary", bundle: .main)
-                    }
-
-                    endRepeatSection(rule: rule)
-                }
-            }
-            .navigationTitle(Text("Recurrence", bundle: .main))
-            .sheet(
-                item: $store.scope(
-                    state: \.destination?.customEditor,
-                    action: \.destination.customEditor
-                )
-            ) { customStore in
-                NavigationStack {
-                    CustomRecurrenceEditorView(store: customStore)
-                }
-            }
-        }
-    }
-
-    private var displayPreset: RecurrencePreset {
-        store.rule?.matchingPreset ?? .never
-    }
-
-    @ViewBuilder
-    private var presetSection: some View {
-        ForEach(RecurrencePreset.allPresets) { preset in
-            Button {
-                send(.presetSelected(preset), animation: .default)
-            } label: {
-                HStack {
-                    Text(preset.displayName)
-                        .foregroundStyle(Color.primary)
-                    Spacer()
-                    if displayPreset == preset {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.blue)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func endRepeatSection(rule: RecurrenceRule) -> some View {
-        @Dependency(\.calendar) var calendar
-
-        Section {
-            Picker(selection: Binding(
-                get: { rule.endMode },
-                set: { newMode in
-                    var updated = rule
-                    updated.endMode = newMode
-                    if newMode == .onDate && updated.endDate == nil {
-                        updated.endDate = calendar.date(byAdding: .month, value: 1, to: Date()) ?? Date()
-                    }
-                    if newMode == .afterOccurrences && updated.endAfterOccurrences < 1 {
-                        updated.endAfterOccurrences = 1
-                    }
-                    store.rule = updated
-                }
-            )) {
-                Text("Never", bundle: .main).tag(RecurrenceEndMode.never)
-                Text("On Date", bundle: .main).tag(RecurrenceEndMode.onDate)
-                Text("After", bundle: .main).tag(RecurrenceEndMode.afterOccurrences)
-            } label: {
-                Text("End Repeat", bundle: .main)
-            }
-            .pickerStyle(.menu)
-
-            if rule.endMode == .onDate {
-                DatePicker(
-                    selection: Binding(
-                        get: { rule.endDate ?? Date() },
-                        set: { newDate in
-                            var updated = rule
-                            updated.endDate = newDate
-                            store.rule = updated
-                        }
-                    ),
-                    displayedComponents: .date
-                ) {
-                    Text("End Date", bundle: .main)
-                }
-            }
-
-            if rule.endMode == .afterOccurrences {
-                Stepper(
-                    value: Binding(
-                        get: { rule.endAfterOccurrences },
-                        set: { newValue in
-                            var updated = rule
-                            updated.endAfterOccurrences = newValue
-                            store.rule = updated
-                        }
-                    ),
-                    in: 1...999
-                ) {
-                    Text("After \(rule.endAfterOccurrences) occurrence(s)", bundle: .main)
-                }
-            }
-        } header: {
-            Text("End Repeat", bundle: .main)
-        }
-    }
-}
-
 // MARK: - Custom Recurrence Editor
 
 @Reducer
@@ -530,45 +340,7 @@ struct CustomRecurrenceEditorView: View {
 
 // MARK: - Previews
 
-#Preview("Recurrence Picker (English)") {
-    let locale = Locale(identifier: "en_US")
-    let _ = prepareDependencies {
-        $0.locale = locale
-        $0.calendar = {
-            var cal = Calendar(identifier: .gregorian)
-            cal.locale = locale
-            return cal
-        }()
-    }
-    RecurrencePickerView(
-        store: Store(initialState: RecurrencePickerReducer.State()) {
-            RecurrencePickerReducer()
-                ._printChanges()
-        }
-    )
-    .environment(\.locale, locale)
-}
-
-#Preview("Recurrence Picker (Spanish)") {
-    let locale = Locale(identifier: "es_AR")
-    let _ = prepareDependencies {
-        $0.locale = locale
-        $0.calendar = {
-            var cal = Calendar(identifier: .gregorian)
-            cal.locale = locale
-            return cal
-        }()
-    }
-    RecurrencePickerView(
-        store: Store(initialState: RecurrencePickerReducer.State()) {
-            RecurrencePickerReducer()
-                ._printChanges()
-        }
-    )
-    .environment(\.locale, locale)
-}
-
-#Preview("Custom Editor - Weekly (English)") {
+#Preview("Custom Editor - Weekly") {
     let locale = Locale(identifier: "en_US")
     let _ = prepareDependencies {
         $0.locale = locale
@@ -596,35 +368,7 @@ struct CustomRecurrenceEditorView: View {
     .environment(\.locale, locale)
 }
 
-#Preview("Custom Editor - Weekly (Spanish)") {
-    let locale = Locale(identifier: "es_AR")
-    let _ = prepareDependencies {
-        $0.locale = locale
-        $0.calendar = {
-            var cal = Calendar(identifier: .gregorian)
-            cal.locale = locale
-            return cal
-        }()
-    }
-    NavigationStack {
-        CustomRecurrenceEditorView(
-            store: Store(
-                initialState: CustomRecurrenceEditorReducer.State(
-                    rule: RecurrenceRule(
-                        frequency: .weekly,
-                        interval: 1,
-                        weeklyDays: [.tuesday, .thursday]
-                    )
-                )
-            ) {
-                CustomRecurrenceEditorReducer()
-            }
-        )
-    }
-    .environment(\.locale, locale)
-}
-
-#Preview("Custom Editor - Monthly (English)") {
+#Preview("Custom Editor - Monthly") {
     let locale = Locale(identifier: "en_US")
     let _ = prepareDependencies {
         $0.locale = locale
@@ -654,8 +398,8 @@ struct CustomRecurrenceEditorView: View {
     .environment(\.locale, locale)
 }
 
-#Preview("Custom Editor - Yearly (Spanish)") {
-    let locale = Locale(identifier: "es_AR")
+#Preview("Custom Editor - Yearly") {
+    let locale = Locale(identifier: "en_US")
     let _ = prepareDependencies {
         $0.locale = locale
         $0.calendar = {

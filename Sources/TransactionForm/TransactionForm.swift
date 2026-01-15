@@ -27,7 +27,7 @@ struct TransactionFormReducer: Reducer {
         case categoryPicker(CategoryPicker)
         case currencyPicker(CurrencyPicker)
         case locationPicker(LocationPickerReducer)
-        case recurrencePicker(RecurrencePickerReducer)
+        case customRecurrenceEditor(CustomRecurrenceEditorReducer)
     }
 
     @ObservableState
@@ -45,11 +45,12 @@ struct TransactionFormReducer: Reducer {
         var category: Category?
         var tags: [Tag] = []
 
-        // Recurring-specific state
-        var isRecurring: Bool
-        var startDate: Date
+        // Recurring-specific state (nil preset = not recurring)
+        var recurrencePreset: RecurrencePreset?
         var recurrenceRule: RecurrenceRule?
-        var recurrencePreset: RecurrencePreset = .never
+
+        /// Whether this is a recurring transaction (derived from preset)
+        var isRecurring: Bool { recurrencePreset != nil }
 
         var isLocationEnabled: Bool
         /// The location of the transaction we load when editing an existing transaction.
@@ -63,13 +64,13 @@ struct TransactionFormReducer: Reducer {
 
         /// UI is currently whole-dollars only (cents ignored), e.g. "12".
 
-        /// Whether the recurring toggle should be shown
-        var showsRecurringToggle: Bool {
+        /// Whether the repeat picker should be shown
+        var showsRepeatPicker: Bool {
             switch formMode {
             case .newTransaction: true
-            case .newRecurring: false  // Locked ON, don't show toggle
-            case .editTransaction: false  // Hidden
-            case .editRecurring: false  // Locked ON, don't show toggle
+            case .newRecurring: true
+            case .editTransaction: false  // Hidden for existing transactions
+            case .editRecurring: true
             case .postFromRecurring: false  // Hidden, posting creates regular transaction
             }
         }
@@ -98,27 +99,30 @@ struct TransactionFormReducer: Reducer {
         ) {
             self.formMode = formMode
             self.transaction = transaction
-            self.startDate = transaction.localDate
             self.category = category
             self.tags = tags
 
             switch formMode {
             case .newTransaction:
-                self.isRecurring = false
+                self.recurrencePreset = nil
+                self.recurrenceRule = nil
                 self.isLocationEnabled = transaction.id == nil || transaction.locationID != nil
             case .newRecurring:
-                self.isRecurring = true
+                self.recurrencePreset = .monthly
+                self.recurrenceRule = RecurrenceRule.from(preset: .monthly)
                 self.isLocationEnabled = false
             case .editTransaction:
-                self.isRecurring = false
+                self.recurrencePreset = nil
+                self.recurrenceRule = nil
                 self.isLocationEnabled = transaction.locationID != nil
             case let .editRecurring(recurringTransaction):
-                self.isRecurring = true
+                let recurrenceRule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
+                self.recurrenceRule = recurrenceRule
+                self.recurrencePreset = recurrenceRule.matchingPreset
                 self.isLocationEnabled = false
-                self.recurrenceRule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
-                self.recurrencePreset = self.recurrenceRule?.matchingPreset ?? .never
             case .postFromRecurring:
-                self.isRecurring = false
+                self.recurrencePreset = nil
+                self.recurrenceRule = nil
                 self.isLocationEnabled = true  // Enable location capture for posted transaction
             }
         }
@@ -144,7 +148,11 @@ struct TransactionFormReducer: Reducer {
             case saveButtonTapped
             case valueInputFinished
             case task
-            case recurrenceButtonTapped
+            case repeatPresetSelected(RecurrencePreset?)
+            case customRecurrenceButtonTapped
+            case endRepeatModeSelected(RecurrenceEndMode)
+            case endDateChanged(Date)
+            case endAfterOccurrencesChanged(Int)
         }
         case binding(BindingAction<State>)
         case delegate(Delegate)
@@ -162,15 +170,6 @@ struct TransactionFormReducer: Reducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
-            case .binding(\.isRecurring):
-                // When recurring is toggled ON, disable location
-                if state.isRecurring {
-                    state.isLocationEnabled = false
-                    state.location = nil
-                    state.pickedLocation = nil
-                }
-                return .none
-
             case .binding(\.isLocationEnabled):
                 if !state.isLocationEnabled {
                     state.focus = nil
@@ -185,21 +184,12 @@ struct TransactionFormReducer: Reducer {
             case .delegate:
                 return .none
 
-            case let .destination(.presented(.recurrencePicker(.view(.presetSelected(preset))))):
-                state.recurrencePreset = preset
-                return .none
-
-            case let .destination(.presented(.recurrencePicker(.destination(.presented(.customEditor(.delegate(.ruleUpdated(rule)))))))):
+            case let .destination(.presented(.customRecurrenceEditor(.delegate(.ruleUpdated(rule))))):
                 state.recurrenceRule = rule
-                state.recurrencePreset = rule.matchingPreset
+                state.recurrencePreset = .custom
                 return .none
 
             case .destination(.dismiss):
-                // When recurrence picker is dismissed, sync the rule from the picker
-                if case let .recurrencePicker(pickerState) = state.destination {
-                    state.recurrenceRule = pickerState.rule
-                    state.recurrencePreset = pickerState.selectedPreset
-                }
                 return .none
 
             case let .destination(.presented(.categoryPicker(.delegate(delegateAction)))):
@@ -362,14 +352,43 @@ struct TransactionFormReducer: Reducer {
                     state.focus = .description
                     return .none
 
-                case .recurrenceButtonTapped:
+                case let .repeatPresetSelected(preset):
+                    state.recurrencePreset = preset
+                    if let preset {
+                        state.recurrenceRule = RecurrenceRule.from(preset: preset)
+                        // Disable location when switching to recurring
+                        state.isLocationEnabled = false
+                        state.location = nil
+                        state.pickedLocation = nil
+                    } else {
+                        state.recurrenceRule = nil
+                    }
+                    return .none
+
+                case .customRecurrenceButtonTapped:
                     state.focus = nil
-                    state.destination = .recurrencePicker(
-                        RecurrencePickerReducer.State(
-                            selectedPreset: state.recurrencePreset,
-                            rule: state.recurrenceRule
-                        )
+                    let initialRule = state.recurrenceRule ?? RecurrenceRule.from(preset: .monthly)
+                    state.destination = .customRecurrenceEditor(
+                        CustomRecurrenceEditorReducer.State(rule: initialRule)
                     )
+                    return .none
+
+                case let .endRepeatModeSelected(mode):
+                    state.recurrenceRule?.endMode = mode
+                    if mode == .onDate && state.recurrenceRule?.endDate == nil {
+                        @Dependency(\.date.now) var now
+                        @Dependency(\.calendar) var calendar
+                        // Default to 1 month from now
+                        state.recurrenceRule?.endDate = calendar.date(byAdding: .month, value: 1, to: now)
+                    }
+                    return .none
+
+                case let .endDateChanged(date):
+                    state.recurrenceRule?.endDate = date
+                    return .none
+
+                case let .endAfterOccurrencesChanged(count):
+                    state.recurrenceRule?.endAfterOccurrences = count
                     return .none
                 }
 
@@ -484,13 +503,18 @@ struct TransactionFormReducer: Reducer {
         @Dependency(\.date.now) var now
 
         let rule = state.recurrenceRule ?? RecurrenceRule()
-        let startDateIsToday = calendar.isDate(state.startDate, inSameDayAs: now) || state.startDate < now
-        let nextDueDate = startDateIsToday
+        let transactionDate = state.transaction.localDate
+        let dateIsToday = calendar.isDate(transactionDate, inSameDayAs: now) || transactionDate < now
+        let nextDueDate = dateIsToday
             ? rule.nextOccurrence(after: now)
-            : state.startDate
+            : transactionDate
 
         // Capture current location for auto-posting first instance
         let currentLocation = state.currentLocation
+
+        // Convert dates to local components
+        let startLocal = transactionDate.localDateComponents()
+        let nextDueLocal = nextDueDate.localDateComponents()
 
         // Pre-build the recurring transaction draft to help the compiler
         var rtDraft = RecurringTransaction.Draft(
@@ -502,9 +526,13 @@ struct TransactionFormReducer: Reducer {
             interval: rule.interval,
             yearlyDaysOfWeekEnabled: rule.yearlyDaysOfWeekEnabled ? 1 : 0,
             endMode: rule.endMode.rawValue,
-            startDate: state.startDate,
-            nextDueDate: nextDueDate,
-            postedCount: startDateIsToday ? 1 : 0,
+            startLocalYear: startLocal.year,
+            startLocalMonth: startLocal.month,
+            startLocalDay: startLocal.day,
+            nextDueLocalYear: nextDueLocal.year,
+            nextDueLocalMonth: nextDueLocal.month,
+            nextDueLocalDay: nextDueLocal.day,
+            postedCount: dateIsToday ? 1 : 0,
             status: .active,
             createdAtUTC: now,
             updatedAtUTC: now
@@ -550,8 +578,8 @@ struct TransactionFormReducer: Reducer {
                     }
                     .execute(db)
 
-                    // If start date is today or in the past, auto-post the first instance
-                    if startDateIsToday {
+                    // If date is today or in the past, auto-post the first instance
+                    if dateIsToday {
                         // Create location if available
                         let locationID: UUID?
                         if let location = currentLocation {
@@ -631,8 +659,12 @@ struct TransactionFormReducer: Reducer {
             interval: rule.interval,
             yearlyDaysOfWeekEnabled: rule.yearlyDaysOfWeekEnabled ? 1 : 0,
             endMode: rule.endMode.rawValue,
-            startDate: existing.startDate,
-            nextDueDate: existing.nextDueDate,
+            startLocalYear: existing.startLocalYear,
+            startLocalMonth: existing.startLocalMonth,
+            startLocalDay: existing.startLocalDay,
+            nextDueLocalYear: existing.nextDueLocalYear,
+            nextDueLocalMonth: existing.nextDueLocalMonth,
+            nextDueLocalDay: existing.nextDueLocalDay,
             postedCount: existing.postedCount,
             status: existing.status,
             createdAtUTC: existing.createdAtUTC,
@@ -770,11 +802,14 @@ struct TransactionFormReducer: Reducer {
                     // Update the recurring template
                     let rule = RecurrenceRule.from(recurringTransaction: template)
                     let nextDueDate = rule.nextOccurrence(after: template.nextDueDate)
+                    let nextDueLocal = nextDueDate.localDateComponents()
 
                     try RecurringTransaction
                         .where { $0.id.eq(templateID) }
                         .update {
-                            $0.nextDueDate = nextDueDate
+                            $0.nextDueLocalYear = nextDueLocal.year
+                            $0.nextDueLocalMonth = nextDueLocal.month
+                            $0.nextDueLocalDay = nextDueLocal.day
                             $0.postedCount = template.postedCount + 1
                         }
                         .execute(db)
@@ -804,12 +839,9 @@ struct TransactionFormView: View {
             valueInput
             typePicker
             descriptionInput
-            recurringSection
-            if store.isRecurring {
-                startDateSection
-                recurrenceSection
-            } else {
-                dateTimePicker
+            dateTimePicker
+            if store.showsRepeatPicker {
+                repeatSection
             }
             categoriesSection
             tagsSection
@@ -856,12 +888,14 @@ struct TransactionFormView: View {
         }
         .sheet(
             item: $store.scope(
-                state: \.destination?.recurrencePicker,
-                action: \.destination.recurrencePicker
+                state: \.destination?.customRecurrenceEditor,
+                action: \.destination.customRecurrenceEditor
             )
-        ) { pickerStore in
-            RecurrencePickerView(store: pickerStore)
-                .presentationDragIndicator(.visible)
+        ) { editorStore in
+            NavigationStack {
+                CustomRecurrenceEditorView(store: editorStore)
+            }
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -900,17 +934,154 @@ struct TransactionFormView: View {
     }
 
     @ViewBuilder
-    private var recurringSection: some View {
-        if store.showsRecurringToggle {
-            Section {
+    private var repeatSection: some View {
+        Section {
+            // Repeat picker (menu-based like iOS Reminders)
+            HStack {
+                Image(systemName: "repeat")
+                    .font(.title)
+                    .foregroundStyle(.foreground)
+
+                Text("Repeat")
+                    .foregroundStyle(Color(.label))
+
+                Spacer()
+
+                Menu {
+                    // Never option
+                    Button {
+                        send(.repeatPresetSelected(nil), animation: .default)
+                    } label: {
+                        if store.recurrencePreset == nil {
+                            Label("Never", systemImage: "checkmark")
+                        } else {
+                            Text("Never")
+                        }
+                    }
+
+                    Divider()
+
+                    // Standard presets
+                    ForEach(RecurrencePreset.standardPresets) { preset in
+                        Button {
+                            send(.repeatPresetSelected(preset), animation: .default)
+                        } label: {
+                            if store.recurrencePreset == preset {
+                                Label(preset.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(preset.displayName)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    // Custom option
+                    Button {
+                        send(.customRecurrenceButtonTapped)
+                    } label: {
+                        if store.recurrencePreset == .custom {
+                            Label("Custom", systemImage: "checkmark")
+                        } else {
+                            Text("Custom")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(store.recurrencePreset?.displayName ?? "Never")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // Show rule summary for custom rules
+            if store.recurrencePreset == .custom, let rule = store.recurrenceRule {
+                Text(rule.summaryDescription)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            // End Repeat picker (only when recurring)
+            if store.isRecurring {
                 HStack {
-                    Image(systemName: "repeat")
+                    Image(systemName: "repeat.1")
                         .font(.title)
                         .foregroundStyle(.foreground)
 
-                    Toggle(isOn: $store.isRecurring.animation()) {
-                        VStack(alignment: .leading) {
-                            Text("Recurring")
+                    Text("End Repeat")
+                        .foregroundStyle(Color(.label))
+
+                    Spacer()
+
+                    Menu {
+                        Button {
+                            send(.endRepeatModeSelected(.never), animation: .default)
+                        } label: {
+                            if store.recurrenceRule?.endMode == .never {
+                                Label("Never", systemImage: "checkmark")
+                            } else {
+                                Text("Never")
+                            }
+                        }
+
+                        Button {
+                            send(.endRepeatModeSelected(.onDate), animation: .default)
+                        } label: {
+                            if store.recurrenceRule?.endMode == .onDate {
+                                Label("On Date", systemImage: "checkmark")
+                            } else {
+                                Text("On Date")
+                            }
+                        }
+
+                        Button {
+                            send(.endRepeatModeSelected(.afterOccurrences), animation: .default)
+                        } label: {
+                            if store.recurrenceRule?.endMode == .afterOccurrences {
+                                Label("After", systemImage: "checkmark")
+                            } else {
+                                Text("After")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(endRepeatDisplayText)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // End Date picker (when endMode is .onDate)
+                if store.recurrenceRule?.endMode == .onDate {
+                    DatePicker(
+                        "End Date",
+                        selection: Binding(
+                            get: { store.recurrenceRule?.endDate ?? Date() },
+                            set: { send(.endDateChanged($0)) }
+                        ),
+                        displayedComponents: .date
+                    )
+                }
+
+                // Occurrences picker (when endMode is .afterOccurrences)
+                if store.recurrenceRule?.endMode == .afterOccurrences {
+                    Stepper(
+                        value: Binding(
+                            get: { store.recurrenceRule?.endAfterOccurrences ?? 1 },
+                            set: { send(.endAfterOccurrencesChanged($0)) }
+                        ),
+                        in: 1...999
+                    ) {
+                        HStack {
+                            Text("After")
+                            Text("\(store.recurrenceRule?.endAfterOccurrences ?? 1) occurrences")
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -918,48 +1089,15 @@ struct TransactionFormView: View {
         }
     }
 
-    @ViewBuilder
-    private var startDateSection: some View {
-        Section {
-            HStack {
-                Image(systemName: "calendar")
-                    .font(.title)
-                    .foregroundStyle(.foreground)
-
-                DatePicker(
-                    "Start Date",
-                    selection: $store.startDate,
-                    displayedComponents: .date
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var recurrenceSection: some View {
-        Section {
-            Button {
-                send(.recurrenceButtonTapped)
-            } label: {
-                HStack {
-                    Image(systemName: "clock.arrow.2.circlepath")
-                        .font(.title)
-                        .foregroundStyle(.foreground)
-                    Text("Repeat")
-                        .foregroundStyle(Color(.label))
-                    Spacer()
-                    Text(store.recurrencePreset.displayName)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let rule = store.recurrenceRule {
-                Text(rule.summaryDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+    private var endRepeatDisplayText: String {
+        guard let rule = store.recurrenceRule else { return "Never" }
+        switch rule.endMode {
+        case .never:
+            return "Never"
+        case .onDate:
+            return "On Date"
+        case .afterOccurrences:
+            return "After"
         }
     }
 

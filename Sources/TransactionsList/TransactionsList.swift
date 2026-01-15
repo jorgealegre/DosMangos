@@ -5,23 +5,6 @@ import IssueReporting
 import SQLiteData
 import SwiftUI
 
-// MARK: - Virtual Instance (Due Recurring Transaction)
-
-/// Represents a recurring transaction that is due to be posted.
-/// This is a non-persisted model used only for display and actions.
-struct VirtualInstance: Identifiable, Equatable {
-    let id: UUID  // The recurring transaction's ID
-    let recurringTransaction: RecurringTransaction
-    let dueDate: Date
-    let category: Category?
-    let tags: [Tag]
-
-    var description: String { recurringTransaction.description }
-    var valueMinorUnits: Int { recurringTransaction.valueMinorUnits }
-    var currencyCode: String { recurringTransaction.currencyCode }
-    var type: Transaction.TransactionType { recurringTransaction.type }
-}
-
 @Reducer
 struct TransactionsList: Reducer {
 
@@ -37,8 +20,37 @@ struct TransactionsList: Reducer {
 
         var date: Date
 
-        // Due recurring transactions (virtual instances)
-        var dueInstances: [VirtualInstance] = []
+        // Due recurring transactions (reactive via @FetchAll)
+        @FetchAll(DueRecurringRow.none)
+        var dueRows: [DueRecurringRow]
+        var dueRowsQuery: some Statement<DueRecurringRow> & Sendable {
+            @Dependency(\.date.now) var now
+            let today = now.localDateComponents()
+
+            return DueRecurringRow
+                .where {
+                    let rt = $0.recurringTransaction
+                    let isActive = rt.status.eq(RecurringTransactionStatus.active)
+
+                    // Compare local date: nextDue <= today
+                    // (year < todayYear) OR
+                    // (year == todayYear AND month < todayMonth) OR
+                    // (year == todayYear AND month == todayMonth AND day <= todayDay)
+                    let yearBefore = rt.nextDueLocalYear.lt(today.year)
+                    let sameYearMonthBefore = rt.nextDueLocalYear.eq(today.year) && rt.nextDueLocalMonth.lt(today.month)
+                    let sameYearMonthDayOnOrBefore = rt.nextDueLocalYear.eq(today.year)
+                        && rt.nextDueLocalMonth.eq(today.month)
+                        && rt.nextDueLocalDay.lte(today.day)
+
+                    let isDueOnOrBeforeToday = yearBefore || sameYearMonthBefore || sameYearMonthDayOnOrBefore
+
+                    return isActive && isDueOnOrBeforeToday
+                }
+                .order(by: \.recurringTransaction.nextDueLocalYear)
+                .order(by: \.recurringTransaction.nextDueLocalMonth)
+                .order(by: \.recurringTransaction.nextDueLocalDay)
+                .select { $0 }
+        }
 
         @FetchAll(TransactionsListRow.none) // this query is dynamic
         var rows: [TransactionsListRow]
@@ -82,6 +94,7 @@ struct TransactionsList: Reducer {
         init(date: Date) {
             self.date = date
             self._rows = FetchAll(rowsQuery, animation: .default)
+            self._dueRows = FetchAll(dueRowsQuery, animation: .default)
         }
     }
 
@@ -93,20 +106,17 @@ struct TransactionsList: Reducer {
             case deleteTransactions([UUID])
             case transactionTapped(Transaction)
             case dismissTransactionDetailButtonTapped
-            case postVirtualInstance(VirtualInstance)
-            case skipVirtualInstance(VirtualInstance)
+            case postDueRow(DueRecurringRow)
+            case skipDueRow(DueRecurringRow)
         }
 
         case binding(BindingAction<State>)
         case view(View)
         case destination(PresentationAction<Destination.Action>)
-        case dueInstancesLoaded([VirtualInstance])
     }
 
     @Dependency(\.calendar) private var calendar
     @Dependency(\.defaultDatabase) private var database
-
-    @Dependency(\.date.now) private var now
 
     var body: some ReducerOf<Self> {
         BindingReducer()
@@ -116,10 +126,6 @@ struct TransactionsList: Reducer {
                 return .none
 
             case .destination:
-                return .none
-
-            case let .dueInstancesLoaded(instances):
-                state.dueInstances = instances
                 return .none
 
             case let .view(viewAction):
@@ -141,10 +147,7 @@ struct TransactionsList: Reducer {
                     return loadTransactions(state: state)
 
                 case .onAppear:
-                    return .merge(
-                        loadTransactions(state: state),
-                        loadDueInstances()
-                    )
+                    return loadTransactions(state: state)
 
                 case .previousMonthButtonTapped:
                     state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
@@ -161,45 +164,54 @@ struct TransactionsList: Reducer {
                     state.destination = nil
                     return .none
 
-                case let .postVirtualInstance(instance):
-                    // Open transaction form pre-filled from the virtual instance
+                case let .postDueRow(dueRow):
+                    let rt = dueRow.recurringTransaction
                     var draft = Transaction.Draft()
-                    draft.description = instance.description
-                    draft.valueMinorUnits = instance.valueMinorUnits
-                    draft.currencyCode = instance.currencyCode
-                    draft.type = instance.type
+                    draft.description = rt.description
+                    draft.valueMinorUnits = rt.valueMinorUnits
+                    draft.currencyCode = rt.currencyCode
+                    draft.type = rt.type
                     // Set the date to the due date (user can change)
-                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: instance.dueDate)
+                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: rt.nextDueDate)
                     draft.localYear = dateComponents.year!
                     draft.localMonth = dateComponents.month!
                     draft.localDay = dateComponents.day!
 
+                    // Look up category and tags from the category/tag titles
+                    let category: Category? = dueRow.category.flatMap { title in
+                        // Extract just the title (after " › " if subcategory)
+                        let categoryTitle = title.contains(" › ") ? String(title.split(separator: " › ").last ?? "") : title
+                        return Category(title: categoryTitle, parentCategoryID: nil)
+                    }
+                    let tags: [Tag] = dueRow.tags.map { Tag(title: $0) }
+
                     state.destination = .transactionForm(TransactionFormReducer.State(
                         transaction: draft,
-                        formMode: .postFromRecurring(instance.recurringTransaction),
-                        category: instance.category,
-                        tags: instance.tags
+                        formMode: .postFromRecurring(rt),
+                        category: category,
+                        tags: tags
                     ))
                     return .none
 
-                case let .skipVirtualInstance(instance):
-                    let recurringTransaction = instance.recurringTransaction
-                    return .run { send in
+                case let .skipDueRow(dueRow):
+                    let recurringTransaction = dueRow.recurringTransaction
+                    return .run { _ in
                         await withErrorReporting {
                             try await database.write { db in
-                                // Calculate the next due date
                                 let rule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
                                 let nextDueDate = rule.nextOccurrence(after: recurringTransaction.nextDueDate)
+                                let nextDueLocal = nextDueDate.localDateComponents()
 
-                                // Update the recurring transaction
                                 try RecurringTransaction
                                     .where { $0.id.eq(recurringTransaction.id) }
-                                    .update { $0.nextDueDate = nextDueDate }
+                                    .update {
+                                        $0.nextDueLocalYear = nextDueLocal.year
+                                        $0.nextDueLocalMonth = nextDueLocal.month
+                                        $0.nextDueLocalDay = nextDueLocal.day
+                                    }
                                     .execute(db)
                             }
                         }
-                        // Reload due instances
-                        await send(.view(.onAppear))
                     }
                 }
             }
@@ -214,49 +226,6 @@ struct TransactionsList: Reducer {
             try await fetchAll.load(query, animation: .default)
         }
     }
-
-    private func loadDueInstances() -> Effect<Action> {
-        .run { send in
-            let instances = try await database.read { db -> [VirtualInstance] in
-                // Get all active recurring transactions where nextDueDate <= today
-                let recurringTransactions = try RecurringTransaction
-                    .where { $0.status.eq(RecurringTransactionStatus.active) && $0.nextDueDate.lte(now) }
-                    .order(by: \.nextDueDate)
-                    .select { $0 }
-                    .fetchAll(db)
-
-                return try recurringTransactions.map { rt in
-                    // Load category for this recurring transaction
-                    let categoryID = try RecurringTransactionCategory
-                        .where { $0.recurringTransactionID.eq(rt.id) }
-                        .select { $0.categoryID }
-                        .fetchOne(db)
-
-                    let category = try categoryID.flatMap {
-                        try Category.find($0).fetchOne(db)
-                    }
-
-                    // Load tags for this recurring transaction
-                    let tagIDs = try RecurringTransactionTag
-                        .where { $0.recurringTransactionID.eq(rt.id) }
-                        .select { $0.tagID }
-                        .fetchAll(db)
-                    let tags = try tagIDs.compactMap {
-                        try Tag.find($0).fetchOne(db)
-                    }
-
-                    return VirtualInstance(
-                        id: rt.id,
-                        recurringTransaction: rt,
-                        dueDate: rt.nextDueDate,
-                        category: category,
-                        tags: tags
-                    )
-                }
-            }
-            await send(.dueInstancesLoaded(instances))
-        }
-    }
 }
 extension TransactionsList.Destination.State: Equatable {}
 
@@ -268,14 +237,14 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Due section for virtual instances
-                if !store.dueInstances.isEmpty {
+                // Due section for recurring transactions
+                if !store.dueRows.isEmpty {
                     Section {
-                        ForEach(store.dueInstances) { instance in
-                            VirtualInstanceRow(
-                                instance: instance,
-                                onPost: { send(.postVirtualInstance(instance)) },
-                                onSkip: { send(.skipVirtualInstance(instance)) }
+                        ForEach(store.dueRows) { dueRow in
+                            DueRecurringRowView(
+                                dueRow: dueRow,
+                                onPost: { send(.postDueRow(dueRow)) },
+                                onSkip: { send(.skipDueRow(dueRow)) }
                             )
                         }
                     } header: {
@@ -291,8 +260,8 @@ struct TransactionsListView: View {
 
                             Spacer()
 
-                            if store.dueInstances.count > 1 {
-                                Text("\(store.dueInstances.count) items", bundle: .main)
+                            if store.dueRows.count > 1 {
+                                Text("\(store.dueRows.count) items", bundle: .main)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -404,18 +373,20 @@ struct TransactionsListView: View {
     }
 }
 
-// MARK: - Virtual Instance Row
+// MARK: - Due Recurring Row View
 
-private struct VirtualInstanceRow: View {
-    let instance: VirtualInstance
+private struct DueRecurringRowView: View {
+    let dueRow: DueRecurringRow
     let onPost: () -> Void
     let onSkip: () -> Void
+
+    private var rt: RecurringTransaction { dueRow.recurringTransaction }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(instance.description.isEmpty ? "Untitled" : instance.description)
+                    Text(rt.description.isEmpty ? "Untitled" : rt.description)
                         .font(.headline)
 
                     HStack(spacing: 4) {
@@ -431,7 +402,7 @@ private struct VirtualInstanceRow: View {
 
                 Text(formattedAmount)
                     .font(.headline)
-                    .foregroundStyle(instance.type == .income ? .green : .primary)
+                    .foregroundStyle(rt.type == .income ? .green : .primary)
             }
 
             HStack(spacing: 12) {
@@ -458,10 +429,10 @@ private struct VirtualInstanceRow: View {
 
     private var formattedAmount: String {
         let money = Money(
-            value: Int64(instance.valueMinorUnits),
-            currencyCode: instance.currencyCode
+            value: Int64(rt.valueMinorUnits),
+            currencyCode: rt.currencyCode
         )
-        let prefix = instance.type == .expense ? "-" : "+"
+        let prefix = rt.type == .expense ? "-" : "+"
         return "\(prefix)\(money.amount.description) \(money.currencyCode)"
     }
 
@@ -469,7 +440,7 @@ private struct VirtualInstanceRow: View {
         @Dependency(\.date.now) var now
         @Dependency(\.calendar) var calendar
 
-        let dueDate = instance.dueDate
+        let dueDate = rt.nextDueDate
         let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
 
         if calendar.isDate(dueDate, inSameDayAs: now) {

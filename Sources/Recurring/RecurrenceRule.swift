@@ -118,7 +118,6 @@ enum RecurrenceEndMode: Int, Sendable, Equatable {
 // MARK: - Quick Presets
 
 enum RecurrencePreset: Sendable, Equatable, Identifiable {
-    case never
     case daily
     case weekdays
     case weekends
@@ -132,7 +131,6 @@ enum RecurrencePreset: Sendable, Equatable, Identifiable {
 
     var id: String {
         switch self {
-        case .never: "never"
         case .daily: "daily"
         case .weekdays: "weekdays"
         case .weekends: "weekends"
@@ -149,7 +147,6 @@ enum RecurrencePreset: Sendable, Equatable, Identifiable {
     var displayName: String {
         @Dependency(\.locale) var locale
         switch self {
-        case .never: return String(localized: "Never", locale: locale)
         case .daily: return String(localized: "Daily", locale: locale)
         case .weekdays: return String(localized: "Weekdays", locale: locale)
         case .weekends: return String(localized: "Weekends", locale: locale)
@@ -163,8 +160,9 @@ enum RecurrencePreset: Sendable, Equatable, Identifiable {
         }
     }
 
-    static var allPresets: [RecurrencePreset] {
-        [.never, .daily, .weekdays, .weekends, .weekly, .biweekly, .monthly, .everyThreeMonths, .everySixMonths, .yearly, .custom]
+    /// Standard presets (excludes Custom which is handled separately in menus)
+    static var standardPresets: [RecurrencePreset] {
+        [.daily, .weekdays, .weekends, .weekly, .biweekly, .monthly, .everyThreeMonths, .everySixMonths, .yearly]
     }
 }
 
@@ -466,30 +464,28 @@ extension RecurrenceRule {
 // MARK: - Preset Conversion
 
 extension RecurrenceRule {
-    static func from(preset: RecurrencePreset) -> RecurrenceRule? {
+    static func from(preset: RecurrencePreset) -> RecurrenceRule {
         switch preset {
-        case .never:
-            return nil
         case .daily:
-            return RecurrenceRule(frequency: .daily, interval: 1)
+            RecurrenceRule(frequency: .daily, interval: 1)
         case .weekdays:
-            return RecurrenceRule(frequency: .weekly, interval: 1, weeklyDays: Weekday.weekdays)
+            RecurrenceRule(frequency: .weekly, interval: 1, weeklyDays: Weekday.weekdays)
         case .weekends:
-            return RecurrenceRule(frequency: .weekly, interval: 1, weeklyDays: Weekday.weekends)
+            RecurrenceRule(frequency: .weekly, interval: 1, weeklyDays: Weekday.weekends)
         case .weekly:
-            return RecurrenceRule(frequency: .weekly, interval: 1)
+            RecurrenceRule(frequency: .weekly, interval: 1)
         case .biweekly:
-            return RecurrenceRule(frequency: .weekly, interval: 2)
+            RecurrenceRule(frequency: .weekly, interval: 2)
         case .monthly:
-            return RecurrenceRule(frequency: .monthly, interval: 1)
+            RecurrenceRule(frequency: .monthly, interval: 1)
         case .everyThreeMonths:
-            return RecurrenceRule(frequency: .monthly, interval: 3)
+            RecurrenceRule(frequency: .monthly, interval: 3)
         case .everySixMonths:
-            return RecurrenceRule(frequency: .monthly, interval: 6)
+            RecurrenceRule(frequency: .monthly, interval: 6)
         case .yearly:
-            return RecurrenceRule(frequency: .yearly, interval: 1)
+            RecurrenceRule(frequency: .yearly, interval: 1)
         case .custom:
-            return RecurrenceRule()
+            RecurrenceRule()
         }
     }
 

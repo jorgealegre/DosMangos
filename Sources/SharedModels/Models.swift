@@ -315,10 +315,16 @@ struct RecurringTransaction: Identifiable, Hashable, Sendable {
 
     // MARK: State
 
-    /// When this recurrence begins
-    var startDate: Date
-    /// The next occurrence to show as a virtual instance
-    var nextDueDate: Date
+    /// When this recurrence begins (local date components)
+    var startLocalYear: Int
+    var startLocalMonth: Int
+    var startLocalDay: Int
+
+    /// The next occurrence to show as a virtual instance (local date components)
+    var nextDueLocalYear: Int
+    var nextDueLocalMonth: Int
+    var nextDueLocalDay: Int
+
     /// How many transactions have been posted from this template
     var postedCount: Int
     /// 0 = active, 1 = paused, 2 = completed, 3 = deleted
@@ -330,6 +336,42 @@ struct RecurringTransaction: Identifiable, Hashable, Sendable {
     var updatedAtUTC: Date
 }
 extension RecurringTransaction.Draft: Equatable {}
+
+extension RecurringTransaction {
+    var startDate: Date {
+        Date.localDate(year: startLocalYear, month: startLocalMonth, day: startLocalDay)!
+    }
+
+    var nextDueDate: Date {
+        Date.localDate(year: nextDueLocalYear, month: nextDueLocalMonth, day: nextDueLocalDay)!
+    }
+}
+
+extension RecurringTransaction.Draft {
+    var startDate: Date {
+        get {
+            Date.localDate(year: startLocalYear, month: startLocalMonth, day: startLocalDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            startLocalYear = local.year
+            startLocalMonth = local.month
+            startLocalDay = local.day
+        }
+    }
+
+    var nextDueDate: Date {
+        get {
+            Date.localDate(year: nextDueLocalYear, month: nextDueLocalMonth, day: nextDueLocalDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            nextDueLocalYear = local.year
+            nextDueLocalMonth = local.month
+            nextDueLocalDay = local.day
+        }
+    }
+}
 
 @Table("recurringTransactionsCategories")
 struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
@@ -357,4 +399,37 @@ struct TransactionsListRow: Identifiable, Hashable, Sendable {
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
     let location: TransactionLocation?
+}
+
+// MARK: - Due Recurring Row
+
+@Table("dueRecurringRows")
+struct DueRecurringRow: Identifiable, Hashable, Sendable {
+    var id: UUID { recurringTransaction.id }
+    let recurringTransaction: RecurringTransaction
+    let category: String?
+    @Column(as: [String].JSONRepresentation.self)
+    let tags: [String]
+}
+
+// Extension for building recurring transaction queries with tags
+extension RecurringTransaction {
+    static let withTags = Self
+        .group(by: \.id)
+        .leftJoin(RecurringTransactionTag.all) { $0.id.eq($1.recurringTransactionID) }
+        .leftJoin(Tag.all) { $1.tagID.eq($2.title) }
+}
+
+extension RecurringTransactionTag?.TableColumns {
+    var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
+        (self.tagID ?? "").jsonGroupArray(distinct: true, filter: self.tagID.isNot(nil))
+    }
+}
+
+@Table("recurringTransactionCategoriesWithDisplayName")
+struct RecurringTransactionCategoriesWithDisplayName {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var categoryID: String
+    let displayName: String
 }

@@ -248,9 +248,13 @@ func appDatabase() throws -> any DatabaseWriter {
           "endDate" TEXT,
           "endAfterOccurrences" INTEGER,
 
-          -- State
-          "startDate" TEXT NOT NULL DEFAULT (date('now')),
-          "nextDueDate" TEXT NOT NULL DEFAULT (date('now')),
+          -- State (local date components, no time)
+          "startLocalYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "startLocalMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "startLocalDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "nextDueLocalYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "nextDueLocalMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+          "nextDueLocalDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
           "postedCount" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
           "status" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
 
@@ -341,8 +345,8 @@ func appDatabase() throws -> any DatabaseWriter {
         // Index for querying active recurring transactions by next due date
         try #sql(
         """
-        CREATE INDEX IF NOT EXISTS "idx_recurringTransactions_status_nextDueDate"
-        ON "recurringTransactions"("status", "nextDueDate")
+        CREATE INDEX IF NOT EXISTS "idx_recurringTransactions_status_nextDue"
+        ON "recurringTransactions"("status", "nextDueLocalYear", "nextDueLocalMonth", "nextDueLocalDay")
         """
         )
         .execute(db)
@@ -395,6 +399,41 @@ extension Database {
                     )
                 }
 
+        )
+        .execute(self)
+
+        // View for recurring transaction categories with display name
+        try #sql("""
+        CREATE TEMPORARY VIEW \(raw: RecurringTransactionCategoriesWithDisplayName.tableName) AS
+        SELECT
+            \(RecurringTransactionCategory.columns),
+            CASE
+                WHEN "category".\(raw: Category.columns.title.name) IS NULL THEN ''
+                WHEN "parentCategory".\(raw: Category.columns.title.name) IS NOT NULL
+                THEN "parentCategory".\(raw: Category.columns.title.name) || ' › ' || "category".\(raw: Category.columns.title.name)
+                ELSE "category".\(raw: Category.columns.title.name)
+            END AS \(raw: RecurringTransactionCategoriesWithDisplayName.columns.displayName.name)
+        FROM \(raw: RecurringTransactionCategory.tableName)
+        LEFT JOIN \(raw: Category.tableName) AS "category"
+        ON \(RecurringTransactionCategory.columns.categoryID) = "category".\(raw: Category.columns.title.name)
+        LEFT JOIN \(raw: Category.tableName) AS "parentCategory"
+        ON "category".\(raw: Category.columns.parentCategoryID.name) = "parentCategory".\(raw: Category.columns.title.name)
+        """)
+        .execute(self)
+
+        // View for due recurring rows (recurring transactions with category and tags)
+        try DueRecurringRow.createTemporaryView(
+            as: RecurringTransaction
+                .group(by: \.id)
+                .leftJoin(RecurringTransactionCategoriesWithDisplayName.all) { $0.id.eq($1.recurringTransactionID) }
+                .withTags
+                .select {
+                    DueRecurringRow.Columns(
+                        recurringTransaction: $0,
+                        category: $1.displayName,
+                        tags: $3.jsonTitles
+                    )
+                }
         )
         .execute(self)
     }
@@ -701,6 +740,9 @@ func seedSampleData() throws {
 
             // MARK: - Recurring Transactions
 
+            let previousMonthComponents = previousMonthStart.localDateComponents()
+            let todayComponents = today.localDateComponents()
+
             // 1. Monthly rent - due today
             RecurringTransaction(
                 id: uuid(),
@@ -722,8 +764,12 @@ func seedSampleData() throws {
                 endMode: RecurrenceEndMode.never.rawValue,
                 endDate: nil,
                 endAfterOccurrences: nil,
-                startDate: previousMonthStart,
-                nextDueDate: today,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: todayComponents.year,
+                nextDueLocalMonth: todayComponents.month,
+                nextDueLocalDay: todayComponents.day,
                 postedCount: 1,
                 status: .active,
                 createdAtUTC: previousMonthStart,
@@ -732,6 +778,7 @@ func seedSampleData() throws {
 
             // 2. Weekly gym - overdue (3 days ago)
             let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: today)!
+            let threeDaysAgoComponents = threeDaysAgo.localDateComponents()
             RecurringTransaction(
                 id: uuid(),
                 description: "Gym Membership",
@@ -752,8 +799,12 @@ func seedSampleData() throws {
                 endMode: RecurrenceEndMode.never.rawValue,
                 endDate: nil,
                 endAfterOccurrences: nil,
-                startDate: previousMonthStart,
-                nextDueDate: threeDaysAgo,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: threeDaysAgoComponents.year,
+                nextDueLocalMonth: threeDaysAgoComponents.month,
+                nextDueLocalDay: threeDaysAgoComponents.day,
                 postedCount: 4,
                 status: .active,
                 createdAtUTC: previousMonthStart,
@@ -762,6 +813,7 @@ func seedSampleData() throws {
 
             // 3. Yearly subscription - due next week
             let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+            let nextWeekComponents = nextWeek.localDateComponents()
             RecurringTransaction(
                 id: uuid(),
                 description: "iCloud Storage",
@@ -782,8 +834,12 @@ func seedSampleData() throws {
                 endMode: RecurrenceEndMode.never.rawValue,
                 endDate: nil,
                 endAfterOccurrences: nil,
-                startDate: previousMonthStart,
-                nextDueDate: nextWeek,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: nextWeekComponents.year,
+                nextDueLocalMonth: nextWeekComponents.month,
+                nextDueLocalDay: nextWeekComponents.day,
                 postedCount: 0,
                 status: .active,
                 createdAtUTC: previousMonthStart,
@@ -811,8 +867,12 @@ func seedSampleData() throws {
                 endMode: RecurrenceEndMode.never.rawValue,
                 endDate: nil,
                 endAfterOccurrences: nil,
-                startDate: previousMonthStart,
-                nextDueDate: today,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: todayComponents.year,
+                nextDueLocalMonth: todayComponents.month,
+                nextDueLocalDay: todayComponents.day,
                 postedCount: 2,
                 status: .paused,
                 createdAtUTC: previousMonthStart,

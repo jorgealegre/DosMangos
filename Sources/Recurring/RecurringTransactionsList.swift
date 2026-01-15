@@ -16,7 +16,9 @@ struct RecurringTransactionsList: Reducer {
         @FetchAll(
             RecurringTransaction
                 .where { $0.status.in([RecurringTransactionStatus.active, .paused]) }
-                .order(by: \.nextDueDate),
+                .order(by: \.nextDueLocalYear)
+                .order(by: \.nextDueLocalMonth)
+                .order(by: \.nextDueLocalDay),
             animation: .default
         )
         var recurringTransactions: [RecurringTransaction]
