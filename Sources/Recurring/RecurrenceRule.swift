@@ -266,6 +266,203 @@ extension RecurrenceRule {
     }
 }
 
+// MARK: - Next Occurrence Calculation
+
+extension RecurrenceRule {
+    /// Calculates the next occurrence date after the given date based on this rule.
+    func nextOccurrence(after date: Date) -> Date {
+        @Dependency(\.calendar) var calendar
+
+        switch frequency {
+        case .daily:
+            return nextDailyOccurrence(after: date, calendar: calendar)
+        case .weekly:
+            return nextWeeklyOccurrence(after: date, calendar: calendar)
+        case .monthly:
+            return nextMonthlyOccurrence(after: date, calendar: calendar)
+        case .yearly:
+            return nextYearlyOccurrence(after: date, calendar: calendar)
+        }
+    }
+
+    // MARK: - Daily
+
+    private func nextDailyOccurrence(after date: Date, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: interval, to: date) ?? date
+    }
+
+    // MARK: - Weekly
+
+    private func nextWeeklyOccurrence(after date: Date, calendar: Calendar) -> Date {
+        // If no specific days selected, just add interval weeks
+        guard !weeklyDays.isEmpty else {
+            return calendar.date(byAdding: .weekOfYear, value: interval, to: date) ?? date
+        }
+
+        let currentWeekday = calendar.component(.weekday, from: date)
+
+        // Find the next selected weekday
+        let sortedDays = weeklyDays.map(\.rawValue).sorted()
+
+        // First, check if there's a day later this week
+        if let nextDay = sortedDays.first(where: { $0 > currentWeekday }) {
+            let daysToAdd = nextDay - currentWeekday
+            return calendar.date(byAdding: .day, value: daysToAdd, to: date) ?? date
+        }
+
+        // Otherwise, go to the first selected day of the next interval week
+        let firstDayOfNextCycle = sortedDays[0]
+        let daysUntilEndOfWeek = 7 - currentWeekday + firstDayOfNextCycle
+        let totalDays = daysUntilEndOfWeek + (interval - 1) * 7
+        return calendar.date(byAdding: .day, value: totalDays, to: date) ?? date
+    }
+
+    // MARK: - Monthly
+
+    private func nextMonthlyOccurrence(after date: Date, calendar: Calendar) -> Date {
+        switch monthlyMode {
+        case .each:
+            return nextMonthlyEachOccurrence(after: date, calendar: calendar)
+        case .onThe:
+            return nextMonthlyOnTheOccurrence(after: date, calendar: calendar)
+        }
+    }
+
+    private func nextMonthlyEachOccurrence(after date: Date, calendar: Calendar) -> Date {
+        // If no specific days selected, just add interval months
+        guard !monthlyDays.isEmpty else {
+            return calendar.date(byAdding: .month, value: interval, to: date) ?? date
+        }
+
+        let currentDay = calendar.component(.day, from: date)
+        let sortedDays = monthlyDays.sorted()
+
+        // Check if there's a day later this month
+        if let nextDay = sortedDays.first(where: { $0 > currentDay }) {
+            // Check if this day exists in the current month
+            let daysInMonth = calendar.range(of: .day, in: .month, for: date)?.count ?? 31
+            let targetDay = min(nextDay, daysInMonth)
+            if targetDay > currentDay {
+                var components = calendar.dateComponents([.year, .month], from: date)
+                components.day = targetDay
+                if let result = calendar.date(from: components) {
+                    return result
+                }
+            }
+        }
+
+        // Go to the first selected day of the next interval month
+        guard var nextMonthDate = calendar.date(byAdding: .month, value: interval, to: date) else {
+            return date
+        }
+
+        let firstDay = sortedDays[0]
+        let daysInNextMonth = calendar.range(of: .day, in: .month, for: nextMonthDate)?.count ?? 31
+        let targetDay = min(firstDay, daysInNextMonth)
+
+        var components = calendar.dateComponents([.year, .month], from: nextMonthDate)
+        components.day = targetDay
+        return calendar.date(from: components) ?? nextMonthDate
+    }
+
+    private func nextMonthlyOnTheOccurrence(after date: Date, calendar: Calendar) -> Date {
+        // "First Monday", "Last Friday", etc.
+        guard var targetDate = calendar.date(byAdding: .month, value: interval, to: date) else {
+            return date
+        }
+
+        return nthWeekdayOfMonth(
+            ordinal: monthlyOrdinal,
+            weekday: monthlyWeekday,
+            inMonthOf: targetDate,
+            calendar: calendar
+        ) ?? targetDate
+    }
+
+    // MARK: - Yearly
+
+    private func nextYearlyOccurrence(after date: Date, calendar: Calendar) -> Date {
+        // If no specific months selected, just add interval years
+        guard !yearlyMonths.isEmpty else {
+            return calendar.date(byAdding: .year, value: interval, to: date) ?? date
+        }
+
+        let currentMonth = calendar.component(.month, from: date)
+        let currentDay = calendar.component(.day, from: date)
+        let sortedMonths = yearlyMonths.map(\.rawValue).sorted()
+
+        // Check if there's a month later this year
+        for monthRaw in sortedMonths where monthRaw > currentMonth {
+            if let result = yearlyOccurrenceInMonth(monthRaw, year: calendar.component(.year, from: date), calendar: calendar) {
+                return result
+            }
+        }
+
+        // Check current month if day hasn't passed
+        if sortedMonths.contains(currentMonth) {
+            if yearlyDaysOfWeekEnabled {
+                if let result = nthWeekdayOfMonth(ordinal: yearlyOrdinal, weekday: yearlyWeekday, month: currentMonth, year: calendar.component(.year, from: date), calendar: calendar),
+                   calendar.component(.day, from: result) > currentDay {
+                    return result
+                }
+            }
+        }
+
+        // Go to the first selected month of the next interval year
+        let nextYear = calendar.component(.year, from: date) + interval
+        let firstMonth = sortedMonths[0]
+
+        if let result = yearlyOccurrenceInMonth(firstMonth, year: nextYear, calendar: calendar) {
+            return result
+        }
+
+        // Fallback: just add interval years
+        return calendar.date(byAdding: .year, value: interval, to: date) ?? date
+    }
+
+    private func yearlyOccurrenceInMonth(_ month: Int, year: Int, calendar: Calendar) -> Date? {
+        if yearlyDaysOfWeekEnabled {
+            return nthWeekdayOfMonth(ordinal: yearlyOrdinal, weekday: yearlyWeekday, month: month, year: year, calendar: calendar)
+        } else {
+            var components = DateComponents()
+            components.year = year
+            components.month = month
+            components.day = 1
+            return calendar.date(from: components)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func nthWeekdayOfMonth(ordinal: WeekdayOrdinal, weekday: Weekday, inMonthOf date: Date, calendar: Calendar) -> Date? {
+        let year = calendar.component(.year, from: date)
+        let month = calendar.component(.month, from: date)
+        return nthWeekdayOfMonth(ordinal: ordinal, weekday: weekday, month: month, year: year, calendar: calendar)
+    }
+
+    private func nthWeekdayOfMonth(ordinal: WeekdayOrdinal, weekday: Weekday, month: Int, year: Int, calendar: Calendar) -> Date? {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.weekday = weekday.rawValue
+
+        switch ordinal {
+        case .first:
+            components.weekdayOrdinal = 1
+        case .second:
+            components.weekdayOrdinal = 2
+        case .third:
+            components.weekdayOrdinal = 3
+        case .fourth:
+            components.weekdayOrdinal = 4
+        case .last:
+            components.weekdayOrdinal = -1
+        }
+
+        return calendar.date(from: components)
+    }
+}
+
 // MARK: - Preset Conversion
 
 extension RecurrenceRule {

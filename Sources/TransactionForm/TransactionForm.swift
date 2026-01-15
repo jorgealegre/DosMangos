@@ -18,6 +18,8 @@ struct TransactionFormReducer: Reducer {
         case editTransaction
         /// Editing an existing recurring template - toggle locked ON
         case editRecurring(RecurringTransaction)
+        /// Posting a transaction from a recurring template (virtual instance)
+        case postFromRecurring(RecurringTransaction)
     }
 
     @Reducer
@@ -68,6 +70,7 @@ struct TransactionFormReducer: Reducer {
             case .newRecurring: false  // Locked ON, don't show toggle
             case .editTransaction: false  // Hidden
             case .editRecurring: false  // Locked ON, don't show toggle
+            case .postFromRecurring: false  // Hidden, posting creates regular transaction
             }
         }
 
@@ -76,10 +79,28 @@ struct TransactionFormReducer: Reducer {
             !isRecurring
         }
 
-        init(transaction: Transaction.Draft, formMode: FormMode = .newTransaction) {
+        /// Navigation title based on form mode
+        var navigationTitle: LocalizedStringKey {
+            switch formMode {
+            case .newTransaction: "New Transaction"
+            case .newRecurring: "New Recurring"
+            case .editTransaction: "Edit Transaction"
+            case .editRecurring: "Edit Recurring"
+            case .postFromRecurring: "Post Transaction"
+            }
+        }
+
+        init(
+            transaction: Transaction.Draft,
+            formMode: FormMode = .newTransaction,
+            category: Category? = nil,
+            tags: [Tag] = []
+        ) {
             self.formMode = formMode
             self.transaction = transaction
             self.startDate = transaction.localDate
+            self.category = category
+            self.tags = tags
 
             switch formMode {
             case .newTransaction:
@@ -96,6 +117,9 @@ struct TransactionFormReducer: Reducer {
                 self.isLocationEnabled = false
                 self.recurrenceRule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
                 self.recurrencePreset = self.recurrenceRule?.matchingPreset ?? .never
+            case .postFromRecurring:
+                self.isRecurring = false
+                self.isLocationEnabled = true  // Enable location capture for posted transaction
             }
         }
 
@@ -211,6 +235,37 @@ struct TransactionFormReducer: Reducer {
                 switch view {
                 case .task:
                     guard !state.isLoadingDetails else { return .none }
+
+                    // Load details for editing a recurring transaction
+                    if case let .editRecurring(recurringTransaction) = state.formMode {
+                        state.isLoadingDetails = true
+                        return .run { send in
+                            let result = try await database.read { db -> (Category?, [Tag]) in
+                                let categoryID = try RecurringTransactionCategory
+                                    .where { $0.recurringTransactionID.eq(recurringTransaction.id) }
+                                    .select { $0.categoryID }
+                                    .fetchOne(db)
+
+                                let category = try categoryID.flatMap {
+                                    try Category.find($0).fetchOne(db)
+                                }
+
+                                let tagIDs = try RecurringTransactionTag
+                                    .where { $0.recurringTransactionID.eq(recurringTransaction.id) }
+                                    .select { $0.tagID }
+                                    .fetchAll(db)
+                                let tags = try tagIDs.compactMap {
+                                    try Tag.find($0).fetchOne(db)
+                                }
+
+                                return (category, tags)
+                            }
+
+                            await send(.detailsLoaded(result.0, result.1, nil))
+                        }
+                    }
+
+                    // Load details for editing a regular transaction
                     guard let transactionID = state.transaction.id else { return .none }
                     state.isLoadingDetails = true
                     return .run { [locationID = state.transaction.locationID] send in
@@ -290,9 +345,16 @@ struct TransactionFormReducer: Reducer {
                 case .saveButtonTapped:
                     state.focus = nil
 
-                    if state.isRecurring {
+                    switch state.formMode {
+                    case .editRecurring(let existing):
+                        return updateRecurringTransaction(&state, existing: existing)
+                    case .newRecurring:
                         return saveRecurringTransaction(&state)
-                    } else {
+                    case .newTransaction where state.isRecurring:
+                        return saveRecurringTransaction(&state)
+                    case .postFromRecurring(let recurringTransaction):
+                        return postFromRecurringTransaction(&state, template: recurringTransaction)
+                    default:
                         return saveRegularTransaction(&state)
                     }
 
@@ -424,7 +486,7 @@ struct TransactionFormReducer: Reducer {
         let rule = state.recurrenceRule ?? RecurrenceRule()
         let startDateIsToday = calendar.isDate(state.startDate, inSameDayAs: now) || state.startDate < now
         let nextDueDate = startDateIsToday
-            ? nextOccurrence(after: now, rule: rule)
+            ? rule.nextOccurrence(after: now)
             : state.startDate
 
         // Capture current location for auto-posting first instance
@@ -553,19 +615,177 @@ struct TransactionFormReducer: Reducer {
         }
     }
 
-    /// Placeholder for next occurrence calculation - to be implemented in Phase 7
-    private func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
-        switch rule.frequency {
-        case .daily:
-            return calendar.date(byAdding: .day, value: rule.interval, to: date) ?? date
-        case .weekly:
-            return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
-        case .monthly:
-            return calendar.date(byAdding: .month, value: rule.interval, to: date) ?? date
-        case .yearly:
-            return calendar.date(byAdding: .year, value: rule.interval, to: date) ?? date
+    private func updateRecurringTransaction(_ state: inout State, existing: RecurringTransaction) -> Effect<Action> {
+        @Dependency(\.date.now) var now
+
+        let rule = state.recurrenceRule ?? RecurrenceRule()
+
+        // Build the update for the recurring transaction
+        var rtDraft = RecurringTransaction.Draft(
+            id: existing.id,
+            description: state.transaction.description,
+            valueMinorUnits: state.transaction.valueMinorUnits,
+            currencyCode: state.transaction.currencyCode,
+            type: state.transaction.type,
+            frequency: rule.frequency.rawValue,
+            interval: rule.interval,
+            yearlyDaysOfWeekEnabled: rule.yearlyDaysOfWeekEnabled ? 1 : 0,
+            endMode: rule.endMode.rawValue,
+            startDate: existing.startDate,
+            nextDueDate: existing.nextDueDate,
+            postedCount: existing.postedCount,
+            status: existing.status,
+            createdAtUTC: existing.createdAtUTC,
+            updatedAtUTC: now
+        )
+        rtDraft.weeklyDays = rule.weeklyDays.isEmpty ? nil : rule.weeklyDays.map { String($0.rawValue) }.joined(separator: ",")
+        rtDraft.monthlyMode = rule.monthlyMode.rawValue
+        rtDraft.monthlyDays = rule.monthlyDays.isEmpty ? nil : rule.monthlyDays.sorted().map { String($0) }.joined(separator: ",")
+        rtDraft.monthlyOrdinal = rule.monthlyOrdinal.rawValue
+        rtDraft.monthlyWeekday = rule.monthlyWeekday.rawValue
+        rtDraft.yearlyMonths = rule.yearlyMonths.isEmpty ? nil : rule.yearlyMonths.map { String($0.rawValue) }.sorted().joined(separator: ",")
+        rtDraft.yearlyOrdinal = rule.yearlyOrdinal.rawValue
+        rtDraft.yearlyWeekday = rule.yearlyWeekday.rawValue
+        rtDraft.endDate = rule.endDate
+        rtDraft.endAfterOccurrences = rule.endAfterOccurrences
+
+        return .run { [state = state, rtDraft = rtDraft, recurringTransactionID = existing.id] send in
+            withErrorReporting {
+                try database.write { db in
+                    // Update the recurring transaction template
+                    try RecurringTransaction.upsert { rtDraft }
+                        .execute(db)
+
+                    // Delete existing category join records and recreate
+                    try RecurringTransactionCategory
+                        .where { $0.recurringTransactionID.eq(recurringTransactionID) }
+                        .delete()
+                        .execute(db)
+
+                    if let category = state.category {
+                        try RecurringTransactionCategory.insert {
+                            RecurringTransactionCategory.Draft(
+                                recurringTransactionID: recurringTransactionID,
+                                categoryID: category.id
+                            )
+                        }
+                        .execute(db)
+                    }
+
+                    // Delete existing tag join records and recreate
+                    try RecurringTransactionTag
+                        .where { $0.recurringTransactionID.eq(recurringTransactionID) }
+                        .delete()
+                        .execute(db)
+
+                    try RecurringTransactionTag.insert {
+                        state.tags.map { tag in
+                            RecurringTransactionTag.Draft(
+                                recurringTransactionID: recurringTransactionID,
+                                tagID: tag.id
+                            )
+                        }
+                    }
+                    .execute(db)
+                }
+            }
+            await dismiss()
         }
     }
+
+    private func postFromRecurringTransaction(_ state: inout State, template: RecurringTransaction) -> Effect<Action> {
+        @Dependency(\.date.now) var now
+
+        // Build the location if available
+        let newTransactionLocation: TransactionLocation.Draft?
+        if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
+            newTransactionLocation = pickedLocation
+        } else if state.isLocationEnabled, let location = state.currentLocation {
+            newTransactionLocation = TransactionLocation.Draft(
+                latitude: location.location.coordinate.latitude,
+                longitude: location.location.coordinate.longitude,
+                city: location.city,
+                countryCode: location.countryCode
+            )
+        } else {
+            newTransactionLocation = nil
+        }
+
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: state.transaction.localDate)
+
+        var txDraft = Transaction.Draft(
+            description: state.transaction.description,
+            valueMinorUnits: state.transaction.valueMinorUnits,
+            currencyCode: state.transaction.currencyCode,
+            convertedValueMinorUnits: state.transaction.valueMinorUnits,
+            convertedCurrencyCode: state.transaction.currencyCode,
+            type: state.transaction.type,
+            createdAtUTC: now,
+            localYear: dateComponents.year!,
+            localMonth: dateComponents.month!,
+            localDay: dateComponents.day!
+        )
+        txDraft.recurringTransactionID = template.id
+
+        return .run { [state = state, txDraft = txDraft, templateID = template.id] send in
+            withErrorReporting {
+                try database.write { db in
+                    // Create location if provided
+                    let locationID: UUID?
+                    if let location = newTransactionLocation {
+                        locationID = try TransactionLocation.insert { location }
+                            .returning(\.id)
+                            .fetchOne(db)
+                    } else {
+                        locationID = nil
+                    }
+
+                    // Create the transaction
+                    var finalDraft = txDraft
+                    finalDraft.locationID = locationID
+
+                    let transactionID = try Transaction.insert { finalDraft }
+                        .returning(\.id)
+                        .fetchOne(db)!
+
+                    // Create category join record
+                    if let category = state.category {
+                        try TransactionCategory.insert {
+                            TransactionCategory.Draft(
+                                transactionID: transactionID,
+                                categoryID: category.id
+                            )
+                        }
+                        .execute(db)
+                    }
+
+                    // Create tag join records
+                    try TransactionTag.insert {
+                        state.tags.map { tag in
+                            TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
+                        }
+                    }
+                    .execute(db)
+
+                    // Update the recurring template
+                    let rule = RecurrenceRule.from(recurringTransaction: template)
+                    let nextDueDate = rule.nextOccurrence(after: template.nextDueDate)
+
+                    try RecurringTransaction
+                        .where { $0.id.eq(templateID) }
+                        .update {
+                            $0.nextDueDate = nextDueDate
+                            $0.postedCount = template.postedCount + 1
+                        }
+                        .execute(db)
+
+                    // TODO: Check end conditions and update status if needed
+                }
+            }
+            await dismiss()
+        }
+    }
+
 }
 
 extension TransactionFormReducer.Destination.State: Equatable {}

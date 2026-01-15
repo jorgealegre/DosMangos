@@ -434,28 +434,28 @@ func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
   - [x] Create tags join records
   - [x] If startDate ≤ today: auto-post first instance with current location
   - [x] Advance nextDueDate to next occurrence
-- [ ] Handle edit recurring template (update template only, no new transaction)
-- [ ] Handle delete (soft delete → set status to deleted)
-- [ ] Handle pause/resume actions from recurring list
+- [x] Handle edit recurring template (update template only, no new transaction)
+- [ ] ~~Handle delete (soft delete → set status to deleted)~~ (deferred)
+- [ ] ~~Handle pause/resume actions from recurring list~~ (deferred)
 
-### Phase 4: Virtual Instances in Transactions List
-- [ ] Create `VirtualInstance` model (non-persisted)
-- [ ] Create function to compute virtual instances from active templates
-- [ ] Modify `TransactionsList` state to include virtual instances
-- [ ] Create "Due" section UI at top of transactions list
-- [ ] Show due count when multiple occurrences are overdue
-- [ ] Implement "Post" action → opens transaction form pre-filled
-- [ ] Implement "Skip" action → advances `nextDueDate`
-- [ ] Update `nextDueDate` after post/skip
+### Phase 4: Virtual Instances in Transactions List ✅
+- [x] Create `VirtualInstance` model (non-persisted)
+- [x] Create function to compute virtual instances from active templates
+- [x] Modify `TransactionsList` state to include virtual instances
+- [x] Create "Due" section UI at top of transactions list
+- [x] Show due count when multiple occurrences are overdue
+- [x] Implement "Post" action → opens transaction form pre-filled
+- [x] Implement "Skip" action → advances `nextDueDate`
+- [x] Update `nextDueDate` after post/skip
 
-### Phase 5: Post from Virtual Instance
-- [ ] Pre-fill transaction form from virtual instance data
-- [ ] Set intended date as default (user can change)
-- [ ] Capture current location when form opens
-- [ ] Set `recurringTransactionID` when saving posted transaction
-- [ ] Increment `postedCount` on recurring template
-- [ ] Advance `nextDueDate` to next occurrence
-- [ ] Check and handle end conditions after posting
+### Phase 5: Post from Virtual Instance ✅
+- [x] Pre-fill transaction form from virtual instance data
+- [x] Set intended date as default (user can change)
+- [x] Capture current location when form opens
+- [x] Set `recurringTransactionID` when saving posted transaction
+- [x] Increment `postedCount` on recurring template
+- [x] Advance `nextDueDate` to next occurrence
+- [ ] Check and handle end conditions after posting (deferred)
 
 ### Phase 6: Polish & Linking
 - [ ] Show recurring symbol (🔄) on posted transactions in list
@@ -464,14 +464,14 @@ func nextOccurrence(after date: Date, rule: RecurrenceRule) -> Date {
 - [ ] Handle end conditions (auto-complete when limit reached)
 - [ ] Add "Skip All" option for catching up quickly
 
-### Phase 7: Next Occurrence Logic
-- [ ] Implement `nextOccurrence(after:rule:)` for daily
-- [ ] Implement `nextOccurrence(after:rule:)` for weekly (with weekday selection)
-- [ ] Implement `nextOccurrence(after:rule:)` for monthly (each mode)
-- [ ] Implement `nextOccurrence(after:rule:)` for monthly (onThe mode)
-- [ ] Implement `nextOccurrence(after:rule:)` for yearly
-- [ ] Handle interval (every N days/weeks/months/years)
-- [ ] Write unit tests for next occurrence logic
+### Phase 7: Next Occurrence Logic ✅
+- [x] Implement `nextOccurrence(after:rule:)` for daily
+- [x] Implement `nextOccurrence(after:rule:)` for weekly (with weekday selection)
+- [x] Implement `nextOccurrence(after:rule:)` for monthly (each mode)
+- [x] Implement `nextOccurrence(after:rule:)` for monthly (onThe mode)
+- [x] Implement `nextOccurrence(after:rule:)` for yearly
+- [x] Handle interval (every N days/weeks/months/years)
+- [ ] Write unit tests for next occurrence logic (deferred)
 
 ---
 

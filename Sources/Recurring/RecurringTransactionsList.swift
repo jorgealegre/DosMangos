@@ -150,7 +150,7 @@ struct RecurringTransactionsListView: View {
             ) { formStore in
                 NavigationStack {
                     TransactionFormView(store: formStore)
-                        .navigationTitle(Text("New Recurring", bundle: .main))
+                        .navigationTitle(formStore.navigationTitle)
                         .navigationBarTitleDisplayMode(.inline)
                 }
                 .presentationDragIndicator(.visible)
