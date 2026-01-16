@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 
+@Reducer
 struct AppDelegateReducer: Reducer {
     struct State: Equatable {
     }
@@ -9,6 +10,7 @@ struct AppDelegateReducer: Reducer {
         case didFinishLaunching
         case sceneDelegate(SceneDelegate)
 
+        @CasePathable
         enum SceneDelegate {
             case willEnterForeground
         }

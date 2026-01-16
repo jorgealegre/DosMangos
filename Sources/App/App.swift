@@ -32,6 +32,7 @@ struct AppReducer: Reducer {
     }
 
     enum Action: ViewAction {
+        @CasePathable
         enum View {
             case newTransactionButtonTapped
             case discardButtonTapped

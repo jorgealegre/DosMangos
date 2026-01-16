@@ -99,6 +99,7 @@ struct TransactionsList: Reducer {
     }
 
     enum Action: BindableAction, ViewAction {
+        @CasePathable
         enum View {
             case nextMonthButtonTapped
             case onAppear

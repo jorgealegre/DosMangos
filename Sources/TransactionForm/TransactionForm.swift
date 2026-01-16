@@ -135,8 +135,10 @@ struct TransactionFormReducer: Reducer {
     }
 
     enum Action: ViewAction, BindableAction {
+        @CasePathable
         enum Delegate {
         }
+        @CasePathable
         enum View {
             case dateButtonTapped
             case categoriesButtonTapped
@@ -355,8 +357,6 @@ struct TransactionFormReducer: Reducer {
                     return .none
 
                 case .saveButtonTapped:
-                    state.focus = nil
-
                     switch state.formMode {
                     case .editRecurring(let existing):
                         return updateRecurringTransaction(&state, existing: existing)
@@ -934,6 +934,23 @@ struct TransactionFormView: View {
     }
 
     @ViewBuilder
+    private var descriptionInput: some View {
+        Section {
+            TextField(
+                "Description",
+                text: $store.transaction.description
+            )
+            .autocorrectionDisabled()
+            .keyboardType(.alphabet)
+            .submitLabel(.done)
+            .focused($focus, equals: .description)
+            .onSubmit {
+                send(.saveButtonTapped)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var repeatSection: some View {
         Section {
             // Repeat picker
@@ -1067,23 +1084,6 @@ struct TransactionFormView: View {
                 )
                 .datePickerStyle(.graphical)
                 .transition(.identity)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var descriptionInput: some View {
-        Section {
-            TextField(
-                "Description",
-                text: $store.transaction.description
-            )
-            .autocorrectionDisabled()
-            .keyboardType(.alphabet)
-            .submitLabel(.done)
-            .focused($focus, equals: .description)
-            .onSubmit {
-                send(.saveButtonTapped)
             }
         }
     }

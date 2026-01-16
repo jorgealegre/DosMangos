@@ -12,6 +12,7 @@
 		CF0689D32F19E4750082DE08 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = CF0689D22F19E4750082DE08 /* SnapshotTesting */; };
 		CF19906A2F03621700FD49FF /* CoreLocationClient in Frameworks */ = {isa = PBXBuildFile; productRef = CF1990692F03621700FD49FF /* CoreLocationClient */; };
 		CF23A8602F02328D0033C31B /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = CF23A85F2F02328D0033C31B /* Collections */; };
+		CF89CCB02F1AF04A00F2EB87 /* SnapshotTestingCustomDump in Frameworks */ = {isa = PBXBuildFile; productRef = CF89CCAF2F1AF04A00F2EB87 /* SnapshotTestingCustomDump */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
 		CF9409602ECABF6E0009C56D /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095F2ECABF6E0009C56D /* SQLiteData */; };
 		CFF265C32F0DA277004655B6 /* Currency in Frameworks */ = {isa = PBXBuildFile; productRef = CFF265C22F0DA277004655B6 /* Currency */; };
@@ -58,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF89CCB02F1AF04A00F2EB87 /* SnapshotTestingCustomDump in Frameworks */,
 				CF0689D32F19E4750082DE08 /* SnapshotTesting in Frameworks */,
 				CF0689D12F19E4750082DE08 /* InlineSnapshotTesting in Frameworks */,
 				CF0689CE2F19E3B90082DE08 /* DependenciesTestSupport in Frameworks */,
@@ -131,6 +133,7 @@
 				CF0689CD2F19E3B90082DE08 /* DependenciesTestSupport */,
 				CF0689D02F19E4750082DE08 /* InlineSnapshotTesting */,
 				CF0689D22F19E4750082DE08 /* SnapshotTesting */,
+				CF89CCAF2F1AF04A00F2EB87 /* SnapshotTestingCustomDump */,
 			);
 			productName = DosMangosTests;
 			productReference = CF0689412F19E24B0082DE08 /* DosMangosTests.xctest */;
@@ -719,6 +722,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = Collections;
+		};
+		CF89CCAF2F1AF04A00F2EB87 /* SnapshotTestingCustomDump */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF0689CF2F19E4750082DE08 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTestingCustomDump;
 		};
 		CF94095C2ECABF3F0009C56D /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;

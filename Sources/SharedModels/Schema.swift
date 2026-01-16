@@ -2,6 +2,12 @@ import Dependencies
 import OSLog
 import SQLiteData
 
+@DatabaseFunction("uuid")
+func uuid() -> UUID {
+    @Dependency(\.uuid) var uuid
+    return uuid()
+}
+
 extension DependencyValues {
     mutating func bootstrapDatabase() throws {
         defaultDatabase = try appDatabase()
@@ -23,6 +29,7 @@ func appDatabase() throws -> any DatabaseWriter {
         }
 #endif
 
+        db.add(function: $uuid)
         try db.createViews()
     }
     let database = try SQLiteData.defaultDatabase(configuration: configuration)
