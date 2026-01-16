@@ -148,8 +148,6 @@ struct TransactionFormReducer: Reducer {
             case saveButtonTapped
             case valueInputFinished
             case task
-            case repeatPresetSelected(RecurrencePreset?)
-            case customRecurrenceButtonTapped
             case endRepeatModeSelected(RecurrenceEndMode)
             case endDateChanged(Date)
             case endAfterOccurrencesChanged(Int)
@@ -170,6 +168,30 @@ struct TransactionFormReducer: Reducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding(\.recurrencePreset):
+                guard let preset = state.recurrencePreset else {
+                    state.recurrenceRule = nil
+                    state.isLocationEnabled = true
+                    return .none
+                }
+
+                if preset == .custom {
+                    // Open custom editor sheet
+//                    state.focus = nil
+                    let initialRule = state.recurrenceRule ?? RecurrenceRule.from(preset: .monthly)
+                    state.destination = .customRecurrenceEditor(
+                        CustomRecurrenceEditorReducer.State(rule: initialRule)
+                    )
+                } else {
+                    state.recurrenceRule = RecurrenceRule.from(preset: preset)
+                }
+
+                // Disable location when switching to recurring
+                state.isLocationEnabled = false
+                state.location = nil
+                state.pickedLocation = nil
+                return .none
+
             case .binding(\.isLocationEnabled):
                 if !state.isLocationEnabled {
                     state.focus = nil
@@ -350,27 +372,6 @@ struct TransactionFormReducer: Reducer {
 
                 case .valueInputFinished:
                     state.focus = .description
-                    return .none
-
-                case let .repeatPresetSelected(preset):
-                    state.recurrencePreset = preset
-                    if let preset {
-                        state.recurrenceRule = RecurrenceRule.from(preset: preset)
-                        // Disable location when switching to recurring
-                        state.isLocationEnabled = false
-                        state.location = nil
-                        state.pickedLocation = nil
-                    } else {
-                        state.recurrenceRule = nil
-                    }
-                    return .none
-
-                case .customRecurrenceButtonTapped:
-                    state.focus = nil
-                    let initialRule = state.recurrenceRule ?? RecurrenceRule.from(preset: .monthly)
-                    state.destination = .customRecurrenceEditor(
-                        CustomRecurrenceEditorReducer.State(rule: initialRule)
-                    )
                     return .none
 
                 case let .endRepeatModeSelected(mode):
@@ -936,64 +937,22 @@ struct TransactionFormView: View {
     @ViewBuilder
     private var repeatSection: some View {
         Section {
-            // Repeat picker (menu-based like iOS Reminders)
-            HStack {
-                Image(systemName: "repeat")
-                    .font(.title)
-                    .foregroundStyle(.foreground)
-
-                Text("Repeat")
-                    .foregroundStyle(Color(.label))
-
-                Spacer()
-
-                Menu {
-                    // Never option
-                    Button {
-                        send(.repeatPresetSelected(nil), animation: .default)
-                    } label: {
-                        if store.recurrencePreset == nil {
-                            Label("Never", systemImage: "checkmark")
-                        } else {
-                            Text("Never")
-                        }
-                    }
-
-                    Divider()
-
-                    // Standard presets
-                    ForEach(RecurrencePreset.standardPresets) { preset in
-                        Button {
-                            send(.repeatPresetSelected(preset), animation: .default)
-                        } label: {
-                            if store.recurrencePreset == preset {
-                                Label(preset.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(preset.displayName)
-                            }
-                        }
-                    }
-
-                    Divider()
-
-                    // Custom option
-                    Button {
-                        send(.customRecurrenceButtonTapped)
-                    } label: {
-                        if store.recurrencePreset == .custom {
-                            Label("Custom", systemImage: "checkmark")
-                        } else {
-                            Text("Custom")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(store.recurrencePreset?.displayName ?? "Never")
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            // Repeat picker
+            Picker(selection: $store.recurrencePreset.animation()) {
+                Text("Never").tag(RecurrencePreset?.none)
+                Divider()
+                ForEach(RecurrencePreset.standardPresets) { preset in
+                    Text(preset.displayName).tag(RecurrencePreset?.some(preset))
+                }
+                Divider()
+                Text("Custom").tag(RecurrencePreset?.some(.custom))
+            } label: {
+                HStack {
+                    Image(systemName: "repeat")
+                        .font(.title)
+                        .foregroundStyle(.foreground)
+                    Text("Repeat")
+                        .foregroundStyle(Color(.label))
                 }
             }
 
@@ -1006,63 +965,31 @@ struct TransactionFormView: View {
 
             // End Repeat picker (only when recurring)
             if store.isRecurring {
-                HStack {
-                    Image(systemName: "repeat.1")
-                        .font(.title)
-                        .foregroundStyle(.foreground)
+                Picker(
+                    selection: Binding(
+                        get: { store.recurrenceRule?.endMode ?? .never },
+                        set: { send(.endRepeatModeSelected($0)) }
+                    ).animation()
+                ) {
+                    Text("Never").tag(RecurrenceEndMode.never)
+                    Text("On Date").tag(RecurrenceEndMode.onDate)
+                    Text("After").tag(RecurrenceEndMode.afterOccurrences)
+                } label: {
+                    HStack {
+                        Image(systemName: "repeat.badge.xmark")
+                            .font(.title)
+                            .foregroundStyle(.foreground)
 
-                    Text("End Repeat")
-                        .foregroundStyle(Color(.label))
-
-                    Spacer()
-
-                    Menu {
-                        Button {
-                            send(.endRepeatModeSelected(.never), animation: .default)
-                        } label: {
-                            if store.recurrenceRule?.endMode == .never {
-                                Label("Never", systemImage: "checkmark")
-                            } else {
-                                Text("Never")
-                            }
-                        }
-
-                        Button {
-                            send(.endRepeatModeSelected(.onDate), animation: .default)
-                        } label: {
-                            if store.recurrenceRule?.endMode == .onDate {
-                                Label("On Date", systemImage: "checkmark")
-                            } else {
-                                Text("On Date")
-                            }
-                        }
-
-                        Button {
-                            send(.endRepeatModeSelected(.afterOccurrences), animation: .default)
-                        } label: {
-                            if store.recurrenceRule?.endMode == .afterOccurrences {
-                                Label("After", systemImage: "checkmark")
-                            } else {
-                                Text("After")
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(endRepeatDisplayText)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("End Repeat")
                     }
                 }
 
                 // End Date picker (when endMode is .onDate)
-                if store.recurrenceRule?.endMode == .onDate {
+                if let recurrenceRule = store.recurrenceRule, recurrenceRule.endMode == .onDate {
                     DatePicker(
                         "End Date",
                         selection: Binding(
-                            get: { store.recurrenceRule?.endDate ?? Date() },
+                            get: { recurrenceRule.endDate ?? Date() },
                             set: { send(.endDateChanged($0)) }
                         ),
                         displayedComponents: .date
@@ -1070,19 +997,16 @@ struct TransactionFormView: View {
                 }
 
                 // Occurrences picker (when endMode is .afterOccurrences)
-                if store.recurrenceRule?.endMode == .afterOccurrences {
+                if let recurrenceRule = store.recurrenceRule, recurrenceRule.endMode == .afterOccurrences {
                     Stepper(
                         value: Binding(
-                            get: { store.recurrenceRule?.endAfterOccurrences ?? 1 },
+                            get: { recurrenceRule.endAfterOccurrences },
                             set: { send(.endAfterOccurrencesChanged($0)) }
                         ),
                         in: 1...999
                     ) {
-                        HStack {
-                            Text("After")
-                            Text("\(store.recurrenceRule?.endAfterOccurrences ?? 1) occurrences")
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("After \(recurrenceRule.endAfterOccurrences) occurrences")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
