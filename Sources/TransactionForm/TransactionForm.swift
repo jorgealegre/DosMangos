@@ -947,12 +947,11 @@ struct TransactionFormView: View {
                 Divider()
                 Text("Custom").tag(RecurrencePreset?.some(.custom))
             } label: {
-                HStack {
-                    Image(systemName: "repeat")
-                        .font(.title)
-                        .foregroundStyle(.foreground)
+                Label {
                     Text("Repeat")
-                        .foregroundStyle(Color(.label))
+                } icon: {
+                    Image(systemName: "repeat")
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -975,12 +974,11 @@ struct TransactionFormView: View {
                     Text("On Date").tag(RecurrenceEndMode.onDate)
                     Text("After").tag(RecurrenceEndMode.afterOccurrences)
                 } label: {
-                    HStack {
-                        Image(systemName: "repeat.badge.xmark")
-                            .font(.title)
-                            .foregroundStyle(.foreground)
-
+                    Label {
                         Text("End Repeat")
+                    } icon: {
+                        Image(systemName: "repeat.1")
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -1028,37 +1026,39 @@ struct TransactionFormView: View {
     @ViewBuilder
     private var dateTimePicker: some View {
         Section {
-            HStack {
+            Label {
+                HStack {
+                    Button {
+                        send(.dateButtonTapped, animation: .default)
+                    } label: {
+                        Text(store.transaction.localDate.formattedRelativeDay())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        send(.previousDayButtonTapped)
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .renderingMode(.template)
+                            .foregroundColor(.accentColor)
+                            .padding(8)
+                    }
+                    Button {
+                        send(.nextDayButtonTapped)
+                    } label: {
+                        Image(systemName: "chevron.forward")
+                            .renderingMode(.template)
+                            .foregroundColor(.accentColor)
+                            .padding(8)
+                    }
+                }
+                .buttonStyle(BorderlessButtonStyle())
+            } icon: {
                 Image(systemName: "calendar")
-                    .font(.title)
-                    .foregroundStyle(.foreground)
-
-                Button {
-                    send(.dateButtonTapped, animation: .default)
-                } label: {
-                    Text(store.transaction.localDate.formattedRelativeDay())
-                }
-
-                Spacer()
-
-                Button {
-                    send(.previousDayButtonTapped)
-                } label: {
-                    Image(systemName: "chevron.backward")
-                        .renderingMode(.template)
-                        .foregroundColor(.accentColor)
-                        .padding(8)
-                }
-                Button {
-                    send(.nextDayButtonTapped)
-                } label: {
-                    Image(systemName: "chevron.forward")
-                        .renderingMode(.template)
-                        .foregroundColor(.accentColor)
-                        .padding(8)
-                }
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(BorderlessButtonStyle())
 
             if store.isDatePickerVisible {
                 DatePicker(
@@ -1096,22 +1096,26 @@ struct TransactionFormView: View {
                 send(.categoriesButtonTapped, animation: .default)
             } label: {
                 HStack {
-                    Image(systemName: "folder")
-                        .font(.title)
-                        .foregroundStyle(.foreground)
-                    Text("Categories")
-                        .foregroundStyle(Color(.label))
+                    Label {
+                        Text("Categories")
+                    } icon: {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
+
                     if let category = store.category {
                         Text(category.title)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .font(.callout)
-                            .foregroundStyle(.gray)
+                            .foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.right")
+                        .foregroundStyle(.tertiary)
                 }
             }
+            .buttonStyle(.plain)
         }
         .popover(
             item: $store.scope(
@@ -1135,22 +1139,26 @@ struct TransactionFormView: View {
                 send(.tagsButtonTapped, animation: .default)
             } label: {
                 HStack {
-                    Image(systemName: "number.square")
-                        .font(.title)
-                        .foregroundStyle(.foreground)
-                    Text("Tags")
-                        .foregroundStyle(Color(.label))
+                    Label {
+                        Text("Tags")
+                    } icon: {
+                        Image(systemName: "number")
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
+
                     if let tagsDetail {
                         tagsDetail
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .font(.callout)
-                            .foregroundStyle(.gray)
+                            .foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.right")
+                        .foregroundStyle(.tertiary)
                 }
             }
+            .buttonStyle(.plain)
         }
         .popover(isPresented: $store.isPresentingTagsPopover) {
             NavigationStack {
@@ -1168,14 +1176,8 @@ struct TransactionFormView: View {
     @ViewBuilder
     private var locationSection: some View {
         Section {
-            HStack {
-                Image(systemName: "location")
-                    .font(.title)
-                    .foregroundStyle(.foreground)
-
-                Spacer()
-
-                Toggle(isOn: $store.isLocationEnabled.animation()) {
+            Toggle(isOn: $store.isLocationEnabled.animation()) {
+                Label {
                     VStack(alignment: .leading) {
                         Text("Location")
                             .font(store.isLocationEnabled ? .caption : nil)
@@ -1216,6 +1218,9 @@ struct TransactionFormView: View {
                             .fontWeight(.medium)
                         }
                     }
+                } icon: {
+                    Image(systemName: "location")
+                        .foregroundStyle(.secondary)
                 }
             }
 
