@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF0689CE2F19E3B90082DE08 /* DependenciesTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = CF0689CD2F19E3B90082DE08 /* DependenciesTestSupport */; };
+		CF0689D12F19E4750082DE08 /* InlineSnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = CF0689D02F19E4750082DE08 /* InlineSnapshotTesting */; };
+		CF0689D32F19E4750082DE08 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = CF0689D22F19E4750082DE08 /* SnapshotTesting */; };
 		CF19906A2F03621700FD49FF /* CoreLocationClient in Frameworks */ = {isa = PBXBuildFile; productRef = CF1990692F03621700FD49FF /* CoreLocationClient */; };
 		CF23A8602F02328D0033C31B /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = CF23A85F2F02328D0033C31B /* Collections */; };
 		CF94095D2ECABF3F0009C56D /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = CF94095C2ECABF3F0009C56D /* ComposableArchitecture */; };
@@ -14,7 +17,18 @@
 		CFF265C32F0DA277004655B6 /* Currency in Frameworks */ = {isa = PBXBuildFile; productRef = CFF265C22F0DA277004655B6 /* Currency */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		CF0689452F19E24B0082DE08 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CF5CA8562905BC6100156961 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CF5CA85D2905BC6100156961;
+			remoteInfo = DosMangos;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		CF0689412F19E24B0082DE08 /* DosMangosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DosMangosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CF19906B2F03628100FD49FF /* swift-dos-mangos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "swift-dos-mangos"; sourceTree = "<group>"; };
 		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -34,11 +48,22 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		CF0689422F19E24B0082DE08 /* DosMangosTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DosMangosTests; sourceTree = "<group>"; };
 		CF207A732EF61E2200851104 /* DosMangos */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (CF207A852EF61E2200851104 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = DosMangos; sourceTree = "<group>"; };
 		CFEC98102EF7905100449A78 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sources; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CF06893E2F19E24B0082DE08 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CF0689D32F19E4750082DE08 /* SnapshotTesting in Frameworks */,
+				CF0689D12F19E4750082DE08 /* InlineSnapshotTesting in Frameworks */,
+				CF0689CE2F19E3B90082DE08 /* DependenciesTestSupport in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CF5CA85B2905BC6100156961 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -60,6 +85,7 @@
 				CF19906B2F03628100FD49FF /* swift-dos-mangos */,
 				CFEC98102EF7905100449A78 /* Sources */,
 				CF207A732EF61E2200851104 /* DosMangos */,
+				CF0689422F19E24B0082DE08 /* DosMangosTests */,
 				CF5CA85F2905BC6100156961 /* Products */,
 				CFE0A6FC2905BFA4009F1853 /* Frameworks */,
 			);
@@ -69,6 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				CF5CA85E2905BC6100156961 /* DosMangos.app */,
+				CF0689412F19E24B0082DE08 /* DosMangosTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +110,32 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		CF0689402F19E24B0082DE08 /* DosMangosTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CF0689472F19E24B0082DE08 /* Build configuration list for PBXNativeTarget "DosMangosTests" */;
+			buildPhases = (
+				CF06893D2F19E24B0082DE08 /* Sources */,
+				CF06893E2F19E24B0082DE08 /* Frameworks */,
+				CF06893F2F19E24B0082DE08 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CF0689462F19E24B0082DE08 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CF0689422F19E24B0082DE08 /* DosMangosTests */,
+			);
+			name = DosMangosTests;
+			packageProductDependencies = (
+				CF0689CD2F19E3B90082DE08 /* DependenciesTestSupport */,
+				CF0689D02F19E4750082DE08 /* InlineSnapshotTesting */,
+				CF0689D22F19E4750082DE08 /* SnapshotTesting */,
+			);
+			productName = DosMangosTests;
+			productReference = CF0689412F19E24B0082DE08 /* DosMangosTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		CF5CA85D2905BC6100156961 /* DosMangos */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CF5CA86C2905BC6300156961 /* Build configuration list for PBXNativeTarget "DosMangos" */;
@@ -118,9 +171,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1410;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					CF0689402F19E24B0082DE08 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = CF5CA85D2905BC6100156961;
+					};
 					CF5CA85D2905BC6100156961 = {
 						CreatedOnToolsVersion = 14.1;
 					};
@@ -140,17 +197,27 @@
 				CF94095B2ECABF3F0009C56D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 				CF94095E2ECABF6E0009C56D /* XCRemoteSwiftPackageReference "sqlite-data" */,
 				CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */,
+				CF0689CC2F19E3B90082DE08 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
+				CF0689CF2F19E4750082DE08 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			productRefGroup = CF5CA85F2905BC6100156961 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				CF5CA85D2905BC6100156961 /* DosMangos */,
+				CF0689402F19E24B0082DE08 /* DosMangosTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		CF06893F2F19E24B0082DE08 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CF5CA85C2905BC6100156961 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -161,6 +228,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		CF06893D2F19E24B0082DE08 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CF5CA85A2905BC6100156961 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -170,7 +244,94 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		CF0689462F19E24B0082DE08 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CF5CA85D2905BC6100156961 /* DosMangos */;
+			targetProxy = CF0689452F19E24B0082DE08 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		CF0689482F19E24B0082DE08 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = MCQUU65FS6;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangosTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DosMangos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DosMangos";
+			};
+			name = Debug;
+		};
+		CF0689492F19E24B0082DE08 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = MCQUU65FS6;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangosTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DosMangos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DosMangos";
+			};
+			name = Release;
+		};
+		CF06894A2F19E24B0082DE08 /* TestFlight */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = MCQUU65FS6;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alegre.DosMangosTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DosMangos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DosMangos";
+			};
+			name = TestFlight;
+		};
 		CF0CD5AA2EF788BA002CC3E3 /* TestFlight */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = CF207A732EF61E2200851104 /* DosMangos */;
@@ -459,6 +620,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		CF0689472F19E24B0082DE08 /* Build configuration list for PBXNativeTarget "DosMangosTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CF0689482F19E24B0082DE08 /* Debug */,
+				CF0689492F19E24B0082DE08 /* Release */,
+				CF06894A2F19E24B0082DE08 /* TestFlight */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CF5CA8592905BC6100156961 /* Build configuration list for PBXProject "DosMangos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -482,6 +653,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		CF0689CC2F19E3B90082DE08 /* XCRemoteSwiftPackageReference "swift-dependencies" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-dependencies";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.10.1;
+			};
+		};
+		CF0689CF2F19E4750082DE08 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.18.7;
+			};
+		};
 		CF23A85E2F02328D0033C31B /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections.git";
@@ -509,6 +696,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CF0689CD2F19E3B90082DE08 /* DependenciesTestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF0689CC2F19E3B90082DE08 /* XCRemoteSwiftPackageReference "swift-dependencies" */;
+			productName = DependenciesTestSupport;
+		};
+		CF0689D02F19E4750082DE08 /* InlineSnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF0689CF2F19E4750082DE08 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = InlineSnapshotTesting;
+		};
+		CF0689D22F19E4750082DE08 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF0689CF2F19E4750082DE08 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
+		};
 		CF1990692F03621700FD49FF /* CoreLocationClient */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CoreLocationClient;

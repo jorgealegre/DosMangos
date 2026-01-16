@@ -821,7 +821,6 @@ struct TransactionFormReducer: Reducer {
             await dismiss()
         }
     }
-
 }
 
 extension TransactionFormReducer.Destination.State: Equatable {}
@@ -977,7 +976,7 @@ struct TransactionFormView: View {
                     Label {
                         Text("End Repeat")
                     } icon: {
-                        Image(systemName: "repeat.1")
+                        Image(systemName: "repeat.badge.xmark")
                             .foregroundStyle(.secondary)
                     }
                 }

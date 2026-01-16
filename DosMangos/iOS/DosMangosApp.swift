@@ -78,6 +78,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
 }
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    @Dependency(\.context) var context
 //    @Dependency(\.defaultSyncEngine) var syncEngine
     var window: UIWindow?
     weak var store: StoreOf<AppReducer>?
@@ -87,6 +88,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
+        guard context != .test else { return }
         // Get store reference from static property
         self.store = AppDelegate.shared?.store
     }

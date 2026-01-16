@@ -350,7 +350,7 @@ extension RecurrenceRule {
         }
 
         // Go to the first selected day of the next interval month
-        guard var nextMonthDate = calendar.date(byAdding: .month, value: interval, to: date) else {
+        guard let nextMonthDate = calendar.date(byAdding: .month, value: interval, to: date) else {
             return date
         }
 
@@ -365,7 +365,7 @@ extension RecurrenceRule {
 
     private func nextMonthlyOnTheOccurrence(after date: Date, calendar: Calendar) -> Date {
         // "First Monday", "Last Friday", etc.
-        guard var targetDate = calendar.date(byAdding: .month, value: interval, to: date) else {
+        guard let targetDate = calendar.date(byAdding: .month, value: interval, to: date) else {
             return date
         }
 

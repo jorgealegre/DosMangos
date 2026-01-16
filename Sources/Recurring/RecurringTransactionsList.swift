@@ -50,7 +50,7 @@ struct RecurringTransactionsList: Reducer {
                 return .none
 
             case .view(.addButtonTapped):
-                var draft = Transaction.Draft()
+                let draft = Transaction.Draft()
                 state.destination = .transactionForm(
                     TransactionFormReducer.State(
                         transaction: draft,

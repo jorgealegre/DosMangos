@@ -20,10 +20,15 @@ struct AppReducer: Reducer {
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
 
         var appDelegate = AppDelegateReducer.State()
-        var transactionsList = TransactionsList.State(date: .now)
+        var transactionsList: TransactionsList.State
         var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
         var recurringTransactionsList = RecurringTransactionsList.State()
+
+        init() {
+            @Dependency(\.date.now) var now
+            self.transactionsList = TransactionsList.State(date: now)
+        }
     }
 
     enum Action: ViewAction {
