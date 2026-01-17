@@ -258,7 +258,7 @@ struct AppView: View {
 //    let locale = Locale(identifier: "es_AR")
     let _ = try! prepareDependencies {
         try $0.bootstrapDatabase()
-//        try seedSampleData()
+        try seedSampleData()
         $0.locale = locale
     }
     AppView(

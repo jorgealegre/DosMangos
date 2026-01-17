@@ -51,6 +51,7 @@ extension BaseTestSuite {
                 $0.destination = nil
             }
 
+            try await store.state.transactionsList.$rows.load()
             assertInlineSnapshot(of: store.state.transactionsList.rows, as: .customDump) {
                 """
                 [
@@ -73,7 +74,7 @@ extension BaseTestSuite {
                     category: nil,
                     tags: [],
                     location: TransactionLocation(
-                      id: UUID(00000000-0000-0000-0000-000000000001),
+                      id: UUID(00000000-0000-0000-0000-000000000000),
                       latitude: -34.6037,
                       longitude: -58.3816,
                       city: "Córdoba",
