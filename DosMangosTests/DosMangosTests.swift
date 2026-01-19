@@ -74,7 +74,7 @@ extension BaseTestSuite {
                     category: nil,
                     tags: [],
                     location: TransactionLocation(
-                      id: UUID(00000000-0000-0000-0000-000000000000),
+                      id: UUID(00000000-0000-0000-0000-000000000001),
                       latitude: -34.6037,
                       longitude: -58.3816,
                       city: "Córdoba",

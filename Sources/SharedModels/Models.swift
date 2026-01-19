@@ -233,7 +233,6 @@ extension Transaction {
 
 @Table("transaction_locations")
 struct TransactionLocation: Identifiable, Hashable, Sendable {
-    @Column("locationID")
     let id: UUID
     var latitude: Double
     var longitude: Double
