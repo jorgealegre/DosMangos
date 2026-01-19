@@ -52,6 +52,7 @@ extension BaseTestSuite {
             }
 
             try await store.state.transactionsList.$rows.load()
+            // TODO: the location ID is wrong, will get fixed soon
             assertInlineSnapshot(of: store.state.transactionsList.rows, as: .customDump) {
                 """
                 [
