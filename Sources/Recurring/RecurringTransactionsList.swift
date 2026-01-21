@@ -121,7 +121,7 @@ struct RecurringTransactionsListView: View {
                             send(.deleteRecurringTransactions(ids), animation: .default)
                         }
                     } header: {
-                        Text("Active", bundle: .main)
+                        Text("Active")
                     }
                 }
 
@@ -139,23 +139,23 @@ struct RecurringTransactionsListView: View {
                             send(.deleteRecurringTransactions(ids), animation: .default)
                         }
                     } header: {
-                        Text("Paused", bundle: .main)
+                        Text("Paused")
                     }
                 }
 
                 if store.recurringTransactions.isEmpty {
                     ContentUnavailableView {
                         Label {
-                            Text("No Recurring Transactions", bundle: .main)
+                            Text("No Recurring Transactions")
                         } icon: {
                             Image(systemName: "repeat.circle")
                         }
                     } description: {
-                        Text("Tap + to create a recurring transaction template.", bundle: .main)
+                        Text("Tap + to create a recurring transaction template.")
                     }
                 }
             }
-            .navigationTitle(Text("Recurring", bundle: .main))
+            .navigationTitle(Text("Recurring"))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -212,7 +212,7 @@ private struct RecurringTransactionRow: View {
 
                 if transaction.status == .paused {
                     Label {
-                        Text("Paused", bundle: .main)
+                        Text("Paused")
                     } icon: {
                         Image(systemName: "pause.circle.fill")
                     }
@@ -253,11 +253,11 @@ private struct RecurringTransactionRow: View {
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
 
         if calendar.isDate(nextDue, inSameDayAs: now) {
-            return String(localized: "Due today", bundle: .main)
+            return String(localized: "Due today")
         } else if calendar.isDate(nextDue, inSameDayAs: tomorrow) {
-            return String(localized: "Due tomorrow", bundle: .main)
+            return String(localized: "Due tomorrow")
         } else if nextDue < now {
-            return String(localized: "Overdue", bundle: .main)
+            return String(localized: "Overdue")
         } else {
             return nextDue.formatted(date: .abbreviated, time: .omitted)
         }

@@ -84,7 +84,7 @@ struct CustomRecurrenceEditorView: View {
             summaryText
             frequencySpecificOptions
         }
-        .navigationTitle(Text("Custom", bundle: .main))
+        .navigationTitle(Text("Custom"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -110,14 +110,14 @@ struct CustomRecurrenceEditorView: View {
                     Text(freq.displayName).tag(freq)
                 }
             } label: {
-                Text("Frequency", bundle: .main)
+                Text("Frequency")
             }
 
             Stepper(
                 value: $store.rule.interval,
                 in: 1...99
             ) {
-                Text("Every \(store.rule.interval)", bundle: .main)
+                Text("Every \(store.rule.interval)")
             }
         }
     }
@@ -178,7 +178,7 @@ struct CustomRecurrenceEditorView: View {
                 store.rule.monthlyMode = .each
             } label: {
                 HStack {
-                    Text("Each", bundle: .main)
+                    Text("Each")
                         .foregroundStyle(Color.primary)
                     Spacer()
                     if store.rule.monthlyMode == .each {
@@ -192,7 +192,7 @@ struct CustomRecurrenceEditorView: View {
                 store.rule.monthlyMode = .onThe
             } label: {
                 HStack {
-                    Text("On the...", bundle: .main)
+                    Text("On the...")
                         .foregroundStyle(Color.primary)
                     Spacer()
                     if store.rule.monthlyMode == .onThe {
@@ -246,7 +246,7 @@ struct CustomRecurrenceEditorView: View {
                     Text(ordinal.displayName).tag(ordinal)
                 }
             } label: {
-                Text("Ordinal", bundle: .main)
+                Text("Ordinal")
             }
             .pickerStyle(.wheel)
             .frame(maxWidth: .infinity)
@@ -256,7 +256,7 @@ struct CustomRecurrenceEditorView: View {
                     Text(weekday.fullName).tag(weekday)
                 }
             } label: {
-                Text("Weekday", bundle: .main)
+                Text("Weekday")
             }
             .pickerStyle(.wheel)
             .frame(maxWidth: .infinity)
@@ -274,7 +274,7 @@ struct CustomRecurrenceEditorView: View {
 
         Section {
             Toggle(isOn: $store.rule.yearlyDaysOfWeekEnabled.animation()) {
-                Text("Days of Week", bundle: .main)
+                Text("Days of Week")
             }
 
             if store.rule.yearlyDaysOfWeekEnabled {
@@ -319,7 +319,7 @@ struct CustomRecurrenceEditorView: View {
                     Text(ordinal.displayName).tag(ordinal)
                 }
             } label: {
-                Text("Ordinal", bundle: .main)
+                Text("Ordinal")
             }
             .pickerStyle(.wheel)
             .frame(maxWidth: .infinity)
@@ -329,7 +329,7 @@ struct CustomRecurrenceEditorView: View {
                     Text(weekday.fullName).tag(weekday)
                 }
             } label: {
-                Text("Weekday", bundle: .main)
+                Text("Weekday")
             }
             .pickerStyle(.wheel)
             .frame(maxWidth: .infinity)

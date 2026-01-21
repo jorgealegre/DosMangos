@@ -251,7 +251,7 @@ struct TransactionsListView: View {
                     } header: {
                         HStack {
                             Label {
-                                Text("Due", bundle: .main)
+                                Text("Due")
                                     .font(.caption.bold())
                                     .textCase(nil)
                             } icon: {
@@ -262,7 +262,7 @@ struct TransactionsListView: View {
                             Spacer()
 
                             if store.dueRows.count > 1 {
-                                Text("\(store.dueRows.count) items", bundle: .main)
+                                Text("\(store.dueRows.count) items")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -445,13 +445,13 @@ private struct DueRecurringRowView: View {
         let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
 
         if calendar.isDate(dueDate, inSameDayAs: now) {
-            return String(localized: "Due today", bundle: .main)
+            return String(localized: "Due today")
         } else if calendar.isDate(dueDate, inSameDayAs: yesterday) {
-            return String(localized: "Due yesterday", bundle: .main)
+            return String(localized: "Due yesterday")
         } else {
             let days = calendar.dateComponents([.day], from: dueDate, to: now).day ?? 0
             if days > 0 {
-                return String(localized: "\(days) days overdue", bundle: .main)
+                return String(localized: "\(days) days overdue")
             } else {
                 return dueDate.formatted(date: .abbreviated, time: .omitted)
             }
