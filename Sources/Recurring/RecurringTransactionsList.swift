@@ -241,7 +241,7 @@ private struct RecurringTransactionRow: View {
     }
 
     private var frequencySummary: String {
-        let rule = recurrenceRule
+        let rule = RecurrenceRule.from(recurringTransaction: transaction)
         return rule.summaryDescription
     }
 
@@ -251,52 +251,20 @@ private struct RecurringTransactionRow: View {
 
         let nextDue = transaction.nextDueDate
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
 
         if calendar.isDate(nextDue, inSameDayAs: now) {
             return String(localized: "Due today")
         } else if calendar.isDate(nextDue, inSameDayAs: tomorrow) {
             return String(localized: "Due tomorrow")
+        } else if calendar.isDate(nextDue, inSameDayAs: yesterday) {
+            return String(localized: "Due yesterday")
         } else if nextDue < now {
-            return String(localized: "Overdue")
+            let days = calendar.dateComponents([.day], from: nextDue, to: now).day ?? 0
+            return String(localized: "\(days) days overdue")
         } else {
             return nextDue.formatted(date: .abbreviated, time: .omitted)
         }
-    }
-
-    private var recurrenceRule: RecurrenceRule {
-        RecurrenceRule(
-            frequency: RecurrenceFrequency(rawValue: transaction.frequency) ?? .monthly,
-            interval: transaction.interval,
-            weeklyDays: parseWeekdays(transaction.weeklyDays),
-            monthlyMode: MonthlyMode(rawValue: transaction.monthlyMode ?? 0) ?? .each,
-            monthlyDays: parseDays(transaction.monthlyDays),
-            monthlyOrdinal: WeekdayOrdinal(rawValue: transaction.monthlyOrdinal ?? 1) ?? .first,
-            monthlyWeekday: Weekday(rawValue: transaction.monthlyWeekday ?? 2) ?? .monday,
-            yearlyMonths: parseMonths(transaction.yearlyMonths),
-            yearlyDaysOfWeekEnabled: transaction.yearlyDaysOfWeekEnabled == 1,
-            yearlyOrdinal: WeekdayOrdinal(rawValue: transaction.yearlyOrdinal ?? 1) ?? .first,
-            yearlyWeekday: Weekday(rawValue: transaction.yearlyWeekday ?? 2) ?? .monday,
-            endMode: RecurrenceEndMode(rawValue: transaction.endMode) ?? .never,
-            endDate: transaction.endDate,
-            endAfterOccurrences: transaction.endAfterOccurrences ?? 1
-        )
-    }
-
-    private func parseWeekdays(_ string: String?) -> Set<Weekday> {
-        guard let string, !string.isEmpty else { return [] }
-        let values = string.split(separator: ",").compactMap { Int($0) }
-        return Set(values.compactMap { Weekday(rawValue: $0) })
-    }
-
-    private func parseDays(_ string: String?) -> Set<Int> {
-        guard let string, !string.isEmpty else { return [] }
-        return Set(string.split(separator: ",").compactMap { Int($0) })
-    }
-
-    private func parseMonths(_ string: String?) -> Set<Month> {
-        guard let string, !string.isEmpty else { return [] }
-        let values = string.split(separator: ",").compactMap { Int($0) }
-        return Set(values.compactMap { Month(rawValue: $0) })
     }
 }
 

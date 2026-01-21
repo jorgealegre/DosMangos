@@ -334,33 +334,53 @@ extension RecurrenceRule {
 
         let currentDay = calendar.component(.day, from: date)
         let sortedDays = monthlyDays.sorted()
+        let daysInMonth = calendar.range(of: .day, in: .month, for: date)?.count ?? 31
 
-        // Check if there's a day later this month
-        if let nextDay = sortedDays.first(where: { $0 > currentDay }) {
-            // Check if this day exists in the current month
-            let daysInMonth = calendar.range(of: .day, in: .month, for: date)?.count ?? 31
-            let targetDay = min(nextDay, daysInMonth)
-            if targetDay > currentDay {
-                var components = calendar.dateComponents([.year, .month], from: date)
-                components.day = targetDay
+        // Check if there's a valid day later this month (must actually exist in this month)
+        for nextDay in sortedDays where nextDay > currentDay && nextDay <= daysInMonth {
+            var components = calendar.dateComponents([.year, .month], from: date)
+            components.day = nextDay
+            if let result = calendar.date(from: components) {
+                return result
+            }
+        }
+
+        // Go to the first valid selected day of the next interval month
+        guard let nextMonthDate = calendar.date(byAdding: .month, value: interval, to: date) else {
+            return date
+        }
+
+        let daysInNextMonth = calendar.range(of: .day, in: .month, for: nextMonthDate)?.count ?? 31
+
+        // Find the first selected day that exists in the next month
+        for day in sortedDays where day <= daysInNextMonth {
+            var components = calendar.dateComponents([.year, .month], from: nextMonthDate)
+            components.day = day
+            if let result = calendar.date(from: components) {
+                return result
+            }
+        }
+
+        // Fallback: if no selected days exist in next month, keep searching future months
+        // This handles edge cases like selecting only day 31 (skips Feb, Apr, Jun, Sep, Nov)
+        var searchDate = nextMonthDate
+        for _ in 0..<12 {
+            guard let nextSearch = calendar.date(byAdding: .month, value: interval, to: searchDate) else {
+                return date
+            }
+            searchDate = nextSearch
+            let daysInSearchMonth = calendar.range(of: .day, in: .month, for: searchDate)?.count ?? 31
+
+            for day in sortedDays where day <= daysInSearchMonth {
+                var components = calendar.dateComponents([.year, .month], from: searchDate)
+                components.day = day
                 if let result = calendar.date(from: components) {
                     return result
                 }
             }
         }
 
-        // Go to the first selected day of the next interval month
-        guard let nextMonthDate = calendar.date(byAdding: .month, value: interval, to: date) else {
-            return date
-        }
-
-        let firstDay = sortedDays[0]
-        let daysInNextMonth = calendar.range(of: .day, in: .month, for: nextMonthDate)?.count ?? 31
-        let targetDay = min(firstDay, daysInNextMonth)
-
-        var components = calendar.dateComponents([.year, .month], from: nextMonthDate)
-        components.day = targetDay
-        return calendar.date(from: components) ?? nextMonthDate
+        return date
     }
 
     private func nextMonthlyOnTheOccurrence(after date: Date, calendar: Calendar) -> Date {

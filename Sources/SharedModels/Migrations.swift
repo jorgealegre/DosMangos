@@ -342,7 +342,7 @@ extension DatabaseMigrator {
 
             // 3. Drop old table and rename new
             try #sql("""
-            DROP TABLE "transaction_locations" 
+            DROP TABLE "transaction_locations"
             """).execute(db)
             try #sql("""
             ALTER TABLE "transaction_locations_new" RENAME TO "transaction_locations"
