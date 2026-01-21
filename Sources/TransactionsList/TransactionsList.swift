@@ -20,6 +20,38 @@ struct TransactionsList: Reducer {
 
         var date: Date
 
+        // Due recurring transactions (reactive via @FetchAll)
+        @FetchAll(DueRecurringRow.none)
+        var dueRows: [DueRecurringRow]
+        var dueRowsQuery: some Statement<DueRecurringRow> & Sendable {
+            @Dependency(\.date.now) var now
+            let today = now.localDateComponents()
+
+            return DueRecurringRow
+                .where {
+                    let rt = $0.recurringTransaction
+                    let isActive = rt.status.eq(RecurringTransactionStatus.active)
+
+                    // Compare local date: nextDue <= today
+                    // (year < todayYear) OR
+                    // (year == todayYear AND month < todayMonth) OR
+                    // (year == todayYear AND month == todayMonth AND day <= todayDay)
+                    let yearBefore = rt.nextDueLocalYear.lt(today.year)
+                    let sameYearMonthBefore = rt.nextDueLocalYear.eq(today.year) && rt.nextDueLocalMonth.lt(today.month)
+                    let sameYearMonthDayOnOrBefore = rt.nextDueLocalYear.eq(today.year)
+                        && rt.nextDueLocalMonth.eq(today.month)
+                        && rt.nextDueLocalDay.lte(today.day)
+
+                    let isDueOnOrBeforeToday = yearBefore || sameYearMonthBefore || sameYearMonthDayOnOrBefore
+
+                    return isActive && isDueOnOrBeforeToday
+                }
+                .order(by: \.recurringTransaction.nextDueLocalYear)
+                .order(by: \.recurringTransaction.nextDueLocalMonth)
+                .order(by: \.recurringTransaction.nextDueLocalDay)
+                .select { $0 }
+        }
+
         @FetchAll(TransactionsListRow.none) // this query is dynamic
         var rows: [TransactionsListRow]
         var rowsQuery: some Statement<TransactionsListRow> & Sendable {
@@ -62,10 +94,12 @@ struct TransactionsList: Reducer {
         init(date: Date) {
             self.date = date
             self._rows = FetchAll(rowsQuery, animation: .default)
+            self._dueRows = FetchAll(dueRowsQuery, animation: .default)
         }
     }
 
     enum Action: BindableAction, ViewAction {
+        @CasePathable
         enum View {
             case nextMonthButtonTapped
             case onAppear
@@ -73,6 +107,8 @@ struct TransactionsList: Reducer {
             case deleteTransactions([UUID])
             case transactionTapped(Transaction)
             case dismissTransactionDetailButtonTapped
+            case postDueRow(DueRecurringRow)
+            case skipDueRow(DueRecurringRow)
         }
 
         case binding(BindingAction<State>)
@@ -120,13 +156,64 @@ struct TransactionsList: Reducer {
 
                 case let .transactionTapped(transaction):
                     state.destination = .transactionForm(TransactionFormReducer.State(
-                        transaction: Transaction.Draft(transaction)
+                        transaction: Transaction.Draft(transaction),
+                        formMode: .editTransaction
                     ))
                     return .none
 
                 case .dismissTransactionDetailButtonTapped:
                     state.destination = nil
                     return .none
+
+                case let .postDueRow(dueRow):
+                    let rt = dueRow.recurringTransaction
+                    var draft = Transaction.Draft()
+                    draft.description = rt.description
+                    draft.valueMinorUnits = rt.valueMinorUnits
+                    draft.currencyCode = rt.currencyCode
+                    draft.type = rt.type
+                    // Set the date to the due date (user can change)
+                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: rt.nextDueDate)
+                    draft.localYear = dateComponents.year!
+                    draft.localMonth = dateComponents.month!
+                    draft.localDay = dateComponents.day!
+
+                    // Look up category and tags from the category/tag titles
+                    let category: Category? = dueRow.category.flatMap { title in
+                        // Extract just the title (after " › " if subcategory)
+                        let categoryTitle = title.contains(" › ") ? String(title.split(separator: " › ").last ?? "") : title
+                        return Category(title: categoryTitle, parentCategoryID: nil)
+                    }
+                    let tags: [Tag] = dueRow.tags.map { Tag(title: $0) }
+
+                    state.destination = .transactionForm(TransactionFormReducer.State(
+                        transaction: draft,
+                        formMode: .postFromRecurring(rt),
+                        category: category,
+                        tags: tags
+                    ))
+                    return .none
+
+                case let .skipDueRow(dueRow):
+                    let recurringTransaction = dueRow.recurringTransaction
+                    return .run { _ in
+                        await withErrorReporting {
+                            try await database.write { db in
+                                let rule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
+                                let nextDueDate = rule.nextOccurrence(after: recurringTransaction.nextDueDate)
+                                let nextDueLocal = nextDueDate.localDateComponents()
+
+                                try RecurringTransaction
+                                    .where { $0.id.eq(recurringTransaction.id) }
+                                    .update {
+                                        $0.nextDueLocalYear = nextDueLocal.year
+                                        $0.nextDueLocalMonth = nextDueLocal.month
+                                        $0.nextDueLocalDay = nextDueLocal.day
+                                    }
+                                    .execute(db)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -151,6 +238,39 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationStack {
             List {
+                // Due section for recurring transactions
+                if !store.dueRows.isEmpty {
+                    Section {
+                        ForEach(store.dueRows) { dueRow in
+                            DueRecurringRowView(
+                                dueRow: dueRow,
+                                onPost: { send(.postDueRow(dueRow)) },
+                                onSkip: { send(.skipDueRow(dueRow)) }
+                            )
+                        }
+                    } header: {
+                        HStack {
+                            Label {
+                                Text("Due")
+                                    .font(.caption.bold())
+                                    .textCase(nil)
+                            } icon: {
+                                Image(systemName: "clock.badge.exclamationmark")
+                            }
+                            .foregroundStyle(.orange)
+
+                            Spacer()
+
+                            if store.dueRows.count > 1 {
+                                Text("\(store.dueRows.count) items")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                // Regular transactions by day
                 ForEach(store.days, id: \.self) { day in
                     let rows = store.rowsByDay[day] ?? []
                     Section {
@@ -218,7 +338,7 @@ struct TransactionsListView: View {
             ) { transactionFormStore in
                 NavigationStack {
                     TransactionFormView(store: transactionFormStore)
-                        .navigationTitle("Edit transaction")
+                        .navigationTitle(transactionFormStore.navigationTitle)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
@@ -230,6 +350,7 @@ struct TransactionsListView: View {
                             }
                         }
                 }
+                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -248,6 +369,91 @@ struct TransactionsListView: View {
                             .font(.footnote)
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Due Recurring Row View
+
+private struct DueRecurringRowView: View {
+    let dueRow: DueRecurringRow
+    let onPost: () -> Void
+    let onSkip: () -> Void
+
+    private var rt: RecurringTransaction { dueRow.recurringTransaction }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(rt.description.isEmpty ? "Untitled" : rt.description)
+                        .font(.headline)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "repeat")
+                            .font(.caption2)
+                        Text(dueDateText)
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(formattedAmount)
+                    .font(.headline)
+                    .foregroundStyle(rt.type == .income ? .green : .primary)
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    onPost()
+                } label: {
+                    Label("Post", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+
+                Button {
+                    onSkip()
+                } label: {
+                    Label("Skip", systemImage: "forward.fill")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var formattedAmount: String {
+        let money = Money(
+            value: Int64(rt.valueMinorUnits),
+            currencyCode: rt.currencyCode
+        )
+        let prefix = rt.type == .expense ? "-" : "+"
+        return "\(prefix)\(money.amount.description) \(money.currencyCode)"
+    }
+
+    private var dueDateText: String {
+        @Dependency(\.date.now) var now
+        @Dependency(\.calendar) var calendar
+
+        let dueDate = rt.nextDueDate
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+
+        if calendar.isDate(dueDate, inSameDayAs: now) {
+            return String(localized: "Due today")
+        } else if calendar.isDate(dueDate, inSameDayAs: yesterday) {
+            return String(localized: "Due yesterday")
+        } else {
+            let days = calendar.dateComponents([.day], from: dueDate, to: now).day ?? 0
+            if days > 0 {
+                return String(localized: "\(days) days overdue")
+            } else {
+                return dueDate.formatted(date: .abbreviated, time: .omitted)
             }
         }
     }

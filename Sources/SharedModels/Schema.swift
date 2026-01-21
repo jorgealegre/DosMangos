@@ -2,6 +2,12 @@ import Dependencies
 import OSLog
 import SQLiteData
 
+@DatabaseFunction("uuid")
+func uuid() -> UUID {
+    @Dependency(\.uuid) var uuid
+    return uuid()
+}
+
 extension DependencyValues {
     mutating func bootstrapDatabase() throws {
         defaultDatabase = try appDatabase()
@@ -23,6 +29,7 @@ func appDatabase() throws -> any DatabaseWriter {
         }
 #endif
 
+        db.add(function: $uuid)
         try db.createViews()
     }
     let database = try SQLiteData.defaultDatabase(configuration: configuration)
@@ -36,190 +43,8 @@ func appDatabase() throws -> any DatabaseWriter {
 #if DEBUG
     migrator.eraseDatabaseOnSchemaChange = true
 #endif
-    migrator.registerMigration("Create initial tables") { db in
-//        let defaultListColor = Color.HexRepresentation(queryOutput: RemindersList.defaultColor).hexValue
-        try #sql(
-        """
-        CREATE TABLE "transactions" (
-          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
-          "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
-          "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
-          "localYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "localMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
-          "locationID" TEXT REFERENCES "transaction_locations"("id") ON DELETE SET NULL
-        ) STRICT
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE TABLE "transaction_locations" (
-          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "latitude" REAL NOT NULL,
-          "longitude" REAL NOT NULL,
-          "city" TEXT,
-          "countryCode" TEXT
-        ) STRICT
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE TABLE "categories" (
-          "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL,
-          "parentCategoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE
-        ) STRICT
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE TABLE "transactionsCategories" (
-          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
-          "categoryID" TEXT NOT NULL REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE("transactionID", "categoryID") ON CONFLICT IGNORE
-        ) STRICT
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE TABLE "tags" (
-          "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL
-        ) STRICT
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE TABLE "transactionsTags" (
-          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
-          "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE("transactionID", "tagID") ON CONFLICT IGNORE
-        ) STRICT
-        """
-        )
-        .execute(db)
-    }
 
-    migrator.registerMigration("Create foreign key indexes") { db in
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactions_localYMD_createdAtUTC"
-        ON "transactions"("localYear", "localMonth", "localDay", "createdAtUTC")
-        """
-        )
-        .execute(db)
-
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_transactionID"
-        ON "transactionsCategories"("transactionID")
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_categoryID"
-        ON "transactionsCategories"("categoryID")
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactionsTags_transactionID"
-        ON "transactionsTags"("transactionID")
-        """
-        )
-        .execute(db)
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactionsTags_tagID"
-        ON "transactionsTags"("tagID")
-        """
-        )
-        .execute(db)
-
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_categories_parentCategoryID"
-        ON "categories"("parentCategoryID")
-        """
-        )
-        .execute(db)
-
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_transactions_locationID"
-        ON "transactions"("locationID")
-        """
-        )
-        .execute(db)
-    }
-
-    migrator.registerMigration("Add currency conversion support") { db in
-        // Add conversion columns as NULLABLE
-        // NULL = conversion not yet available (offline, rate not found, etc.)
-        try #sql(
-        """
-        ALTER TABLE "transactions"
-        ADD COLUMN "convertedValueMinorUnits" INTEGER
-        """
-        )
-        .execute(db)
-
-        try #sql(
-        """
-        ALTER TABLE "transactions"
-        ADD COLUMN "convertedCurrencyCode" TEXT
-        """
-        )
-        .execute(db)
-
-        // Create exchangeRates table for caching
-        try #sql(
-        """
-        CREATE TABLE "exchangeRates" (
-          "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-          "fromCurrency" TEXT NOT NULL,
-          "toCurrency" TEXT NOT NULL,
-          "rate" REAL NOT NULL,
-          "date" TEXT NOT NULL,
-          "fetchedAt" TEXT NOT NULL DEFAULT (datetime('now')),
-          UNIQUE("fromCurrency", "toCurrency", "date") ON CONFLICT REPLACE
-        ) STRICT
-        """
-        )
-        .execute(db)
-
-        // Index for fast rate lookups
-        try #sql(
-        """
-        CREATE INDEX IF NOT EXISTS "idx_exchangeRates_lookup"
-        ON "exchangeRates"("fromCurrency", "toCurrency", "date")
-        """
-        )
-        .execute(db)
-
-        // Backfill existing USD transactions (same currency, no conversion needed)
-        try #sql(
-        """
-        UPDATE "transactions"
-        SET "convertedValueMinorUnits" = "valueMinorUnits",
-            "convertedCurrencyCode" = "currencyCode"
-        WHERE "currencyCode" = 'USD'
-        """
-        )
-        .execute(db)
-
-        // Non-USD transactions remain NULL (we don't know historical rates)
-    }
+    migrator.registerAllMigrations()
 
     try migrator.migrate(database)
 
@@ -257,7 +82,7 @@ extension Database {
             as: Transaction
                 .group(by: \.id)
                 .leftJoin(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
-                .leftJoin(TransactionLocation.all) { $0.locationID.eq($2.id) }
+                .leftJoin(TransactionLocation.all) { $0.id.eq($2.transactionID) }
                 .withTags
                 .select {
                     TransactionsListRow.Columns(
@@ -267,7 +92,41 @@ extension Database {
                         location: $2
                     )
                 }
+        )
+        .execute(self)
 
+        // View for recurring transaction categories with display name
+        try #sql("""
+        CREATE TEMPORARY VIEW \(raw: RecurringTransactionCategoriesWithDisplayName.tableName) AS
+        SELECT
+            \(RecurringTransactionCategory.columns),
+            CASE
+                WHEN "category".\(raw: Category.columns.title.name) IS NULL THEN ''
+                WHEN "parentCategory".\(raw: Category.columns.title.name) IS NOT NULL
+                THEN "parentCategory".\(raw: Category.columns.title.name) || ' › ' || "category".\(raw: Category.columns.title.name)
+                ELSE "category".\(raw: Category.columns.title.name)
+            END AS \(raw: RecurringTransactionCategoriesWithDisplayName.columns.displayName.name)
+        FROM \(raw: RecurringTransactionCategory.tableName)
+        LEFT JOIN \(raw: Category.tableName) AS "category"
+        ON \(RecurringTransactionCategory.columns.categoryID) = "category".\(raw: Category.columns.title.name)
+        LEFT JOIN \(raw: Category.tableName) AS "parentCategory"
+        ON "category".\(raw: Category.columns.parentCategoryID.name) = "parentCategory".\(raw: Category.columns.title.name)
+        """)
+        .execute(self)
+
+        // View for due recurring rows (recurring transactions with category and tags)
+        try DueRecurringRow.createTemporaryView(
+            as: RecurringTransaction
+                .group(by: \.id)
+                .leftJoin(RecurringTransactionCategoriesWithDisplayName.all) { $0.id.eq($1.recurringTransactionID) }
+                .withTags
+                .select {
+                    DueRecurringRow.Columns(
+                        recurringTransaction: $0,
+                        category: $1.displayName,
+                        tags: $3.jsonTitles
+                    )
+                }
         )
         .execute(self)
     }
@@ -327,7 +186,7 @@ func seedSampleData() throws {
         return base
     }
 
-    // Create diverse locations
+    // Location data (indexed, will be created after transactions)
     let locations: [(latitude: Double, longitude: Double, city: String, countryCode: String)] = [
         (40.7128, -74.0060, "New York", "US"),
         (-34.6037, -58.3816, "Buenos Aires", "AR"),
@@ -337,10 +196,6 @@ func seedSampleData() throws {
         (48.8566, 2.3522, "Paris", "FR"),
         (19.0760, 72.8777, "Mumbai", "IN"),
     ]
-    var locationIDs: [UUID] = []
-    for _ in locations {
-        locationIDs.append(uuid())
-    }
 
     // Current month (~7 transactions, all within last 5 days to avoid future dates)
     let currentMonthSeed: [(daysAgo: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
@@ -366,7 +221,7 @@ func seedSampleData() throws {
         localYear: Int,
         localMonth: Int,
         localDay: Int,
-        locationID: UUID,
+        locationIndex: Int,
         categoryID: String,
         tagIndices: [Int]
     )] = []
@@ -375,7 +230,6 @@ func seedSampleData() throws {
         let id = uuid()
         let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo)
         let local = date.localDateComponents()
-        let locationID = locationIDs[index % locationIDs.count]
 
         // Calculate converted values
         let convertedValueMinorUnits: Int?
@@ -404,7 +258,7 @@ func seedSampleData() throws {
             localYear: local.year,
             localMonth: local.month,
             localDay: local.day,
-            locationID: locationID,
+            locationIndex: index % locations.count,
             categoryID: categoryIDs[seed.categoryIndex],
             tagIndices: seed.tagIndices
         ))
@@ -431,7 +285,7 @@ func seedSampleData() throws {
         localYear: Int,
         localMonth: Int,
         localDay: Int,
-        locationID: UUID,
+        locationIndex: Int,
         categoryID: String,
         tagIndices: [Int]
     )] = []
@@ -440,7 +294,6 @@ func seedSampleData() throws {
         let id = uuid()
         let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset)
         let local = date.localDateComponents()
-        let locationID = locationIDs[(index + 3) % locationIDs.count]
 
         // Calculate converted values
         let convertedValueMinorUnits: Int?
@@ -468,7 +321,7 @@ func seedSampleData() throws {
             localYear: local.year,
             localMonth: local.month,
             localDay: local.day,
-            locationID: locationID,
+            locationIndex: (index + 3) % locations.count,
             categoryID: categoryIDs[seed.categoryIndex],
             tagIndices: seed.tagIndices
         ))
@@ -497,16 +350,6 @@ func seedSampleData() throws {
                 Category(title: categoryID, parentCategoryID: nil)
             }
 
-            for (index, location) in locations.enumerated() {
-                TransactionLocation(
-                    id: locationIDs[index],
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                    city: location.city,
-                    countryCode: location.countryCode
-                )
-            }
-
             // Insert current month transactions
             for t in currentMonthTransactions {
                 Transaction(
@@ -520,8 +363,17 @@ func seedSampleData() throws {
                     createdAtUTC: t.createdAtUTC,
                     localYear: t.localYear,
                     localMonth: t.localMonth,
-                    localDay: t.localDay,
-                    locationID: t.locationID
+                    localDay: t.localDay
+                )
+
+                // Create location for this transaction (shared PK pattern)
+                let loc = locations[t.locationIndex]
+                TransactionLocation(
+                    transactionID: t.id,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    city: loc.city,
+                    countryCode: loc.countryCode
                 )
 
                 TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)
@@ -543,8 +395,17 @@ func seedSampleData() throws {
                     createdAtUTC: t.createdAtUTC,
                     localYear: t.localYear,
                     localMonth: t.localMonth,
-                    localDay: t.localDay,
-                    locationID: t.locationID
+                    localDay: t.localDay
+                )
+
+                // Create location for this transaction (shared PK pattern)
+                let loc = locations[t.locationIndex]
+                TransactionLocation(
+                    transactionID: t.id,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    city: loc.city,
+                    countryCode: loc.countryCode
                 )
 
                 TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)
@@ -570,6 +431,147 @@ func seedSampleData() throws {
                 rate: 1500.0,  // 1 ARS = 0.000667 USD
                 date: today,
                 fetchedAt: now
+            )
+
+            // MARK: - Recurring Transactions
+
+            let previousMonthComponents = previousMonthStart.localDateComponents()
+            let todayComponents = today.localDateComponents()
+
+            // 1. Monthly rent - due today
+            RecurringTransaction(
+                id: uuid(),
+                description: "Rent",
+                valueMinorUnits: 1500_00,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.monthly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: MonthlyMode.each.rawValue,
+                monthlyDays: "1",
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: todayComponents.year,
+                nextDueLocalMonth: todayComponents.month,
+                nextDueLocalDay: todayComponents.day,
+                postedCount: 1,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 2. Weekly gym - overdue (3 days ago)
+            let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: today)!
+            let threeDaysAgoComponents = threeDaysAgo.localDateComponents()
+            RecurringTransaction(
+                id: uuid(),
+                description: "Gym Membership",
+                valueMinorUnits: 40_00,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.weekly.rawValue,
+                interval: 1,
+                weeklyDays: "2,4,6", // Mon, Wed, Fri
+                monthlyMode: nil,
+                monthlyDays: nil,
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: threeDaysAgoComponents.year,
+                nextDueLocalMonth: threeDaysAgoComponents.month,
+                nextDueLocalDay: threeDaysAgoComponents.day,
+                postedCount: 4,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 3. Yearly subscription - due next week
+            let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+            let nextWeekComponents = nextWeek.localDateComponents()
+            RecurringTransaction(
+                id: uuid(),
+                description: "iCloud Storage",
+                valueMinorUnits: 2_99,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.yearly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: nil,
+                monthlyDays: nil,
+                monthlyOrdinal: nil,
+                monthlyWeekday: nil,
+                yearlyMonths: "1", // January
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: nextWeekComponents.year,
+                nextDueLocalMonth: nextWeekComponents.month,
+                nextDueLocalDay: nextWeekComponents.day,
+                postedCount: 0,
+                status: .active,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
+            )
+
+            // 4. Paused Netflix subscription
+            RecurringTransaction(
+                id: uuid(),
+                description: "Netflix",
+                valueMinorUnits: 15_99,
+                currencyCode: "USD",
+                type: .expense,
+                frequency: RecurrenceFrequency.monthly.rawValue,
+                interval: 1,
+                weeklyDays: nil,
+                monthlyMode: MonthlyMode.onThe.rawValue,
+                monthlyDays: nil,
+                monthlyOrdinal: WeekdayOrdinal.first.rawValue,
+                monthlyWeekday: Weekday.monday.rawValue,
+                yearlyMonths: nil,
+                yearlyDaysOfWeekEnabled: 0,
+                yearlyOrdinal: nil,
+                yearlyWeekday: nil,
+                endMode: RecurrenceEndMode.never.rawValue,
+                endDate: nil,
+                endAfterOccurrences: nil,
+                startLocalYear: previousMonthComponents.year,
+                startLocalMonth: previousMonthComponents.month,
+                startLocalDay: previousMonthComponents.day,
+                nextDueLocalYear: todayComponents.year,
+                nextDueLocalMonth: todayComponents.month,
+                nextDueLocalDay: todayComponents.day,
+                postedCount: 2,
+                status: .paused,
+                createdAtUTC: previousMonthStart,
+                updatedAtUTC: now
             )
         }
     }

@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "F74A3B08-AA22-4EC0-81C4-4B75E81DEE4A",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "",
+        "value" : ""
+      }
+    ],
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:DosMangos.xcodeproj",
+      "identifier" : "CF5CA85D2905BC6100156961",
+      "name" : "DosMangos"
+    },
+    "testExecutionOrdering" : "random"
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:DosMangos.xcodeproj",
+        "identifier" : "CF0689402F19E24B0082DE08",
+        "name" : "DosMangosTests"
+      }
+    }
+  ],
+  "version" : 1
+}

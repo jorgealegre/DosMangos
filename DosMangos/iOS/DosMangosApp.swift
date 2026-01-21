@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import CoreLocationClient
 import Dependencies
+import Sharing
 import SwiftUI
 
 @main
@@ -13,6 +14,14 @@ struct DosMangosApp: App {
         if context == .live {
             try! prepareDependencies {
                 try $0.bootstrapDatabase()
+
+                #if DEBUG || TESTFLIGHT
+                // Apply debug date override if set
+                @Shared(.debugDateOverride) var debugDate
+                if let debugDate {
+                    $0.date = DateGenerator { debugDate }
+                }
+                #endif
             }
 
             // Need to touch the location client so that it starts up in the main thread.
@@ -69,6 +78,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
 }
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    @Dependency(\.context) var context
 //    @Dependency(\.defaultSyncEngine) var syncEngine
     var window: UIWindow?
     weak var store: StoreOf<AppReducer>?
@@ -78,6 +88,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
+        guard context != .test else { return }
         // Get store reference from static property
         self.store = AppDelegate.shared?.store
     }

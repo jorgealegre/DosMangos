@@ -78,7 +78,7 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
-    var locationID: UUID?
+    var recurringTransactionID: UUID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -231,8 +231,9 @@ extension Transaction {
 // MARK: - TransactionLocation
 
 @Table("transaction_locations")
-struct TransactionLocation: Identifiable, Hashable, Sendable {
-    let id: UUID
+struct TransactionLocation: Hashable, Sendable {
+    @Column(primaryKey: true)
+    let transactionID: UUID
     var latitude: Double
     var longitude: Double
     var city: String?
@@ -243,6 +244,9 @@ struct TransactionLocation: Identifiable, Hashable, Sendable {
         @Dependency(\.locale) var locale
         return locale.localizedString(forRegionCode: countryCode)
     }
+}
+extension TransactionLocation: Identifiable {
+    var id: UUID { transactionID }
 }
 extension TransactionLocation {
     var coordinate: CLLocationCoordinate2D {
@@ -263,6 +267,131 @@ extension TransactionLocation.Draft {
     }
 }
 
+// MARK: - Recurring Transaction
+
+enum RecurringTransactionStatus: Int, QueryBindable, Sendable {
+    case active = 0
+    case paused = 1
+    case completed = 2
+    case deleted = 3
+}
+
+@Table("recurringTransactions")
+struct RecurringTransaction: Identifiable, Hashable, Sendable {
+    let id: UUID
+
+    var description: String
+    var valueMinorUnits: Int
+    var currencyCode: String
+    var type: Transaction.TransactionType
+
+    // MARK: Recurrence Rule (flattened)
+
+    /// 0 = daily, 1 = weekly, 2 = monthly, 3 = yearly
+    var frequency: Int
+    /// Repeat every N units (e.g., every 2 weeks)
+    var interval: Int
+    /// Comma-separated weekday values: "2,4,6" for Mon, Wed, Fri (1=Sun, 2=Mon, ..., 7=Sat)
+    var weeklyDays: String?
+    /// 0 = each (specific days), 1 = onThe (ordinal weekday like "first Monday")
+    var monthlyMode: Int?
+    /// Comma-separated day numbers: "1,15" for 1st and 15th of month
+    var monthlyDays: String?
+    /// 1 = first, 2 = second, 3 = third, 4 = fourth, -1 = last
+    var monthlyOrdinal: Int?
+    /// 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    var monthlyWeekday: Int?
+    /// Comma-separated month numbers: "1,7" for January and July
+    var yearlyMonths: String?
+    /// 0 = false, 1 = true — when true, uses ordinal + weekday (e.g., "first Sunday of January")
+    var yearlyDaysOfWeekEnabled: Int
+    /// 1 = first, 2 = second, 3 = third, 4 = fourth, -1 = last
+    var yearlyOrdinal: Int?
+    /// 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    var yearlyWeekday: Int?
+    /// 0 = never, 1 = onDate, 2 = afterOccurrences
+    var endMode: Int
+    /// End date when endMode = 1 (onDate)
+    var endDate: Date?
+    /// Number of occurrences when endMode = 2 (afterOccurrences)
+    var endAfterOccurrences: Int?
+
+    // MARK: State
+
+    /// When this recurrence begins (local date components)
+    var startLocalYear: Int
+    var startLocalMonth: Int
+    var startLocalDay: Int
+
+    /// The next occurrence to show as a virtual instance (local date components)
+    var nextDueLocalYear: Int
+    var nextDueLocalMonth: Int
+    var nextDueLocalDay: Int
+
+    /// How many transactions have been posted from this template
+    var postedCount: Int
+    /// 0 = active, 1 = paused, 2 = completed, 3 = deleted
+    var status: RecurringTransactionStatus
+
+    // MARK: Metadata
+
+    var createdAtUTC: Date
+    var updatedAtUTC: Date
+}
+extension RecurringTransaction.Draft: Equatable {}
+
+extension RecurringTransaction {
+    var startDate: Date {
+        Date.localDate(year: startLocalYear, month: startLocalMonth, day: startLocalDay)!
+    }
+
+    var nextDueDate: Date {
+        Date.localDate(year: nextDueLocalYear, month: nextDueLocalMonth, day: nextDueLocalDay)!
+    }
+}
+
+extension RecurringTransaction.Draft {
+    var startDate: Date {
+        get {
+            Date.localDate(year: startLocalYear, month: startLocalMonth, day: startLocalDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            startLocalYear = local.year
+            startLocalMonth = local.month
+            startLocalDay = local.day
+        }
+    }
+
+    var nextDueDate: Date {
+        get {
+            Date.localDate(year: nextDueLocalYear, month: nextDueLocalMonth, day: nextDueLocalDay)!
+        }
+        set {
+            let local = newValue.localDateComponents()
+            nextDueLocalYear = local.year
+            nextDueLocalMonth = local.month
+            nextDueLocalDay = local.day
+        }
+    }
+}
+
+@Table("recurringTransactionsCategories")
+struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var categoryID: String
+}
+extension RecurringTransactionCategory.Draft: Equatable {}
+
+@Table("recurringTransactionsTags")
+struct RecurringTransactionTag: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var tagID: String
+}
+extension RecurringTransactionTag.Draft: Equatable {}
+
 // MARK: - TransactionsListRow
 
 @Table("transactionsListRows")
@@ -273,4 +402,37 @@ struct TransactionsListRow: Identifiable, Hashable, Sendable {
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
     let location: TransactionLocation?
+}
+
+// MARK: - Due Recurring Row
+
+@Table("dueRecurringRows")
+struct DueRecurringRow: Identifiable, Hashable, Sendable {
+    var id: UUID { recurringTransaction.id }
+    let recurringTransaction: RecurringTransaction
+    let category: String?
+    @Column(as: [String].JSONRepresentation.self)
+    let tags: [String]
+}
+
+// Extension for building recurring transaction queries with tags
+extension RecurringTransaction {
+    static let withTags = Self
+        .group(by: \.id)
+        .leftJoin(RecurringTransactionTag.all) { $0.id.eq($1.recurringTransactionID) }
+        .leftJoin(Tag.all) { $1.tagID.eq($2.title) }
+}
+
+extension RecurringTransactionTag?.TableColumns {
+    var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
+        (self.tagID ?? "").jsonGroupArray(distinct: true, filter: self.tagID.isNot(nil))
+    }
+}
+
+@Table("recurringTransactionCategoriesWithDisplayName")
+struct RecurringTransactionCategoriesWithDisplayName {
+    let id: UUID
+    var recurringTransactionID: UUID
+    var categoryID: String
+    let displayName: String
 }

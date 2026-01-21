@@ -20,12 +20,19 @@ struct AppReducer: Reducer {
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
 
         var appDelegate = AppDelegateReducer.State()
-        var transactionsList = TransactionsList.State(date: .now)
+        var transactionsList: TransactionsList.State
         var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
+        var recurringTransactionsList = RecurringTransactionsList.State()
+
+        init() {
+            @Dependency(\.date.now) var now
+            self.transactionsList = TransactionsList.State(date: now)
+        }
     }
 
     enum Action: ViewAction {
+        @CasePathable
         enum View {
             case newTransactionButtonTapped
             case discardButtonTapped
@@ -37,6 +44,7 @@ struct AppReducer: Reducer {
         case transactionsList(TransactionsList.Action)
         case transactionsMap(TransactionsMap.Action)
         case settings(SettingsReducer.Action)
+        case recurringTransactionsList(RecurringTransactionsList.Action)
 
         case destination(PresentationAction<Destination.Action>)
         case view(View)
@@ -61,6 +69,10 @@ struct AppReducer: Reducer {
             SettingsReducer()
         }
 
+        Scope(state: \.recurringTransactionsList, action: \.recurringTransactionsList) {
+            RecurringTransactionsList()
+        }
+
         Reduce { state, action in
             switch action {
             case .appDelegate(.didFinishLaunching):
@@ -79,6 +91,9 @@ struct AppReducer: Reducer {
                 return .none
 
             case .settings:
+                return .none
+
+            case .recurringTransactionsList:
                 return .none
 
             case let .view(view):
@@ -146,7 +161,12 @@ struct AppView: View {
                 Label("Transactions", systemImage: "list.bullet.rectangle.portrait")
             }
 
-            Color.red
+            RecurringTransactionsListView(
+                store: store.scope(
+                    state: \.recurringTransactionsList,
+                    action: \.recurringTransactionsList
+                )
+            )
                 .tabItem {
                     Label("Recurring", systemImage: "repeat.circle")
                 }
@@ -247,6 +267,6 @@ struct AppView: View {
                 ._printChanges()
         }
     )
-    .tint(.purple)
+//    .tint(.purple)
     .environment(\.locale, locale)
 }

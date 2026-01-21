@@ -1,3 +1,4 @@
+import Combine
 import CoreLocationClient
 import Dependencies
 import OSLog
@@ -62,12 +63,23 @@ final class LocationSharedKey: SharedReaderKey {
                     )
                 }
 
-                let delegateStream = await locationManager.delegate().values
+                // Create an AsyncStream that subscribes BEFORE we request the location.
+                // This prevents a race condition where the location update could be
+                // delivered before we start iterating.
+                let delegatePublisher = await locationManager.delegate()
+                let (stream, continuation) = AsyncStream<LocationManagerClient.Action>.makeStream()
+                let cancellable = delegatePublisher.sink { action in
+                    continuation.yield(action)
+                }
+                defer {
+                    cancellable.cancel()
+                    continuation.finish()
+                }
 
                 logger.debug("Requesting location update")
                 await locationManager.requestLocation()
 
-                for await action in delegateStream {
+                for await action in stream {
                     switch action {
                     case .didUpdateLocations(let locations):
                         guard let location = locations.last else {
