@@ -5,6 +5,7 @@ import Dependencies
 import IssueReporting
 import Sharing
 import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - Debug Date Override
 
@@ -22,6 +23,7 @@ struct DebugMenuView: View {
 
     @Shared(.debugDateOverride) var debugDate: Date?
     @State private var selectedDate: Date = Date()
+    @State private var backupURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -75,8 +77,17 @@ struct DebugMenuView: View {
                         seedDatabase()
                     }
                 }
+
+                Section("Data Backup") {
+                    Button("Backup Database") {
+                        backupDatabase()
+                    }
+                }
             }
             .navigationTitle("Debug Menu")
+            .sheet(item: $backupURL) { url in
+                ShareSheet(activityItems: [url])
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -116,6 +127,52 @@ struct DebugMenuView: View {
         }
         dismiss()
     }
+
+    private func backupDatabase() {
+        withErrorReporting {
+            let fileManager = FileManager.default
+
+            // Get version and build number
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
+            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+
+            // Create timestamped filename
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd_HHmmss"
+            let timestamp = formatter.string(from: Date())
+
+            let filename = "DosMangos_v\(version)_\(build)_\(timestamp).sqlite"
+
+            // Copy to temp directory for sharing
+            let tempDir = fileManager.temporaryDirectory
+            let destinationURL = tempDir.appendingPathComponent(filename)
+
+            // Remove existing file if present
+            try? fileManager.removeItem(at: destinationURL)
+
+            // Use GRDB's backup API for transactionally-consistent snapshot
+            let destination = try DatabaseQueue(path: destinationURL.path)
+            try database.backup(to: destination)
+
+            backupURL = destinationURL
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 extension View {
