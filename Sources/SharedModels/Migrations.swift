@@ -316,5 +316,86 @@ extension DatabaseMigrator {
             )
             .execute(db)
         }
+
+        self.registerMigration("Shared PK for transaction_locations") { db in
+            // Switching from: transactions.locationID -> transaction_locations.id
+            // To: transaction_locations.transactionID -> transactions.id (shared PK pattern)
+
+            // 1. Create new transaction_locations with transactionID as PK
+            try #sql("""
+            CREATE TABLE "transaction_locations_new" (
+              "transactionID" TEXT PRIMARY KEY NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
+              "latitude" REAL NOT NULL,
+              "longitude" REAL NOT NULL,
+              "city" TEXT,
+              "countryCode" TEXT
+            ) STRICT
+            """).execute(db)
+
+            // 2. Copy data, mapping old location IDs to their transaction IDs
+            try #sql("""
+            INSERT INTO "transaction_locations_new" ("transactionID", "latitude", "longitude", "city", "countryCode")
+            SELECT t."id", tl."latitude", tl."longitude", tl."city", tl."countryCode"
+            FROM "transaction_locations" tl
+            JOIN "transactions" t ON t."locationID" = tl."id"
+            """).execute(db)
+
+            // 3. Drop old table and rename new
+            try #sql("""
+            DROP TABLE "transaction_locations" 
+            """).execute(db)
+            try #sql("""
+            ALTER TABLE "transaction_locations_new" RENAME TO "transaction_locations"
+            """).execute(db)
+
+            // 4. Recreate transactions table without locationID column
+            try #sql("""
+            CREATE TABLE "transactions_new" (
+              "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+              "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+              "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+              "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+              "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+              "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
+              "localYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+              "localMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+              "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+              "convertedValueMinorUnits" INTEGER,
+              "convertedCurrencyCode" TEXT,
+              "recurringTransactionID" TEXT REFERENCES "recurringTransactions"("id") ON DELETE SET NULL
+            ) STRICT
+            """).execute(db)
+
+            // 5. Copy data (excluding locationID)
+            try #sql("""
+            INSERT INTO "transactions_new"
+            ("id", "description", "valueMinorUnits", "currencyCode", "type", "createdAtUTC",
+             "localYear", "localMonth", "localDay", "convertedValueMinorUnits",
+             "convertedCurrencyCode", "recurringTransactionID")
+            SELECT "id", "description", "valueMinorUnits", "currencyCode", "type", "createdAtUTC",
+                   "localYear", "localMonth", "localDay", "convertedValueMinorUnits",
+                   "convertedCurrencyCode", "recurringTransactionID"
+            FROM "transactions"
+            """).execute(db)
+
+            // 6. Drop old table and rename new
+            try #sql("""
+            DROP TABLE "transactions"
+            """).execute(db)
+            try #sql("""
+            ALTER TABLE "transactions_new" RENAME TO "transactions"
+            """).execute(db)
+
+            // 7. Recreate indexes on transactions (excluding idx_transactions_locationID)
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactions_localYMD_createdAtUTC"
+            ON "transactions"("localYear", "localMonth", "localDay", "createdAtUTC")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactions_recurringTransactionID"
+            ON "transactions"("recurringTransactionID")
+            """).execute(db)
+        }
     }
 }

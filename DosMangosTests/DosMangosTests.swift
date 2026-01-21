@@ -52,13 +52,12 @@ extension BaseTestSuite {
             }
 
             try await store.state.transactionsList.$rows.load()
-            // TODO: the location ID is wrong, will get fixed soon
             assertInlineSnapshot(of: store.state.transactionsList.rows, as: .customDump) {
                 """
                 [
                   [0]: TransactionsListRow(
                     transaction: Transaction(
-                      id: UUID(00000000-0000-0000-0000-000000000001),
+                      id: UUID(00000000-0000-0000-0000-000000000000),
                       description: "Rent",
                       valueMinorUnits: 12300,
                       currencyCode: "USD",
@@ -69,13 +68,12 @@ extension BaseTestSuite {
                       localYear: 2009,
                       localMonth: 2,
                       localDay: 13,
-                      locationID: UUID(00000000-0000-0000-0000-000000000000),
                       recurringTransactionID: nil
                     ),
                     category: nil,
                     tags: [],
                     location: TransactionLocation(
-                      id: UUID(00000000-0000-0000-0000-000000000001),
+                      transactionID: UUID(00000000-0000-0000-0000-000000000000),
                       latitude: -34.6037,
                       longitude: -58.3816,
                       city: "Córdoba",

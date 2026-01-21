@@ -82,7 +82,7 @@ extension Database {
             as: Transaction
                 .group(by: \.id)
                 .leftJoin(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
-                .leftJoin(TransactionLocation.all) { $0.locationID.eq($2.id) }
+                .leftJoin(TransactionLocation.all) { $0.id.eq($2.transactionID) }
                 .withTags
                 .select {
                     TransactionsListRow.Columns(
@@ -186,7 +186,7 @@ func seedSampleData() throws {
         return base
     }
 
-    // Create diverse locations
+    // Location data (indexed, will be created after transactions)
     let locations: [(latitude: Double, longitude: Double, city: String, countryCode: String)] = [
         (40.7128, -74.0060, "New York", "US"),
         (-34.6037, -58.3816, "Buenos Aires", "AR"),
@@ -196,10 +196,6 @@ func seedSampleData() throws {
         (48.8566, 2.3522, "Paris", "FR"),
         (19.0760, 72.8777, "Mumbai", "IN"),
     ]
-    var locationIDs: [UUID] = []
-    for _ in locations {
-        locationIDs.append(uuid())
-    }
 
     // Current month (~7 transactions, all within last 5 days to avoid future dates)
     let currentMonthSeed: [(daysAgo: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
@@ -225,7 +221,7 @@ func seedSampleData() throws {
         localYear: Int,
         localMonth: Int,
         localDay: Int,
-        locationID: UUID,
+        locationIndex: Int,
         categoryID: String,
         tagIndices: [Int]
     )] = []
@@ -234,7 +230,6 @@ func seedSampleData() throws {
         let id = uuid()
         let date = dateInSameMonthAsNow(daysAgo: seed.daysAgo)
         let local = date.localDateComponents()
-        let locationID = locationIDs[index % locationIDs.count]
 
         // Calculate converted values
         let convertedValueMinorUnits: Int?
@@ -263,7 +258,7 @@ func seedSampleData() throws {
             localYear: local.year,
             localMonth: local.month,
             localDay: local.day,
-            locationID: locationID,
+            locationIndex: index % locations.count,
             categoryID: categoryIDs[seed.categoryIndex],
             tagIndices: seed.tagIndices
         ))
@@ -290,7 +285,7 @@ func seedSampleData() throws {
         localYear: Int,
         localMonth: Int,
         localDay: Int,
-        locationID: UUID,
+        locationIndex: Int,
         categoryID: String,
         tagIndices: [Int]
     )] = []
@@ -299,7 +294,6 @@ func seedSampleData() throws {
         let id = uuid()
         let date = dateInPreviousMonth(dayOffsetFromStart: seed.dayOffset)
         let local = date.localDateComponents()
-        let locationID = locationIDs[(index + 3) % locationIDs.count]
 
         // Calculate converted values
         let convertedValueMinorUnits: Int?
@@ -327,7 +321,7 @@ func seedSampleData() throws {
             localYear: local.year,
             localMonth: local.month,
             localDay: local.day,
-            locationID: locationID,
+            locationIndex: (index + 3) % locations.count,
             categoryID: categoryIDs[seed.categoryIndex],
             tagIndices: seed.tagIndices
         ))
@@ -356,16 +350,6 @@ func seedSampleData() throws {
                 Category(title: categoryID, parentCategoryID: nil)
             }
 
-            for (index, location) in locations.enumerated() {
-                TransactionLocation(
-                    id: locationIDs[index],
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                    city: location.city,
-                    countryCode: location.countryCode
-                )
-            }
-
             // Insert current month transactions
             for t in currentMonthTransactions {
                 Transaction(
@@ -379,8 +363,17 @@ func seedSampleData() throws {
                     createdAtUTC: t.createdAtUTC,
                     localYear: t.localYear,
                     localMonth: t.localMonth,
-                    localDay: t.localDay,
-                    locationID: t.locationID
+                    localDay: t.localDay
+                )
+
+                // Create location for this transaction (shared PK pattern)
+                let loc = locations[t.locationIndex]
+                TransactionLocation(
+                    transactionID: t.id,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    city: loc.city,
+                    countryCode: loc.countryCode
                 )
 
                 TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)
@@ -402,8 +395,17 @@ func seedSampleData() throws {
                     createdAtUTC: t.createdAtUTC,
                     localYear: t.localYear,
                     localMonth: t.localMonth,
-                    localDay: t.localDay,
-                    locationID: t.locationID
+                    localDay: t.localDay
+                )
+
+                // Create location for this transaction (shared PK pattern)
+                let loc = locations[t.locationIndex]
+                TransactionLocation(
+                    transactionID: t.id,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    city: loc.city,
+                    countryCode: loc.countryCode
                 )
 
                 TransactionCategory.Draft(transactionID: t.id, categoryID: t.categoryID)

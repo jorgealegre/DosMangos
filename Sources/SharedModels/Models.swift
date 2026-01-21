@@ -78,7 +78,6 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
-    var locationID: UUID?
     var recurringTransactionID: UUID?
 }
 extension Transaction.Draft: Equatable {}
@@ -232,8 +231,9 @@ extension Transaction {
 // MARK: - TransactionLocation
 
 @Table("transaction_locations")
-struct TransactionLocation: Identifiable, Hashable, Sendable {
-    let id: UUID
+struct TransactionLocation: Hashable, Sendable {
+    @Column(primaryKey: true)
+    let transactionID: UUID
     var latitude: Double
     var longitude: Double
     var city: String?
@@ -244,6 +244,9 @@ struct TransactionLocation: Identifiable, Hashable, Sendable {
         @Dependency(\.locale) var locale
         return locale.localizedString(forRegionCode: countryCode)
     }
+}
+extension TransactionLocation: Identifiable {
+    var id: UUID { transactionID }
 }
 extension TransactionLocation {
     var coordinate: CLLocationCoordinate2D {

@@ -9,6 +9,12 @@
     }
   ],
   "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "",
+        "value" : ""
+      }
+    ],
     "performanceAntipatternCheckerEnabled" : true,
     "targetForVariableExpansion" : {
       "containerPath" : "container:DosMangos.xcodeproj",

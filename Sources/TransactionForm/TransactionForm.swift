@@ -106,7 +106,8 @@ struct TransactionFormReducer: Reducer {
             case .newTransaction:
                 self.recurrencePreset = nil
                 self.recurrenceRule = nil
-                self.isLocationEnabled = transaction.id == nil || transaction.locationID != nil
+                // For new transactions, enable location; for edits, it'll be set after loading
+                self.isLocationEnabled = transaction.id == nil
             case .newRecurring:
                 self.recurrencePreset = .monthly
                 self.recurrenceRule = RecurrenceRule.from(preset: .monthly)
@@ -114,7 +115,8 @@ struct TransactionFormReducer: Reducer {
             case .editTransaction:
                 self.recurrencePreset = nil
                 self.recurrenceRule = nil
-                self.isLocationEnabled = transaction.locationID != nil
+                // Will be updated in .task after loading existing location
+                self.isLocationEnabled = false
             case let .editRecurring(recurringTransaction):
                 let recurrenceRule = RecurrenceRule.from(recurringTransaction: recurringTransaction)
                 self.recurrenceRule = recurrenceRule
@@ -282,7 +284,7 @@ struct TransactionFormReducer: Reducer {
                     // Load details for editing a regular transaction
                     guard let transactionID = state.transaction.id else { return .none }
                     state.isLoadingDetails = true
-                    return .run { [locationID = state.transaction.locationID] send in
+                    return .run { send in
                         let result = try await database.read { db -> (Category?, [Tag], TransactionLocation?) in
                             let categoryID = try TransactionCategory
                                 .where { $0.transactionID.eq(transactionID) }
@@ -301,9 +303,8 @@ struct TransactionFormReducer: Reducer {
                                 try Tag.find($0).fetchOne(db)
                             }
 
-                            let location = try locationID.flatMap {
-                                try TransactionLocation.find($0).fetchOne(db)
-                            }
+                            // Load location by transactionID (shared PK pattern)
+                            let location = try TransactionLocation.find(transactionID).fetchOne(db)
 
                             return (category, tags, location)
                         }
@@ -397,6 +398,8 @@ struct TransactionFormReducer: Reducer {
                 state.category = category
                 state.tags = tags
                 state.location = location
+                // TODO: not to sure about this
+                state.isLocationEnabled = location != nil
                 state.isLoadingDetails = false
                 return .none
 
@@ -408,21 +411,6 @@ struct TransactionFormReducer: Reducer {
     // MARK: - Save Helpers
 
     private func saveRegularTransaction(_ state: inout State) -> Effect<Action> {
-        // If we already have a persisted location, prefer it over a newly captured one.
-        let newTransactionLocation: TransactionLocation.Draft?
-        if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
-            newTransactionLocation = pickedLocation
-        } else if state.isLocationEnabled, state.location == nil, let location = state.currentLocation {
-            newTransactionLocation = TransactionLocation.Draft(
-                latitude: location.location.coordinate.latitude,
-                longitude: location.location.coordinate.longitude,
-                city: location.city,
-                countryCode: location.countryCode
-            )
-        } else {
-            newTransactionLocation = nil
-        }
-
         return .run { [state = state] send in
             var updatedTransaction = state.transaction
             let defaultCurrency = "USD" // TODO: Get from app settings
@@ -449,27 +437,46 @@ struct TransactionFormReducer: Reducer {
 
             withErrorReporting {
                 try database.write { db in
-                    if (!state.isLocationEnabled || newTransactionLocation != nil),
-                        let oldID = state.transaction.locationID {
-                        try TransactionLocation.find(oldID).delete().execute(db)
-                    }
-
-                    let locationID: UUID?
-                    if let newTransactionLocation {
-                        locationID = try TransactionLocation.insert { newTransactionLocation }
-                            .returning(\.id)
-                            .fetchOne(db)
-                    } else if state.isLocationEnabled {
-                        locationID = state.transaction.locationID
-                    } else {
-                        locationID = nil
-                    }
-
-                    updatedTransaction.locationID = locationID
-
+                    // First, save the transaction to get its ID
                     let transactionID = try Transaction.upsert { updatedTransaction }
                         .returning(\.id)
                         .fetchOne(db)!
+
+                    // Handle location (shared PK pattern: location.transactionID = transaction.id)
+                    if state.isLocationEnabled {
+                        // Determine what location data to use
+                        let locationData: TransactionLocation?
+                        if let pickedLocation = state.pickedLocation {
+                            locationData = TransactionLocation(
+                                transactionID: transactionID,
+                                latitude: pickedLocation.latitude,
+                                longitude: pickedLocation.longitude,
+                                city: pickedLocation.city,
+                                countryCode: pickedLocation.countryCode
+                            )
+                        } else if state.location != nil {
+                            // Keep existing location (already has correct transactionID)
+                            locationData = nil
+                        } else if let currentLocation = state.currentLocation {
+                            locationData = TransactionLocation(
+                                transactionID: transactionID,
+                                latitude: currentLocation.location.coordinate.latitude,
+                                longitude: currentLocation.location.coordinate.longitude,
+                                city: currentLocation.city,
+                                countryCode: currentLocation.countryCode
+                            )
+                        } else {
+                            locationData = nil
+                        }
+
+                        // Upsert the location if we have new data
+                        if let locationData {
+                            try TransactionLocation.upsert { locationData }.execute(db)
+                        }
+                    } else {
+                        // Location disabled, delete any existing location
+                        try TransactionLocation.find(transactionID).delete().execute(db)
+                    }
 
                     try TransactionCategory
                         .where { $0.transactionID.eq(transactionID) }
@@ -581,23 +588,6 @@ struct TransactionFormReducer: Reducer {
 
                     // If date is today or in the past, auto-post the first instance
                     if dateIsToday {
-                        // Create location if available
-                        let locationID: UUID?
-                        if let location = currentLocation {
-                            locationID = try TransactionLocation.insert {
-                                TransactionLocation.Draft(
-                                    latitude: location.location.coordinate.latitude,
-                                    longitude: location.location.coordinate.longitude,
-                                    city: location.city,
-                                    countryCode: location.countryCode
-                                )
-                            }
-                            .returning(\.id)
-                            .fetchOne(db)
-                        } else {
-                            locationID = nil
-                        }
-
                         // Create the first transaction instance
                         let nowLocal = now.localDateComponents()
                         var txDraft = Transaction.Draft(
@@ -612,12 +602,25 @@ struct TransactionFormReducer: Reducer {
                             localMonth: nowLocal.month,
                             localDay: nowLocal.day
                         )
-                        txDraft.locationID = locationID
                         txDraft.recurringTransactionID = recurringTransactionID
 
                         let transactionID = try Transaction.insert { txDraft }
                             .returning(\.id)
                             .fetchOne(db)!
+
+                        // Create location if available (shared PK pattern)
+                        if let location = currentLocation {
+                            try TransactionLocation.insert {
+                                TransactionLocation(
+                                    transactionID: transactionID,
+                                    latitude: location.location.coordinate.latitude,
+                                    longitude: location.location.coordinate.longitude,
+                                    city: location.city,
+                                    countryCode: location.countryCode
+                                )
+                            }
+                            .execute(db)
+                        }
 
                         // Create category join record for the transaction
                         if let category = state.category {
@@ -729,21 +732,6 @@ struct TransactionFormReducer: Reducer {
     private func postFromRecurringTransaction(_ state: inout State, template: RecurringTransaction) -> Effect<Action> {
         @Dependency(\.date.now) var now
 
-        // Build the location if available
-        let newTransactionLocation: TransactionLocation.Draft?
-        if state.isLocationEnabled, let pickedLocation = state.pickedLocation {
-            newTransactionLocation = pickedLocation
-        } else if state.isLocationEnabled, let location = state.currentLocation {
-            newTransactionLocation = TransactionLocation.Draft(
-                latitude: location.location.coordinate.latitude,
-                longitude: location.location.coordinate.longitude,
-                city: location.city,
-                countryCode: location.countryCode
-            )
-        } else {
-            newTransactionLocation = nil
-        }
-
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: state.transaction.localDate)
 
         var txDraft = Transaction.Draft(
@@ -763,23 +751,38 @@ struct TransactionFormReducer: Reducer {
         return .run { [state = state, txDraft = txDraft, templateID = template.id] send in
             withErrorReporting {
                 try database.write { db in
-                    // Create location if provided
-                    let locationID: UUID?
-                    if let location = newTransactionLocation {
-                        locationID = try TransactionLocation.insert { location }
-                            .returning(\.id)
-                            .fetchOne(db)
-                    } else {
-                        locationID = nil
-                    }
-
-                    // Create the transaction
-                    var finalDraft = txDraft
-                    finalDraft.locationID = locationID
-
-                    let transactionID = try Transaction.insert { finalDraft }
+                    // Create the transaction first
+                    let transactionID = try Transaction.insert { txDraft }
                         .returning(\.id)
                         .fetchOne(db)!
+
+                    // Create location if enabled (shared PK pattern)
+                    if state.isLocationEnabled {
+                        let locationData: TransactionLocation?
+                        if let pickedLocation = state.pickedLocation {
+                            locationData = TransactionLocation(
+                                transactionID: transactionID,
+                                latitude: pickedLocation.latitude,
+                                longitude: pickedLocation.longitude,
+                                city: pickedLocation.city,
+                                countryCode: pickedLocation.countryCode
+                            )
+                        } else if let currentLocation = state.currentLocation {
+                            locationData = TransactionLocation(
+                                transactionID: transactionID,
+                                latitude: currentLocation.location.coordinate.latitude,
+                                longitude: currentLocation.location.coordinate.longitude,
+                                city: currentLocation.city,
+                                countryCode: currentLocation.countryCode
+                            )
+                        } else {
+                            locationData = nil
+                        }
+
+                        if let locationData {
+                            try TransactionLocation.insert { locationData }.execute(db)
+                        }
+                    }
 
                     // Create category join record
                     if let category = state.category {
