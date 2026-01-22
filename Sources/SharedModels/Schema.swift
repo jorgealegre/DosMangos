@@ -134,7 +134,7 @@ extension Database {
 
 // TODO: db functions
 
-nonisolated private let logger = Logger(subsystem: "DosMangos", category: "Database")
+nonisolated private let logger = Logger(subsystem: "dev.alegre.DosMangos", category: "Database")
 
 func seedSampleData() throws {
     @Dependency(\.date.now) var now

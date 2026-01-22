@@ -1,9 +1,9 @@
 #if DEBUG || TESTFLIGHT
-import SwiftUI
-import SQLiteData
 import Dependencies
 import IssueReporting
 import Sharing
+import SQLiteData
+import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
@@ -86,6 +86,12 @@ struct DebugMenuView: View {
                     }
                     Button("Import Database") {
                         showImportPicker = true
+                    }
+                }
+
+                Section {
+                    NavigationLink("Show Logs") {
+                        LogsView()
                     }
                 }
             }

@@ -333,4 +333,4 @@ extension DependencyValues {
     }
 }
 
-nonisolated private let logger = Logger(subsystem: "DosMangos", category: "ExchangeRateClient")
+nonisolated private let logger = Logger(subsystem: "dev.alegre.DosMangos", category: "ExchangeRateClient")

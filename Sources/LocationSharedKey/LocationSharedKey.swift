@@ -4,7 +4,7 @@ import Dependencies
 import OSLog
 import Sharing
 
-private let logger = Logger(subsystem: "DosMangos", category: "LocationSharedKey")
+private let logger = Logger(subsystem: "dev.alegre.DosMangos", category: "LocationSharedKey")
 
 struct GeocodedLocation: Equatable, Sendable {
     let location: Location
