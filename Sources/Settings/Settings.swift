@@ -15,6 +15,7 @@ struct SettingsReducer: Reducer {
     @Reducer
     enum Path {
         case categories(CategoriesReducer)
+        case defaultCurrencyPicker(DefaultCurrencyPickerReducer)
     }
 
     enum Action: ViewAction {
@@ -40,7 +41,7 @@ struct SettingsReducer: Reducer {
                     return .none
 
                 case .defaultCurrencyTapped:
-                    // TODO: Navigate to default currency picker
+                    state.path.append(.defaultCurrencyPicker(DefaultCurrencyPickerReducer.State()))
                     return .none
 
                 case .tagsTapped:
@@ -100,6 +101,8 @@ struct SettingsView: View {
             switch store.case {
             case let .categories(store):
                 CategoriesView(store: store)
+            case let .defaultCurrencyPicker(store):
+                DefaultCurrencyPickerView(store: store)
             }
         }
     }
