@@ -24,6 +24,8 @@ struct DebugMenuView: View {
     @Shared(.debugDateOverride) var debugDate: Date?
     @State private var selectedDate: Date = Date()
     @State private var backupURL: URL?
+    @State private var showSeedConfirmation = false
+    @State private var showImportPicker = false
 
     var body: some View {
         NavigationStack {
@@ -74,7 +76,7 @@ struct DebugMenuView: View {
 
                 Section {
                     Button("Seed Database") {
-                        seedDatabase()
+                        showSeedConfirmation = true
                     }
                 }
 
@@ -82,11 +84,29 @@ struct DebugMenuView: View {
                     Button("Backup Database") {
                         backupDatabase()
                     }
+                    Button("Import Database") {
+                        showImportPicker = true
+                    }
                 }
             }
             .navigationTitle("Debug Menu")
             .sheet(item: $backupURL) { url in
                 ShareSheet(activityItems: [url])
+            }
+            .alert("Seed Database?", isPresented: $showSeedConfirmation) {
+                Button("Seed", role: .destructive) {
+                    seedDatabase()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will add sample data to the database.")
+            }
+            .fileImporter(
+                isPresented: $showImportPicker,
+                allowedContentTypes: [.database, .data],
+                allowsMultipleSelection: false
+            ) { result in
+                importDatabase(result: result)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -155,6 +175,27 @@ struct DebugMenuView: View {
             try database.backup(to: destination)
 
             backupURL = destinationURL
+        }
+    }
+
+    private func importDatabase(result: Result<[URL], any Error>) {
+        withErrorReporting {
+            let urls = try result.get()
+            guard let sourceURL = urls.first else { return }
+
+            // Start security-scoped access
+            guard sourceURL.startAccessingSecurityScopedResource() else {
+                throw NSError(domain: "DebugMenu", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "Could not access the selected file"
+                ])
+            }
+            defer { sourceURL.stopAccessingSecurityScopedResource() }
+
+            // Import from the selected file into the app's database
+            let source = try DatabaseQueue(path: sourceURL.path)
+            try source.backup(to: database)
+
+            dismiss()
         }
     }
 }
