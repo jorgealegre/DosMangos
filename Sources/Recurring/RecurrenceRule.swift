@@ -385,6 +385,19 @@ extension RecurrenceRule {
 
     private func nextMonthlyOnTheOccurrence(after date: Date, calendar: Calendar) -> Date {
         // "First Monday", "Last Friday", etc.
+        let currentDay = calendar.component(.day, from: date)
+
+        // Check if the nth weekday of the current month is still in the future
+        if let currentMonthResult = nthWeekdayOfMonth(
+            ordinal: monthlyOrdinal,
+            weekday: monthlyWeekday,
+            inMonthOf: date,
+            calendar: calendar
+        ), calendar.component(.day, from: currentMonthResult) > currentDay {
+            return currentMonthResult
+        }
+
+        // Go to the next interval month
         guard let targetDate = calendar.date(byAdding: .month, value: interval, to: date) else {
             return date
         }
@@ -407,22 +420,21 @@ extension RecurrenceRule {
 
         let currentMonth = calendar.component(.month, from: date)
         let currentDay = calendar.component(.day, from: date)
+        let currentYear = calendar.component(.year, from: date)
         let sortedMonths = yearlyMonths.map(\.rawValue).sorted()
 
-        // Check if there's a month later this year
-        for monthRaw in sortedMonths where monthRaw > currentMonth {
-            if let result = yearlyOccurrenceInMonth(monthRaw, year: calendar.component(.year, from: date), calendar: calendar) {
+        // Check current month first if day hasn't passed
+        if sortedMonths.contains(currentMonth), yearlyDaysOfWeekEnabled {
+            if let result = nthWeekdayOfMonth(ordinal: yearlyOrdinal, weekday: yearlyWeekday, month: currentMonth, year: currentYear, calendar: calendar),
+               calendar.component(.day, from: result) > currentDay {
                 return result
             }
         }
 
-        // Check current month if day hasn't passed
-        if sortedMonths.contains(currentMonth) {
-            if yearlyDaysOfWeekEnabled {
-                if let result = nthWeekdayOfMonth(ordinal: yearlyOrdinal, weekday: yearlyWeekday, month: currentMonth, year: calendar.component(.year, from: date), calendar: calendar),
-                   calendar.component(.day, from: result) > currentDay {
-                    return result
-                }
+        // Check later months this year
+        for monthRaw in sortedMonths where monthRaw > currentMonth {
+            if let result = yearlyOccurrenceInMonth(monthRaw, year: currentYear, calendar: calendar) {
+                return result
             }
         }
 
