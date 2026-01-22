@@ -8,10 +8,118 @@ import SwiftUI
 @Reducer
 struct TransactionsList: Reducer {
 
+    // MARK: - Data Request
+
+    struct DataRequest: FetchKeyRequest {
+        var date: Date
+
+        struct Value: Equatable {
+            var rows: [TransactionsListRow] = []
+            var dueRows: [DueRecurringRow] = []
+
+            // Pre-computed groupings
+            var rowsByDay: [Int: [TransactionsListRow]] = [:]
+            var balanceByDay: [Int: Money] = [:]
+            var days: [Int] = []
+
+            // Monthly summary
+            var incomeTotal: Int = 0
+            var expenseTotal: Int = 0
+            var currencyCode: String = "USD"
+
+            var total: Int { incomeTotal - expenseTotal }
+
+            var totalMoney: Money {
+                Money(value: Int64(total), currencyCode: currencyCode)
+            }
+        }
+
+        func fetch(_ db: Database) throws -> Value {
+            @Dependency(\.calendar) var calendar
+            let components = calendar.dateComponents([.year, .month], from: date)
+            let year = components.year!
+            let month = components.month!
+
+            // 1. Fetch transactions for the month
+            let rows = try TransactionsListRow
+                .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq(month) }
+                .fetchAll(db)
+
+            // 2. Fetch due recurring transactions for the month
+            let dueRows = try DueRecurringRow
+                .where {
+                    let rt = $0.recurringTransaction
+                    let isActive = rt.status.eq(RecurringTransactionStatus.active)
+                    let isDueInMonth = rt.nextDueLocalYear.eq(year) && rt.nextDueLocalMonth.eq(month)
+
+                    return isActive && isDueInMonth
+                }
+                .order(by: \.recurringTransaction.nextDueLocalDay)
+                .fetchAll(db)
+
+            // 3. Fetch monthly summary (aggregates)
+            // Only include transactions that have been converted to the default currency
+            let defaultCurrency = "USD"
+            let summaryRow = try Transaction
+                .where {
+                    $0.localYear.eq(year)
+                        && $0.localMonth.eq(month)
+                        && $0.convertedCurrencyCode.eq(defaultCurrency)
+                }
+                .select {
+                    (
+                        $0.convertedValueMinorUnits.sum(
+                            filter: $0.type.eq(Transaction.TransactionType.income)
+                        ),
+                        $0.convertedValueMinorUnits.sum(
+                            filter: $0.type.eq(Transaction.TransactionType.expense)
+                        )
+                    )
+                }
+                .fetchOne(db)
+
+            // 4. Compute rowsByDay (grouped and sorted)
+            var rowsByDay: [Int: [TransactionsListRow]] = [:]
+            for row in rows {
+                let day = row.transaction.localDay
+                rowsByDay[day, default: []].append(row)
+            }
+            for (day, dayRows) in rowsByDay {
+                rowsByDay[day] = dayRows.sorted { $0.transaction.createdAtUTC > $1.transaction.createdAtUTC }
+            }
+
+            // 5. Compute balanceByDay
+            var balanceByDay: [Int: Money] = [:]
+            for (day, dayRows) in rowsByDay {
+                balanceByDay[day] = dayRows
+                    .compactMap { $0.transaction.signedConvertedMoney }
+                    .sum()
+            }
+
+            // 6. Compute days (sorted descending)
+            let days = Array(rowsByDay.keys.sorted().reversed())
+
+            return Value(
+                rows: rows,
+                dueRows: dueRows,
+                rowsByDay: rowsByDay,
+                balanceByDay: balanceByDay,
+                days: days,
+                incomeTotal: summaryRow?.0 ?? 0,
+                expenseTotal: summaryRow?.1 ?? 0,
+                currencyCode: defaultCurrency
+            )
+        }
+    }
+
+    // MARK: - Destination
+
     @Reducer
     enum Destination {
         case transactionForm(TransactionFormReducer)
     }
+
+    // MARK: - State
 
     @ObservableState
     struct State: Equatable {
@@ -20,81 +128,16 @@ struct TransactionsList: Reducer {
 
         var date: Date
 
-        // Due recurring transactions (reactive via @FetchAll)
-        @FetchAll(DueRecurringRow.none)
-        var dueRows: [DueRecurringRow]
-        var dueRowsQuery: some Statement<DueRecurringRow> & Sendable {
-            @Dependency(\.date.now) var now
-            let today = now.localDateComponents()
-
-            return DueRecurringRow
-                .where {
-                    let rt = $0.recurringTransaction
-                    let isActive = rt.status.eq(RecurringTransactionStatus.active)
-
-                    // Compare local date: nextDue <= today
-                    // (year < todayYear) OR
-                    // (year == todayYear AND month < todayMonth) OR
-                    // (year == todayYear AND month == todayMonth AND day <= todayDay)
-                    let yearBefore = rt.nextDueLocalYear.lt(today.year)
-                    let sameYearMonthBefore = rt.nextDueLocalYear.eq(today.year) && rt.nextDueLocalMonth.lt(today.month)
-                    let sameYearMonthDayOnOrBefore = rt.nextDueLocalYear.eq(today.year)
-                        && rt.nextDueLocalMonth.eq(today.month)
-                        && rt.nextDueLocalDay.lte(today.day)
-
-                    let isDueOnOrBeforeToday = yearBefore || sameYearMonthBefore || sameYearMonthDayOnOrBefore
-
-                    return isActive && isDueOnOrBeforeToday
-                }
-                .order(by: \.recurringTransaction.nextDueLocalYear)
-                .order(by: \.recurringTransaction.nextDueLocalMonth)
-                .order(by: \.recurringTransaction.nextDueLocalDay)
-                .select { $0 }
-        }
-
-        @FetchAll(TransactionsListRow.none) // this query is dynamic
-        var rows: [TransactionsListRow]
-        var rowsQuery: some Statement<TransactionsListRow> & Sendable {
-            @Dependency(\.calendar) var calendar
-            let components = calendar.dateComponents([.year, .month], from: date)
-            let year = components.year!
-            let month = components.month!
-
-            return TransactionsListRow
-                .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq((month)) }
-                .select { $0 }
-        }
-
-        var rowsByDay: [Int: [TransactionsListRow]] {
-            var byDay = Dictionary(grouping: rows) { row in
-                row.transaction.localDay
-            }
-            for (day, dayRows) in byDay {
-                byDay[day] = dayRows.sorted { $0.transaction.createdAtUTC > $1.transaction.createdAtUTC }
-            }
-            return byDay
-        }
-
-        var balanceByDay: [Int: Money] {
-            var balanceByDay: [Int: Money] = [:]
-
-            for (day, rows) in rowsByDay {
-                // Always use converted values (default currency) for totals
-                // Skip transactions without conversion (they'll need background processing)
-                balanceByDay[day] = rows
-                    .compactMap { $0.transaction.signedConvertedMoney }
-                    .sum()
-            }
-            return balanceByDay
-        }
-        var days: [Int] {
-            Array(rowsByDay.keys.sorted().reversed())
-        }
+        @Fetch
+        var data = DataRequest.Value()
 
         init(date: Date) {
             self.date = date
-            self._rows = FetchAll(rowsQuery, animation: .default)
-            self._dueRows = FetchAll(dueRowsQuery, animation: .default)
+            self._data = Fetch(
+                wrappedValue: DataRequest.Value(),
+                DataRequest(date: date),
+                animation: .default
+            )
         }
     }
 
@@ -221,10 +264,10 @@ struct TransactionsList: Reducer {
     }
 
     private func loadTransactions(state: State) -> Effect<Action> {
-        let fetchAll = state.$rows
-        let query = state.rowsQuery
+        let fetch = state.$data
+        let request = DataRequest(date: state.date)
         return .run { _ in
-            try await fetchAll.load(query, animation: .default)
+            try await fetch.load(request, animation: .default)
         }
     }
 }
@@ -238,10 +281,17 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Due section for recurring transactions
-                if !store.dueRows.isEmpty {
+                // Monthly summary
+                if !store.data.rows.isEmpty {
                     Section {
-                        ForEach(store.dueRows) { dueRow in
+                        MonthlySummaryView(data: store.data)
+                    }
+                }
+
+                // Due section for recurring transactions
+                if !store.data.dueRows.isEmpty {
+                    Section {
+                        ForEach(store.data.dueRows) { dueRow in
                             DueRecurringRowView(
                                 dueRow: dueRow,
                                 onPost: { send(.postDueRow(dueRow)) },
@@ -261,8 +311,8 @@ struct TransactionsListView: View {
 
                             Spacer()
 
-                            if store.dueRows.count > 1 {
-                                Text("\(store.dueRows.count) items")
+                            if store.data.dueRows.count > 1 {
+                                Text("\(store.data.dueRows.count) items")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -271,8 +321,8 @@ struct TransactionsListView: View {
                 }
 
                 // Regular transactions by day
-                ForEach(store.days, id: \.self) { day in
-                    let rows = store.rowsByDay[day] ?? []
+                ForEach(store.data.days, id: \.self) { day in
+                    let rows = store.data.rowsByDay[day] ?? []
                     Section {
                         ForEach(rows) { row in
                             Button {
@@ -296,7 +346,7 @@ struct TransactionsListView: View {
                         sectionHeaderView(day: day)
                             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                     } footer: {
-                        if day == store.days.last {
+                        if day == store.data.days.last {
                             Spacer(minLength: 80)
                         }
                     }
@@ -357,14 +407,14 @@ struct TransactionsListView: View {
 
     @ViewBuilder
     private func sectionHeaderView(day: Int) -> some View {
-        if let transaction = store.rowsByDay[day]?.first?.transaction {
+        if let transaction = store.data.rowsByDay[day]?.first?.transaction {
             VStack(spacing: 0) {
                 HStack {
                     Text(transaction.localDate.formattedRelativeDay())
                         .font(.caption.bold())
                         .textCase(nil)
                     Spacer()
-                    if let balance = store.balanceByDay[day] {
+                    if let balance = store.data.balanceByDay[day] {
                         ValueView(money: balance)
                             .font(.footnote)
                     }
@@ -456,6 +506,47 @@ private struct DueRecurringRowView: View {
                 return dueDate.formatted(date: .abbreviated, time: .omitted)
             }
         }
+    }
+}
+
+// MARK: - Monthly Summary View
+
+private struct MonthlySummaryView: View {
+    let data: TransactionsList.DataRequest.Value
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Monthly Total")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                ValueView(money: data.totalMoney)
+                    .font(.title2.bold())
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundStyle(.green)
+                    let income = Money(value: Int64(data.incomeTotal), currencyCode: data.currencyCode)
+                    Text("\(income.amount.description) \(income.currencyCode)")
+                        .font(.caption)
+                }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundStyle(.red)
+                    let expense = Money(value: Int64(data.expenseTotal), currencyCode: data.currencyCode)
+                    Text("\(expense.amount.description) \(expense.currencyCode)")
+                        .font(.caption)
+                }
+            }
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }
 
