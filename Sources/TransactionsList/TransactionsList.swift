@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Currency
 import IdentifiedCollections
 import IssueReporting
+import Sharing
 import SQLiteData
 import SwiftUI
 
@@ -12,6 +13,7 @@ struct TransactionsList: Reducer {
 
     struct DataRequest: FetchKeyRequest {
         var date: Date
+        var defaultCurrency: String
 
         @Selection
         struct CategoryTotal: Equatable, Identifiable {
@@ -67,7 +69,7 @@ struct TransactionsList: Reducer {
 
             // 3. Fetch monthly summary (aggregates)
             // Only include transactions that have been converted to the default currency
-            let defaultCurrency = "USD"
+            let defaultCurrency = self.defaultCurrency
             let summaryRow = try Transaction
                 .where {
                     $0.localYear.eq(year)
@@ -154,14 +156,17 @@ struct TransactionsList: Reducer {
 
         var date: Date
 
+        @Shared(.defaultCurrency) var defaultCurrency: String
+
         @Fetch
         var data = DataRequest.Value()
 
         init(date: Date) {
             self.date = date
+            @Shared(.defaultCurrency) var defaultCurrency
             self._data = Fetch(
                 wrappedValue: DataRequest.Value(),
-                DataRequest(date: date),
+                DataRequest(date: date, defaultCurrency: defaultCurrency),
                 animation: .default
             )
         }
@@ -291,7 +296,7 @@ struct TransactionsList: Reducer {
 
     private func loadTransactions(state: State) -> Effect<Action> {
         let fetch = state.$data
-        let request = DataRequest(date: state.date)
+        let request = DataRequest(date: state.date, defaultCurrency: state.defaultCurrency)
         return .run { _ in
             try await fetch.load(request, animation: .default)
         }

@@ -59,6 +59,8 @@ struct TransactionFormReducer: Reducer {
         var pickedLocation: TransactionLocation.Draft?
         /// The current location of the user, for automatically filling in the location.
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
+        /// The user's default currency for converted values.
+        @Shared(.defaultCurrency) var defaultCurrency: String
 
         @Presents var destination: Destination.State?
 
@@ -411,9 +413,9 @@ struct TransactionFormReducer: Reducer {
     // MARK: - Save Helpers
 
     private func saveRegularTransaction(_ state: inout State) -> Effect<Action> {
+        let defaultCurrency = state.defaultCurrency
         return .run { [state = state] send in
             var updatedTransaction = state.transaction
-            let defaultCurrency = "USD" // TODO: Get from app settings
 
             if updatedTransaction.currencyCode != defaultCurrency {
                 do {
