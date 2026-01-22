@@ -13,6 +13,13 @@ struct TransactionsList: Reducer {
     struct DataRequest: FetchKeyRequest {
         var date: Date
 
+        @Selection
+        struct CategoryTotal: Equatable, Identifiable {
+            var id: String { category }
+            let category: String
+            let total: Int
+        }
+
         struct Value: Equatable {
             var rows: [TransactionsListRow] = []
             var dueRows: [DueRecurringRow] = []
@@ -26,6 +33,7 @@ struct TransactionsList: Reducer {
             var incomeTotal: Int = 0
             var expenseTotal: Int = 0
             var currencyCode: String = "USD"
+            var topCategories: [CategoryTotal] = []
 
             var total: Int { incomeTotal - expenseTotal }
 
@@ -78,7 +86,24 @@ struct TransactionsList: Reducer {
                 }
                 .fetchOne(db)
 
-            // 4. Compute rowsByDay (grouped and sorted)
+            // 4. Fetch top expense categories by total spending
+            let topCategories = try Transaction
+                .where { $0.localYear.eq(year) && $0.localMonth.eq(month) }
+                .where { $0.convertedCurrencyCode.eq(defaultCurrency) }
+                .where { $0.type.eq(Transaction.TransactionType.expense) }
+                .order { $0.convertedValueMinorUnits.sum().desc() }
+                .join(TransactionCategory.all) { $0.id.eq($1.transactionID) }
+                .group { $1.categoryID }
+                .limit(5)
+                .select {
+                    CategoryTotal.Columns(
+                        category: $1.categoryID,
+                        total: $0.convertedValueMinorUnits.ifnull(0).sum() ?? 0
+                    )
+                }
+                .fetchAll(db)
+
+            // 5. Compute rowsByDay (grouped and sorted)
             var rowsByDay: [Int: [TransactionsListRow]] = [:]
             for row in rows {
                 let day = row.transaction.localDay
@@ -88,7 +113,7 @@ struct TransactionsList: Reducer {
                 rowsByDay[day] = dayRows.sorted { $0.transaction.createdAtUTC > $1.transaction.createdAtUTC }
             }
 
-            // 5. Compute balanceByDay
+            // 6. Compute balanceByDay
             var balanceByDay: [Int: Money] = [:]
             for (day, dayRows) in rowsByDay {
                 balanceByDay[day] = dayRows
@@ -96,7 +121,7 @@ struct TransactionsList: Reducer {
                     .sum()
             }
 
-            // 6. Compute days (sorted descending)
+            // 7. Compute days (sorted descending)
             let days = Array(rowsByDay.keys.sorted().reversed())
 
             return Value(
@@ -107,7 +132,8 @@ struct TransactionsList: Reducer {
                 days: days,
                 incomeTotal: summaryRow?.0 ?? 0,
                 expenseTotal: summaryRow?.1 ?? 0,
-                currencyCode: defaultCurrency
+                currencyCode: defaultCurrency,
+                topCategories: topCategories
             )
         }
     }
@@ -515,36 +541,64 @@ private struct MonthlySummaryView: View {
     let data: TransactionsList.DataRequest.Value
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Monthly Total")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            // Total row
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Monthly Total")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                ValueView(money: data.totalMoney)
-                    .font(.title2.bold())
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .foregroundStyle(.green)
-                    let income = Money(value: Int64(data.incomeTotal), currencyCode: data.currencyCode)
-                    Text("\(income.amount.description) \(income.currencyCode)")
-                        .font(.caption)
+                    ValueView(money: data.totalMoney)
+                        .font(.title2.bold())
                 }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .foregroundStyle(.red)
-                    let expense = Money(value: Int64(data.expenseTotal), currencyCode: data.currencyCode)
-                    Text("\(expense.amount.description) \(expense.currencyCode)")
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundStyle(.green)
+                        let income = Money(value: Int64(data.incomeTotal), currencyCode: data.currencyCode)
+                        Text("\(income.amount.description) \(income.currencyCode)")
+                            .font(.caption)
+                    }
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundStyle(.red)
+                        let expense = Money(value: Int64(data.expenseTotal), currencyCode: data.currencyCode)
+                        Text("\(expense.amount.description) \(expense.currencyCode)")
+                            .font(.caption)
+                    }
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            // Top categories
+            if !data.topCategories.isEmpty {
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Top Categories")
                         .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(data.topCategories) { category in
+                        HStack {
+                            Text(category.category)
+                                .font(.subheadline)
+
+                            Spacer()
+
+                            let money = Money(value: Int64(category.total), currencyCode: data.currencyCode)
+                            Text("\(money.amount.description) \(money.currencyCode)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
-            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
