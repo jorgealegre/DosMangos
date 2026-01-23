@@ -176,18 +176,19 @@ struct TransactionsList: Reducer {
         @CasePathable
         enum View {
             case nextMonthButtonTapped
-            case onAppear
             case previousMonthButtonTapped
             case deleteTransactions([UUID])
             case transactionTapped(Transaction)
             case dismissTransactionDetailButtonTapped
             case postDueRow(DueRecurringRow)
             case skipDueRow(DueRecurringRow)
+            case task
         }
 
         case binding(BindingAction<State>)
         case view(View)
         case destination(PresentationAction<Destination.Action>)
+        case defaultCurrencyChanged
     }
 
     @Dependency(\.calendar) private var calendar
@@ -202,6 +203,9 @@ struct TransactionsList: Reducer {
 
             case .destination:
                 return .none
+
+            case .defaultCurrencyChanged:
+                return loadTransactions(state: state)
 
             case let .view(viewAction):
                 switch viewAction {
@@ -221,12 +225,17 @@ struct TransactionsList: Reducer {
                     state.date = calendar.date(byAdding: .month, value: 1, to: state.date)!
                     return loadTransactions(state: state)
 
-                case .onAppear:
-                    return loadTransactions(state: state)
-
                 case .previousMonthButtonTapped:
                     state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
                     return loadTransactions(state: state)
+
+                case .task:
+                    let defaultCurrency = state.$defaultCurrency
+                    return .run { send in
+                        for await _ in defaultCurrency.publisher.values {
+                            await send(.defaultCurrencyChanged)
+                        }
+                    }
 
                 case let .transactionTapped(transaction):
                     state.destination = .transactionForm(TransactionFormReducer.State(
@@ -383,7 +392,7 @@ struct TransactionsListView: View {
                     }
                 }
             }
-            .onAppear { send(.onAppear) }
+            .task { await send(.task).finish() }
             .navigationTitle(store.date.formatted(Date.FormatStyle().month(.wide)))
             .listStyle(.grouped)
             .listSectionSeparator(.hidden)
