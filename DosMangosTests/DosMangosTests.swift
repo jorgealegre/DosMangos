@@ -28,7 +28,8 @@ extension BaseTestSuite {
             await store.send(\.appDelegate.sceneDelegate.willEnterForeground)
             await store.send(\.view.task)
 
-            await store.send(\.transactionsList.view.onAppear)
+            await store.send(\.transactionsList.view.task)
+            await store.receive(\.transactionsList.defaultCurrencyChanged)
             #expect(store.state.transactionsList.data.rows.isEmpty)
 
             var transaction = Transaction.Draft()
