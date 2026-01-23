@@ -40,6 +40,14 @@ struct DefaultCurrencyPickerReducer: Reducer {
         case failure(String)
     }
 
+    /// State of the conversion process
+    enum ConversionState: Equatable {
+        case idle
+        case converting
+        case success(convertedCount: Int)
+        case failure(String)
+    }
+
     @Reducer
     enum Destination {
         case currencyPicker(CurrencyPicker)
@@ -80,6 +88,9 @@ struct DefaultCurrencyPickerReducer: Reducer {
             }
         }
 
+        /// State of the conversion process
+        var conversionState: ConversionState = .idle
+
         @Presents var destination: Destination.State?
 
         /// The currency to display (pending takes precedence for showing what will be converted to)
@@ -100,12 +111,15 @@ struct DefaultCurrencyPickerReducer: Reducer {
             case changeCurrencyButtonTapped
             case cancelChangeTapped
             case retryFailedRatesTapped
+            case convertButtonTapped
+            case doneButtonTapped
         }
         case destination(PresentationAction<Destination.Action>)
         case view(View)
         case conversionInfoLoaded(ConversionInfo)
         case currencyChangedDirectly
         case rateFetched(ConversionPair, Result<Double, Error>)
+        case conversionCompleted(Result<Int, Error>)
     }
 
     @Dependency(\.defaultDatabase) private var database
@@ -167,6 +181,19 @@ struct DefaultCurrencyPickerReducer: Reducer {
                 }
                 return .none
 
+            case let .conversionCompleted(result):
+                switch result {
+                case let .success(count):
+                    state.conversionState = .success(convertedCount: count)
+                    // Update the default currency
+                    if let pending = state.pendingCurrency {
+                        state.$defaultCurrency.withLock { $0 = pending }
+                    }
+                case let .failure(error):
+                    state.conversionState = .failure(error.localizedDescription)
+                }
+                return .none
+
             case let .view(view):
                 switch view {
                 case .changeCurrencyButtonTapped:
@@ -179,6 +206,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     state.pendingCurrency = nil
                     state.conversionInfo = nil
                     state.fetchedRates = [:]
+                    state.conversionState = .idle
                     state.isLoadingConversionInfo = false
                     return .none
 
@@ -195,6 +223,30 @@ struct DefaultCurrencyPickerReducer: Reducer {
                         state.fetchedRates[pair] = .loading
                     }
                     return fetchRates(pairs: failedPairs, targetCurrency: targetCurrency)
+
+                case .convertButtonTapped:
+                    guard let targetCurrency = state.pendingCurrency else { return .none }
+                    state.conversionState = .converting
+                    // Build a lookup dictionary from (year, month, day, currency) -> rate
+                    var rateLookup: [String: Double] = [:]
+                    for (pair, result) in state.fetchedRates {
+                        if case let .success(rate) = result,
+                           let year = pair.date.year,
+                           let month = pair.date.month,
+                           let day = pair.date.day {
+                            let key = "\(year)-\(month)-\(day)-\(pair.fromCurrency)"
+                            rateLookup[key] = rate
+                        }
+                    }
+                    return convertTransactions(targetCurrency: targetCurrency, rateLookup: rateLookup)
+
+                case .doneButtonTapped:
+                    // Reset state and stay on screen with new currency
+                    state.pendingCurrency = nil
+                    state.conversionInfo = nil
+                    state.fetchedRates = [:]
+                    state.conversionState = .idle
+                    return .none
                 }
             }
         }
@@ -258,6 +310,66 @@ struct DefaultCurrencyPickerReducer: Reducer {
                 for await (pair, result) in group {
                     await send(.rateFetched(pair, result))
                 }
+            }
+        }
+    }
+
+    private func convertTransactions(
+        targetCurrency: String,
+        rateLookup: [String: Double]
+    ) -> Effect<Action> {
+        return .run { send in
+            do {
+                let convertedCount = try await database.write { db -> Int in
+                    // Fetch all transactions that need conversion
+                    let transactions = try Transaction
+                        .where { $0.currencyCode.neq(targetCurrency) }
+                        .fetchAll(db)
+
+                    var count = 0
+                    for transaction in transactions {
+                        let key = "\(transaction.localYear)-\(transaction.localMonth)-\(transaction.localDay)-\(transaction.currencyCode)"
+
+                        guard let rate = rateLookup[key] else {
+                            // Skip transactions without a rate (shouldn't happen if UI is correct)
+                            continue
+                        }
+
+                        let convertedValue = Int(Double(transaction.valueMinorUnits) * rate)
+
+                        try Transaction
+                            .where { $0.id.eq(transaction.id) }
+                            .update {
+                                $0.convertedValueMinorUnits = convertedValue
+                                $0.convertedCurrencyCode = targetCurrency
+                            }
+                            .execute(db)
+
+                        count += 1
+                    }
+
+                    // Also update transactions that are already in the target currency
+                    // (set converted = original)
+                    let sameTransactions = try Transaction
+                        .where { $0.currencyCode.eq(targetCurrency) }
+                        .fetchAll(db)
+
+                    for transaction in sameTransactions {
+                        try Transaction
+                            .where { $0.id.eq(transaction.id) }
+                            .update {
+                                $0.convertedValueMinorUnits = transaction.valueMinorUnits
+                                $0.convertedCurrencyCode = targetCurrency
+                            }
+                            .execute(db)
+                    }
+
+                    return count + sameTransactions.count
+                }
+
+                await send(.conversionCompleted(.success(convertedCount)))
+            } catch {
+                await send(.conversionCompleted(.failure(error)))
             }
         }
     }
@@ -357,12 +469,92 @@ struct DefaultCurrencyPickerView: View {
                     }
                 }
             } else if let info = store.conversionInfo {
-                transactionDatesSection(info: info, targetCurrency: currency)
+                switch store.conversionState {
+                case .idle:
+                    transactionDatesSection(info: info, targetCurrency: currency)
+
+                    if store.allRatesFetched {
+                        Section {
+                            Button {
+                                send(.convertButtonTapped)
+                            } label: {
+                                Text("Convert \(info.transactionCount) Transactions")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets())
+                        }
+                    }
+
+                case .converting:
+                    Section {
+                        HStack {
+                            ProgressView()
+                            Text("Converting transactions...")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                case let .success(convertedCount):
+                    Section {
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.green)
+
+                            Text("Conversion Complete")
+                                .font(.headline)
+
+                            Text("\(convertedCount) transactions converted to \(currency.code)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
+
+                    Section {
+                        Button {
+                            send(.doneButtonTapped)
+                        } label: {
+                            Text("Done")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                    }
+
+                case let .failure(errorMessage):
+                    Section {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.red)
+
+                            Text("Conversion Failed")
+                                .font(.headline)
+
+                            Text(errorMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
+                }
             }
 
-            Section {
-                Button("Cancel", role: .destructive) {
-                    send(.cancelChangeTapped)
+            // Only show cancel when not in success state
+            if case .success = store.conversionState {
+                // Don't show cancel
+            } else {
+                Section {
+                    Button("Cancel", role: .destructive) {
+                        send(.cancelChangeTapped)
+                    }
                 }
             }
         }
