@@ -107,6 +107,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
     }
 
     enum Action: ViewAction {
+        @CasePathable
         enum View {
             case changeCurrencyButtonTapped
             case cancelChangeTapped
