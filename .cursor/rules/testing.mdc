@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: TCA testing patterns - apply when writing unit tests, using TestStore, TestClock, or mocking dependencies
+globs: ["**/*Tests.swift", "**/*Tests/*.swift", "*.xctestplan"]
 ---
 
-## Testing Strategies
+# Testing Strategies
 
-### Basic Test Structure
+## Basic Test Structure
 
 ```swift
 @MainActor
@@ -39,7 +40,7 @@ struct TodosTests {
 - Override dependencies in `withDependencies`
 - Assert state mutations in trailing closure
 
-### Testing Async Effects
+## Testing Async Effects
 
 ```swift
 @Test
@@ -70,7 +71,7 @@ func complete() async {
 - `store.receive()` to assert incoming actions
 - Assert state changes for each action
 
-### Testing Debounced/Cancellable Effects
+## Testing Debounced/Cancellable Effects
 
 ```swift
 @Test
@@ -98,7 +99,7 @@ func completionDebounce() async {
 - Verify only final effect completes
 - Use small time increments to test debouncing
 
-### Testing Long-Running Effects
+## Testing Long-Running Effects
 
 ```swift
 @Test
@@ -134,7 +135,7 @@ func recordHappyPath() async {
 - Control when effects complete manually
 - Always cancel long-running tasks
 
-### Non-Exhaustive Testing
+## Non-Exhaustive Testing
 
 ```swift
 @Test
@@ -164,9 +165,9 @@ func recordFailureNonExhaustive() async {
 - Skip intermediate actions
 - Useful for happy-path/smoke tests
 
-### Testing Dependencies
+## Testing Dependencies
 
-#### UUID
+### UUID
 
 ```swift
 withDependencies: {
@@ -175,7 +176,7 @@ withDependencies: {
 }
 ```
 
-#### Date
+### Date
 
 ```swift
 withDependencies: {
@@ -183,7 +184,7 @@ withDependencies: {
 }
 ```
 
-#### Clock
+### Clock
 
 ```swift
 let clock = TestClock()
@@ -192,7 +193,7 @@ withDependencies: {
 }
 ```
 
-#### Custom Clients
+### Custom Clients
 
 ```swift
 withDependencies: {

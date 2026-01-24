@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: Common utilities like error handling with IssueReporting - apply when handling programmer errors or using withErrorReporting
+globs: ["Sources/**/*.swift"]
 ---
 
-## Common Utilities
+# Common Utilities
 
-### Error Handling
+## Error Handling
 
 ```swift
 import IssueReporting

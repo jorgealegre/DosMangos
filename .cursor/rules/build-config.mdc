@@ -1,16 +1,17 @@
 ---
-description: building the app
-alwaysApply: false
+description: Build configuration and Xcode project settings - apply when building, running, or testing the iOS app
+globs: ["DosMangos.xcodeproj/**", "*.xcscheme"]
 ---
+
 # Build Configuration for DosMangos
 
 Only run builds when the user explicitly asks; otherwise they will rely on SwiftUI previews and static checks.
 
 ## Xcode Project Details
+
+Never use xcodebuild from the CLI, always try to use XcodeBuildMCP first.
+
 - **Project Path**: `/Users/jorge/Developer/DosMangos/DosMangos.xcodeproj`
 - **Scheme**: `DosMangos`
 - **Platform**: iOS Simulator
 - **Simulator**: iPhone 17
-
-## Build Commands
-- **Build for Simulator**: Use `build_sim` with `simulatorName: "iPhone 17"`

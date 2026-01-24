@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: SwiftUI view patterns with TCA - apply when building views with ViewAction, Bindable stores, scoping, or presentation
+globs: ["Sources/**/*.swift"]
 ---
 
-## View Patterns
+# View Patterns
 
-### ViewAction Pattern
+## ViewAction Pattern
 
 ```swift
 @ViewAction(for: TransactionsList.self)
@@ -25,7 +26,7 @@ struct TransactionsListView: View {
 - Automatically wraps in `.view()` action case
 - Cleaner than calling `store.send(.view(.action))`
 
-### Bindable Store Pattern
+## Bindable Store Pattern
 
 ```swift
 @Bindable var store: StoreOf<TransactionForm>
@@ -40,7 +41,7 @@ Picker("Type", selection: $store.transaction.type) { /* ... */ }
 - Use `BindingReducer()` in reducer
 - Automatically updates state
 
-### Scope Pattern for Child Views
+## Scope Pattern for Child Views
 
 ```swift
 TransactionsListView(
@@ -56,9 +57,9 @@ TransactionsListView(
 - Child only sees its own state/actions
 - Type-safe state and action mapping
 
-### Sheet and Alert Presentation
+## Sheet and Alert Presentation
 
-#### Sheets
+### Sheets
 
 ```swift
 // State
@@ -80,7 +81,7 @@ enum Destination {
 }
 ```
 
-#### Alerts
+### Alerts
 
 ```swift
 // State
@@ -96,7 +97,7 @@ enum Destination {
 - Use `AlertState` for type-safe alerts
 - Scope the store to the presented feature
 
-### List Patterns
+## List Patterns
 
 ```swift
 List {

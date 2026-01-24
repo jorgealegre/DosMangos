@@ -1,12 +1,13 @@
 ---
-alwaysApply: true
+description: TCA dependency management patterns - apply when creating dependency clients, live implementations, or using @Dependency
+globs: ["Sources/**/*Client.swift", "Sources/**/*Client/*.swift"]
 ---
 
-## Dependencies Management
+# Dependencies Management
 
-### Defining Dependencies
+## Defining Dependencies
 
-#### Simple Client
+### Simple Client
 
 ```swift
 @DependencyClient
@@ -39,7 +40,7 @@ extension DependencyValues {
 - Test value fails if called without override
 - Preview value allows working in Xcode previews
 
-#### Live Implementation
+### Live Implementation
 
 ```swift
 extension AudioPlayerClient: DependencyKey {
@@ -85,9 +86,9 @@ private actor AudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
 - Wrap callbacks with continuations
 - Keep implementation details private
 
-### Using Dependencies
+## Using Dependencies
 
-#### In Reducers
+### In Reducers
 
 ```swift
 @Reducer
@@ -107,7 +108,7 @@ struct Feature {
 }
 ```
 
-#### In Effects
+### In Effects
 
 ```swift
 case .saveData:
@@ -127,7 +128,7 @@ case .saveData:
 - Use `@Dependency` property wrapper
 - Available in reducers and effects
 
-### Preparing Dependencies
+## Preparing Dependencies
 
 ```swift
 let _ = try! prepareDependencies {

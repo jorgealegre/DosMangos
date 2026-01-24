@@ -1,24 +1,25 @@
 ---
-alwaysApply: true
+description: TCA and SQLiteData best practices summary - apply when reviewing code or making architectural decisions
+globs: ["Sources/**/*.swift"]
 ---
 
-## Best Practices Summary
+# Best Practices Summary
 
-### Architecture
+## Architecture
 
 1. **Keep reducers focused**: One reducer per feature
 2. **Compose from bottom up**: Child reducers first, then parent
 3. **Use scoping**: Give children only what they need
 4. **Separate concerns**: View actions, delegate actions, internal actions
 
-### State
+## State
 
 1. **Make it Equatable**: Required for TCA, helps debugging
 2. **Normalize data**: Avoid duplication, derive when possible
 3. **Use IdentifiedArray**: For collections accessed by ID
 4. **Computed properties**: For derived state
 
-### Effects
+## Effects
 
 1. **Always cancellable**: Long-running effects need cancellation
 2. **Capture dependencies**: Inside effect closures
@@ -26,7 +27,7 @@ alwaysApply: true
 4. **Use TestClock**: For deterministic time in tests
 5. **Debounce appropriately**: For search, typing, etc.
 
-### Database
+## Database
 
 1. **Enable foreign keys**: For referential integrity
 2. **Index foreign keys**: For query performance
@@ -34,7 +35,7 @@ alwaysApply: true
 4. **STRICT mode**: For type safety
 5. **Seed data**: For development and testing
 
-### Testing
+## Testing
 
 1. **Test happy paths**: Ensure features work
 2. **Test edge cases**: Errors, cancellation, timing
@@ -42,7 +43,7 @@ alwaysApply: true
 4. **Use TestClock**: For time-based effects
 5. **Exhaustive by default**: Non-exhaustive for integration tests
 
-### Views
+## Views
 
 1. **Use ViewAction**: Cleaner action sending
 2. **Scope child views**: Don't pass entire store
@@ -50,25 +51,9 @@ alwaysApply: true
 4. **Focus management**: Model focus in state
 5. **Presentation**: Use `@Presents` with destination enum
 
-### Dependencies
+## Dependencies
 
 1. **@DependencyClient**: For client interfaces
 2. **Live, test, preview**: Provide all three
 3. **Propagate to children**: Use `withDependencies(from:)`
 4. **Test isolation**: Each test overrides what it needs
-
----
-
-## Conclusion
-
-These patterns represent a robust, scalable approach to iOS app development using TCA and SQLiteData. Key themes:
-
-- **Testability**: Every pattern supports comprehensive testing
-- **Composability**: Features compose from small, focused pieces
-- **Type safety**: Leverage Swift's type system everywhere
-- **Clarity**: Explicit state flow and side effects
-- **Performance**: Efficient database queries and UI updates
-
-TCA provides a powerful, unidirectional architecture for managing state and side effects. SQLiteData integrates seamlessly with TCA through `@FetchAll` and `@FetchOne`, providing reactive database queries.
-
-These learnings from PointFree's example apps represent production-ready patterns that scale from simple to complex applications.

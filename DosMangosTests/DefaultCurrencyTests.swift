@@ -504,6 +504,8 @@ extension BaseTestSuite {
             // Receive all rate fetches (exhaustivity off for ordering)
             await store.skipReceivedActions()
 
+            await store.finish()
+
             #expect(store.state.allRatesFetched == true)
             #expect(store.state.conversionInfo?.pairs.count == 3)
         }
