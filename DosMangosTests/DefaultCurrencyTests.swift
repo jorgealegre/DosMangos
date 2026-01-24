@@ -3,8 +3,6 @@ import ConcurrencyExtras
 import Dependencies
 import DependenciesTestSupport
 import Foundation
-import InlineSnapshotTesting
-import SnapshotTestingCustomDump
 import SQLiteData
 import Testing
 
@@ -27,6 +25,7 @@ extension BaseTestSuite {
 
             // Verify initial state
             #expect(store.state.defaultCurrency == "USD")
+            #expect(store.state.phase == .idle)
 
             // Open currency picker
             await store.send(\.view.changeCurrencyButtonTapped) {
@@ -36,25 +35,46 @@ extension BaseTestSuite {
             // Select EUR
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            // No transactions, so conversion info shows empty
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.pendingCurrency = nil
+            // Rates fetched (no transactions to convert)
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 0,
+                        failedCount: 0,
+                        sameCurrencyCount: 0,
+                        rates: [:]
+                    )
+                )
+            }
+
+            // User confirms (even with 0 transactions, this sets the default currency)
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
+            }
+
+            await store.receive(\.conversionCompleted) {
                 $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 0,
+                    skippedCount: 0,
+                    newCurrency: "EUR"
+                ))
             }
 
-            // Currency changed without needing conversion
-            await store.receive(\.currencyChangedDirectly)
+            // User taps done
+            await store.send(\.view.doneTapped) {
+                $0.phase = .idle
+            }
 
             #expect(store.state.defaultCurrency == "EUR")
         }
 
-        @Test("When all transactions are already in target currency, changes directly")
-        func allTransactionsInTargetCurrency_changesDirectly() async throws {
+        @Test("When all transactions are already in target currency, updates converted values")
+        func allTransactionsInTargetCurrency_updatesConvertedValues() async throws {
             // Create transactions in EUR
             @Dependency(\.date.now) var now
             try await database.write { db in
@@ -83,17 +103,43 @@ extension BaseTestSuite {
             // Select EUR (same as the transaction currency)
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.pendingCurrency = nil
+            // All transactions already in EUR, so only sameCurrencyCount matters
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 0,
+                        failedCount: 0,
+                        sameCurrencyCount: 1,
+                        rates: [:]
+                    )
+                )
+            }
+
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
+            }
+
+            await store.receive(\.conversionCompleted) {
                 $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 1,
+                    skippedCount: 0,
+                    newCurrency: "EUR"
+                ))
             }
 
-            await store.receive(\.currencyChangedDirectly)
+            // Verify the transaction now has converted values set
+            let transactions = try await database.read { db in
+                try Transaction.fetchAll(db)
+            }
+
+            let eurTransaction = transactions.first!
+            #expect(eurTransaction.convertedCurrencyCode == "EUR")
+            #expect(eurTransaction.convertedValueMinorUnits == 500) // Same as original
         }
 
         // MARK: - Conversion Flow
@@ -146,62 +192,37 @@ extension BaseTestSuite {
 
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            // Should receive conversion info with 2 pairs (USD and ARS on same date)
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.conversionInfo = DefaultCurrencyPickerReducer.ConversionInfo(
-                    pairs: [
-                        DefaultCurrencyPickerReducer.ConversionPair(
-                            date: DateComponents(year: 2025, month: 1, day: 15),
-                            fromCurrency: "ARS",
-                            transactionCount: 1
-                        ),
-                        DefaultCurrencyPickerReducer.ConversionPair(
-                            date: DateComponents(year: 2025, month: 1, day: 15),
-                            fromCurrency: "USD",
-                            transactionCount: 1
-                        ),
-                    ],
-                    transactionCount: 2
+            // Rates fetched - both USD and ARS have rates
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 2,
+                        failedCount: 0,
+                        sameCurrencyCount: 0,
+                        rates: [
+                            "2025-1-15-USD": 0.92,
+                            "2025-1-15-ARS": 0.00092
+                        ]
+                    )
                 )
-                // Rates initialized as loading
-                for pair in $0.conversionInfo!.pairs {
-                    $0.fetchedRates[pair] = .loading
-                }
             }
-
-            // Receive rate fetches (order may vary due to parallel execution)
-            // Skip checking exact order, just verify final state
-            await store.skipReceivedActions()
-
-            #expect(store.state.allRatesFetched == true)
-
-            // Verify both rates were fetched correctly
-            let arsPair = DefaultCurrencyPickerReducer.ConversionPair(
-                date: DateComponents(year: 2025, month: 1, day: 15),
-                fromCurrency: "ARS",
-                transactionCount: 1
-            )
-            let usdPair = DefaultCurrencyPickerReducer.ConversionPair(
-                date: DateComponents(year: 2025, month: 1, day: 15),
-                fromCurrency: "USD",
-                transactionCount: 1
-            )
-            #expect(store.state.fetchedRates[arsPair] == .success(0.00092))
-            #expect(store.state.fetchedRates[usdPair] == .success(0.92))
 
             // User taps convert
-            await store.send(\.view.convertButtonTapped) {
-                $0.conversionState = .converting
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.conversionState = .success(convertedCount: 2)
                 $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 2,
+                    skippedCount: 0,
+                    newCurrency: "EUR"
+                ))
             }
 
             // Verify transactions were converted
@@ -218,23 +239,21 @@ extension BaseTestSuite {
             #expect(arsTransaction.convertedValueMinorUnits == 460) // 5000 * 0.00092 = 4.6 EUR = 460 cents
 
             // User taps done
-            await store.send(\.view.doneButtonTapped) {
-                $0.pendingCurrency = nil
-                $0.conversionInfo = nil
-                $0.fetchedRates = [:]
-                $0.conversionState = .idle
+            await store.send(\.view.doneTapped) {
+                $0.phase = .idle
             }
         }
 
-        // MARK: - Rate Fetch Failures
+        // MARK: - Rate Fetch Failures (Partial Success)
 
-        @Test("Rate fetch failure shows error and allows retry")
-        func rateFetchFailure_allowsRetry() async throws {
+        @Test("When some rates fail, shows summary with failed count and allows conversion of successful ones")
+        func partialRateFetchFailure_allowsPartialConversion() async throws {
             @Dependency(\.date.now) var now
             try await database.write { db in
+                // Transaction that will get a rate
                 try Transaction.insert {
                     Transaction.Draft(
-                        description: "Test",
+                        description: "USD Transaction",
                         valueMinorUnits: 1000,
                         currencyCode: "USD",
                         type: .expense,
@@ -242,23 +261,29 @@ extension BaseTestSuite {
                         localYear: 2025, localMonth: 1, localDay: 10
                     )
                 }.execute(db)
+
+                // Transaction that will fail to get a rate
+                try Transaction.insert {
+                    Transaction.Draft(
+                        description: "GBP Transaction",
+                        valueMinorUnits: 2000,
+                        currencyCode: "GBP",
+                        type: .expense,
+                        createdAtUTC: now,
+                        localYear: 2025, localMonth: 1, localDay: 10
+                    )
+                }.execute(db)
             }
 
-            let callCount = LockIsolated(0)
             let store = TestStore(
                 initialState: DefaultCurrencyPickerReducer.State()
             ) {
                 DefaultCurrencyPickerReducer()
             } withDependencies: {
-                $0.exchangeRate.getRate = { _, _, _ in
-                    let count = callCount.withValue { value in
-                        value += 1
-                        return value
-                    }
-                    if count == 1 {
-                        throw ExchangeRateError.rateNotAvailable(from: "USD", to: "EUR", date: Date())
-                    }
-                    return 0.92
+                $0.exchangeRate.getRate = { from, _, _ in
+                    if from == "USD" { return 0.92 }
+                    // GBP fails
+                    throw ExchangeRateError.rateNotAvailable(from: from, to: "EUR", date: Date())
                 }
             }
 
@@ -268,54 +293,53 @@ extension BaseTestSuite {
 
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            let pair = DefaultCurrencyPickerReducer.ConversionPair(
-                date: DateComponents(year: 2025, month: 1, day: 10),
-                fromCurrency: "USD",
-                transactionCount: 1
-            )
-
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.conversionInfo = DefaultCurrencyPickerReducer.ConversionInfo(
-                    pairs: [pair],
-                    transactionCount: 1
+            // One rate succeeded, one failed
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 1,
+                        failedCount: 1,
+                        sameCurrencyCount: 0,
+                        rates: ["2025-1-10-USD": 0.92]
+                    )
                 )
-                $0.fetchedRates[pair] = .loading
             }
 
-            // First fetch fails - skip the exact state check due to date formatting in error message
-            await store.skipReceivedActions()
-
-            #expect(store.state.hasRateFetchError == true)
-            #expect(store.state.allRatesFetched == false)
-            // Verify it is indeed a failure
-            if case .failure = store.state.fetchedRates[pair] {
-                // Good - it's a failure as expected
-            } else {
-                Issue.record("Expected failure state but got: \(String(describing: store.state.fetchedRates[pair]))")
+            // User still confirms conversion for the successful ones
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            // Retry
-            await store.send(\.view.retryFailedRatesTapped) {
-                $0.fetchedRates[pair] = .loading
+            await store.receive(\.conversionCompleted) {
+                $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 1,
+                    skippedCount: 1,
+                    newCurrency: "EUR"
+                ))
             }
 
-            // Second fetch succeeds
-            await store.receive(\.rateFetched) {
-                $0.fetchedRates[pair] = .success(0.92)
+            // Verify only USD transaction was converted
+            let transactions = try await database.read { db in
+                try Transaction.fetchAll(db)
             }
 
-            #expect(store.state.hasRateFetchError == false)
-            #expect(store.state.allRatesFetched == true)
+            let usdTransaction = transactions.first { $0.currencyCode == "USD" }!
+            #expect(usdTransaction.convertedCurrencyCode == "EUR")
+            #expect(usdTransaction.convertedValueMinorUnits == 920)
+
+            let gbpTransaction = transactions.first { $0.currencyCode == "GBP" }!
+            #expect(gbpTransaction.convertedCurrencyCode == nil) // Cleared for later retry
+            #expect(gbpTransaction.convertedValueMinorUnits == nil)
         }
 
         // MARK: - Cancellation
 
-        @Test("Cancellation resets all state")
+        @Test("Cancellation resets state to idle")
         func cancellation_resetsState() async throws {
             @Dependency(\.date.now) var now
             try await database.write { db in
@@ -345,36 +369,24 @@ extension BaseTestSuite {
 
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            let pair = DefaultCurrencyPickerReducer.ConversionPair(
-                date: DateComponents(year: 2025, month: 1, day: 10),
-                fromCurrency: "USD",
-                transactionCount: 1
-            )
-
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.conversionInfo = DefaultCurrencyPickerReducer.ConversionInfo(
-                    pairs: [pair],
-                    transactionCount: 1
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 1,
+                        failedCount: 0,
+                        sameCurrencyCount: 0,
+                        rates: ["2025-1-10-USD": 0.92]
+                    )
                 )
-                $0.fetchedRates[pair] = .loading
-            }
-
-            await store.receive(\.rateFetched) {
-                $0.fetchedRates[pair] = .success(0.92)
             }
 
             // Cancel before converting
-            await store.send(\.view.cancelChangeTapped) {
-                $0.pendingCurrency = nil
-                $0.conversionInfo = nil
-                $0.fetchedRates = [:]
-                $0.conversionState = .idle
-                $0.isLoadingConversionInfo = false
+            await store.send(\.view.cancelTapped) {
+                $0.phase = .idle
             }
 
             // Currency should still be USD
@@ -398,16 +410,15 @@ extension BaseTestSuite {
             // Select USD (same as current)
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "USD") {
                 $0.destination = nil
-                // No pending currency set, no loading started
+                // Phase stays idle, no fetching started
             }
 
-            #expect(store.state.pendingCurrency == nil)
-            #expect(store.state.isLoadingConversionInfo == false)
+            #expect(store.state.phase == .idle)
         }
 
         // MARK: - Multiple Dates
 
-        @Test("Conversion with transactions on multiple dates")
+        @Test("Conversion with transactions on multiple dates uses correct rates")
         func conversionWithMultipleDates() async throws {
             @Dependency(\.date.now) var now
             try await database.write { db in
@@ -469,50 +480,56 @@ extension BaseTestSuite {
 
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                // 3 pairs for 3 different dates
-                $0.conversionInfo = DefaultCurrencyPickerReducer.ConversionInfo(
-                    pairs: [
-                        DefaultCurrencyPickerReducer.ConversionPair(
-                            date: DateComponents(year: 2025, month: 1, day: 20),
-                            fromCurrency: "USD",
-                            transactionCount: 1
-                        ),
-                        DefaultCurrencyPickerReducer.ConversionPair(
-                            date: DateComponents(year: 2025, month: 1, day: 15),
-                            fromCurrency: "USD",
-                            transactionCount: 1
-                        ),
-                        DefaultCurrencyPickerReducer.ConversionPair(
-                            date: DateComponents(year: 2025, month: 1, day: 10),
-                            fromCurrency: "USD",
-                            transactionCount: 1
-                        ),
-                    ],
-                    transactionCount: 3
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 3,
+                        failedCount: 0,
+                        sameCurrencyCount: 0,
+                        rates: [
+                            "2025-1-10-USD": 0.90,
+                            "2025-1-15-USD": 0.91,
+                            "2025-1-20-USD": 0.92
+                        ]
+                    )
                 )
-                for pair in $0.conversionInfo!.pairs {
-                    $0.fetchedRates[pair] = .loading
-                }
             }
 
-            // Receive all rate fetches (exhaustivity off for ordering)
-            await store.skipReceivedActions()
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
+            }
 
-            await store.finish()
+            await store.receive(\.conversionCompleted) {
+                $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 3,
+                    skippedCount: 0,
+                    newCurrency: "EUR"
+                ))
+            }
 
-            #expect(store.state.allRatesFetched == true)
-            #expect(store.state.conversionInfo?.pairs.count == 3)
+            // Verify each transaction used the correct rate
+            let transactions = try await database.read { db in
+                try Transaction.fetchAll(db)
+            }
+
+            let jan10 = transactions.first { $0.description == "Jan 10" }!
+            #expect(jan10.convertedValueMinorUnits == 900)  // 1000 * 0.90
+
+            let jan15 = transactions.first { $0.description == "Jan 15" }!
+            #expect(jan15.convertedValueMinorUnits == 1820) // 2000 * 0.91
+
+            let jan20 = transactions.first { $0.description == "Jan 20" }!
+            #expect(jan20.convertedValueMinorUnits == 2760) // 3000 * 0.92
         }
 
-        // MARK: - Transactions Already in Target Currency Get Updated
+        // MARK: - Mixed Currencies
 
-        @Test("Transactions already in target currency get their converted values set")
+        @Test("Transactions already in target currency get their converted values set during conversion")
         func transactionsInTargetCurrency_getConvertedValuesSet() async throws {
             // Mix of currencies - one in target, one not
             @Dependency(\.date.now) var now
@@ -556,38 +573,34 @@ extension BaseTestSuite {
 
             await store.send(\.destination.currencyPicker.delegate.currencySelected, "EUR") {
                 $0.destination = nil
-                $0.pendingCurrency = "EUR"
-                $0.isLoadingConversionInfo = true
+                $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            // Only USD transaction needs rate fetch
-            let pair = DefaultCurrencyPickerReducer.ConversionPair(
-                date: DateComponents(year: 2025, month: 1, day: 15),
-                fromCurrency: "USD",
-                transactionCount: 1
-            )
-
-            await store.receive(\.conversionInfoLoaded) {
-                $0.isLoadingConversionInfo = false
-                $0.conversionInfo = DefaultCurrencyPickerReducer.ConversionInfo(
-                    pairs: [pair],
-                    transactionCount: 1
+            // 1 USD transaction needs rate, 1 EUR transaction is same-currency
+            await store.receive(\.ratesFetched) {
+                $0.phase = .readyToConvert(
+                    targetCurrency: "EUR",
+                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
+                        convertibleCount: 1,
+                        failedCount: 0,
+                        sameCurrencyCount: 1,
+                        rates: ["2025-1-15-USD": 0.92]
+                    )
                 )
-                $0.fetchedRates[pair] = .loading
             }
 
-            await store.receive(\.rateFetched) {
-                $0.fetchedRates[pair] = .success(0.92)
-            }
-
-            await store.send(\.view.convertButtonTapped) {
-                $0.conversionState = .converting
+            await store.send(\.view.confirmConversionTapped) {
+                $0.phase = .converting(targetCurrency: "EUR")
             }
 
             // Both transactions get updated (count = 2)
             await store.receive(\.conversionCompleted) {
-                $0.conversionState = .success(convertedCount: 2)
                 $0.$defaultCurrency.withLock { $0 = "EUR" }
+                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
+                    convertedCount: 2,
+                    skippedCount: 0,
+                    newCurrency: "EUR"
+                ))
             }
 
             // Verify EUR transaction has converted values set (same as original)
