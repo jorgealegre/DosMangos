@@ -1,0 +1,8 @@
+---
+description: how to run, compile, test and interact with Xcode
+alwaysApply: true
+---
+
+# Xcode Build Instructions
+
+Do NOT use `xcodebuild` from the command line. Always use the **XcodeBuildMCP** tools instead.

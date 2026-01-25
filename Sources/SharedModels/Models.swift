@@ -133,22 +133,20 @@ extension Transaction.Draft {
         }
     }
 
-    // 12300 <> "123"
-    var valueText: String {
+    /// The transaction value in whole units (e.g., dollars, not cents).
+    /// Handles conversion to/from minor units based on currency.
+    var wholeUnits: Int {
         get {
             let currency = CurrencyRegistry.currency(for: currencyCode)
-            let divisor = pow(10.0, Double(currency.minorUnits))
-            let wholeUnits = Double(valueMinorUnits) / divisor
-            return wholeUnits != 0 ? String(Int(wholeUnits)) : ""
+            let divisor = Int(pow(10.0, Double(currency.minorUnits)))
+            return valueMinorUnits / divisor
         }
         set {
-            guard let value = Int(newValue) else {
-                valueMinorUnits = 0
-                return
-            }
             let currency = CurrencyRegistry.currency(for: currencyCode)
-            let multiplier = pow(10.0, Double(currency.minorUnits))
-            valueMinorUnits = Int(Double(value) * multiplier)
+            let multiplier = Int(pow(10.0, Double(currency.minorUnits)))
+            // Cap to prevent overflow (max ~9 trillion)
+            let capped = Swift.min(newValue, Int.max / multiplier)
+            valueMinorUnits = capped * multiplier
         }
     }
 }

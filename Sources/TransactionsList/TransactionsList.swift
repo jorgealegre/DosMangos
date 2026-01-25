@@ -524,7 +524,7 @@ private struct DueRecurringRowView: View {
             currencyCode: rt.currencyCode
         )
         let prefix = rt.type == .expense ? "-" : "+"
-        return "\(prefix)\(money.amount.description) \(money.currencyCode)"
+        return "\(prefix)\(money.formatted(.full))"
     }
 
     private var dueDateText: String {
@@ -574,7 +574,7 @@ private struct MonthlySummaryView: View {
                         Image(systemName: "arrow.up.circle.fill")
                             .foregroundStyle(.green)
                         let income = Money(value: Int64(data.incomeTotal), currencyCode: data.currencyCode)
-                        Text("\(income.amount.description) \(income.currencyCode)")
+                        Text(income.formatted(.compact))
                             .font(.caption)
                     }
 
@@ -582,7 +582,7 @@ private struct MonthlySummaryView: View {
                         Image(systemName: "arrow.down.circle.fill")
                             .foregroundStyle(.red)
                         let expense = Money(value: Int64(data.expenseTotal), currencyCode: data.currencyCode)
-                        Text("\(expense.amount.description) \(expense.currencyCode)")
+                        Text(expense.formatted(.compact))
                             .font(.caption)
                     }
                 }
@@ -606,7 +606,7 @@ private struct MonthlySummaryView: View {
                             Spacer()
 
                             let money = Money(value: Int64(category.total), currencyCode: data.currencyCode)
-                            Text("\(money.amount.description) \(money.currencyCode)")
+                            Text(money.formatted(.compact))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
