@@ -1118,6 +1118,7 @@ struct TransactionFormView: View {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.tertiary)
                 }
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
         }
@@ -1161,6 +1162,7 @@ struct TransactionFormView: View {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.tertiary)
                 }
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
         }
