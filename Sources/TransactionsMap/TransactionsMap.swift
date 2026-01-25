@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Currency
 import MapKit
 import SQLiteData
 import SwiftUI
@@ -104,9 +105,13 @@ private struct TransactionsMKMapView: UIViewRepresentable {
         }
 
         private func valueText(for transaction: Transaction) -> String {
-            // Whole dollars, no decimals
-            let dollars = transaction.valueMinorUnits / 100
-            return transaction.type == .expense ? "-\(dollars)" : "\(dollars)"
+            let money = Money(
+                value: Int64(transaction.valueMinorUnits),
+                currencyCode: transaction.currencyCode
+            )
+            let prefix = transaction.type == .expense ? "-" : ""
+            // Use compact format without currency code for map annotations
+            return "\(prefix)\(money.formatted(.compact, includeCurrencyCode: false))"
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {

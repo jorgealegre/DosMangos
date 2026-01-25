@@ -1,3 +1,4 @@
+import Currency
 import SwiftUI
 
 struct TransactionView: View {
@@ -52,7 +53,7 @@ struct TransactionView: View {
 
                     // Show original currency if different (subtle)
                     if transaction.currencyCode != transaction.convertedCurrencyCode {
-                        Text("\(transaction.money.amount.description) \(transaction.currencyCode)")
+                        Text(transaction.money.formatted(.full))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         // TODO: Display actual exchange rate by joining with exchange_rates table

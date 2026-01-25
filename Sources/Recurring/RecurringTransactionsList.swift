@@ -237,7 +237,7 @@ private struct RecurringTransactionRow: View {
             value: Int64(transaction.valueMinorUnits),
             currencyCode: transaction.currencyCode
         )
-        return "\(money.amount.description) \(money.currencyCode)"
+        return money.formatted(.full)
     }
 
     private var frequencySummary: String {

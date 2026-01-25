@@ -917,14 +917,8 @@ struct TransactionFormView: View {
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.roundedRectangle)
 
-            TextField("0", text: $store.transaction.valueText)
-                .font(.system(size: 80).bold())
-                .minimumScaleFactor(0.2)
-                .monospacedDigit()
-                .multilineTextAlignment(.trailing)
-                .keyboardType(.numberPad)
+            FormattedIntegerField(value: $store.transaction.wholeUnits)
                 .focused($focus, equals: .value)
-                .onSubmit { send(.valueInputFinished) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
