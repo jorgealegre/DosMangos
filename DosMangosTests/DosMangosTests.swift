@@ -38,7 +38,7 @@ extension BaseTestSuite {
             }
             await store.send(\.destination.transactionForm.view.task)
 
-            transaction.valueText = "123"
+            transaction.wholeUnits = 123
             transaction.description = "Rent"
             await store.send(\.destination.transactionForm.binding.transaction, transaction) {
                 $0.destination.modify(\.transactionForm) {
