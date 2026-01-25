@@ -38,37 +38,18 @@ extension BaseTestSuite {
                 $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            // Rates fetched (no transactions to convert)
+            // No transactions to convert, so conversion happens automatically
             await store.receive(\.ratesFetched) {
-                $0.phase = .readyToConvert(
-                    targetCurrency: "EUR",
-                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
-                        convertibleCount: 0,
-                        failedCount: 0,
-                        sameCurrencyCount: 0,
-                        rates: [:]
-                    )
-                )
-            }
-
-            // User confirms (even with 0 transactions, this sets the default currency)
-            await store.send(\.view.confirmConversionTapped) {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
             await store.receive(\.conversionCompleted) {
                 $0.$defaultCurrency.withLock { $0 = "EUR" }
-                $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
-                    convertedCount: 0,
-                    skippedCount: 0,
-                    newCurrency: "EUR"
-                ))
+                $0.phase = .idle
             }
 
             // User taps done
-            await store.send(\.view.doneTapped) {
-                $0.phase = .idle
-            }
+            await store.send(\.view.doneTapped)
 
             #expect(store.state.defaultCurrency == "EUR")
         }
@@ -106,20 +87,8 @@ extension BaseTestSuite {
                 $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            // All transactions already in EUR, so only sameCurrencyCount matters
+            // All transactions already in EUR, no rates needed - conversion happens automatically
             await store.receive(\.ratesFetched) {
-                $0.phase = .readyToConvert(
-                    targetCurrency: "EUR",
-                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
-                        convertibleCount: 0,
-                        failedCount: 0,
-                        sameCurrencyCount: 1,
-                        rates: [:]
-                    )
-                )
-            }
-
-            await store.send(\.view.confirmConversionTapped) {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 

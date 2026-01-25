@@ -93,6 +93,12 @@ struct DefaultCurrencyPickerReducer: Reducer {
             case let .ratesFetched(targetCurrency, result):
                 switch result {
                 case let .success(summary):
+                    // If conversion is straightforward (no rates needed), proceed automatically
+                    let isSimpleConversion = summary.convertibleCount == 0 && summary.failedCount == 0
+                    if isSimpleConversion {
+                        state.phase = .converting(targetCurrency: targetCurrency)
+                        return performConversion(targetCurrency: targetCurrency, rates: summary.rates)
+                    }
                     state.phase = .readyToConvert(targetCurrency: targetCurrency, summary: summary)
                 case let .failure(error):
                     state.phase = .failed(error.localizedDescription)
@@ -103,7 +109,11 @@ struct DefaultCurrencyPickerReducer: Reducer {
                 switch result {
                 case let .success(conversionResult):
                     state.$defaultCurrency.withLock { $0 = conversionResult.newCurrency }
-                    state.phase = .completed(conversionResult)
+                    if conversionResult.convertedCount == 0 {
+                        state.phase = .idle
+                    } else {
+                        state.phase = .completed(conversionResult)
+                    }
                 case let .failure(error):
                     state.phase = .failed(error.localizedDescription)
                 }
