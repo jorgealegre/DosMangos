@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: TCA state management patterns - apply when working with ObservableState, IdentifiedArrayOf, focus state, or bindings
+globs: ["Sources/**/*.swift"]
 ---
 
-## State Management
+# State Management
 
-### ObservableState Pattern
+## ObservableState Pattern
 
 ```swift
 @ObservableState
@@ -30,7 +31,7 @@ struct State: Equatable {
 - Computed properties for derived state
 - Keep state normalized (avoid duplicated data)
 
-### IdentifiedArrayOf for Collections
+## IdentifiedArrayOf for Collections
 
 ```swift
 var todos: IdentifiedArrayOf<Todo.State> = []
@@ -51,7 +52,7 @@ state.todos.insert(newTodo, at: 0)
 - Use for collections that are frequently accessed by ID
 - Maintains order like regular arrays
 
-### Focus State Management
+## Focus State Management
 
 ```swift
 // In State

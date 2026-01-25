@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Sharing
 import SwiftUI
 
 @Reducer
@@ -6,6 +7,7 @@ struct SettingsReducer: Reducer {
     @ObservableState
     struct State: Equatable {
         var path = StackState<Path.State>()
+        @Shared(.defaultCurrency) var defaultCurrency: String
 
         init() {}
     }
@@ -13,11 +15,13 @@ struct SettingsReducer: Reducer {
     @Reducer
     enum Path {
         case categories(CategoriesReducer)
+        case defaultCurrencyPicker(DefaultCurrencyPickerReducer)
     }
 
     enum Action: ViewAction {
         enum View {
             case categoriesTapped
+            case defaultCurrencyTapped
             case tagsTapped
         }
         case path(StackActionOf<Path>)
@@ -34,6 +38,10 @@ struct SettingsReducer: Reducer {
                 switch view {
                 case .categoriesTapped:
                     state.path.append(.categories(CategoriesReducer.State()))
+                    return .none
+
+                case .defaultCurrencyTapped:
+                    state.path.append(.defaultCurrencyPicker(DefaultCurrencyPickerReducer.State()))
                     return .none
 
                 case .tagsTapped:
@@ -72,6 +80,19 @@ struct SettingsView: View {
                             send(.tagsTapped)
                         }
                     }
+
+                    GridRow {
+                        SettingsToolView(
+                            icon: "dollarsign.circle.fill",
+                            title: "Default Currency",
+                            subtitle: "Currently: \(store.defaultCurrency)"
+                        ) {
+                            send(.defaultCurrencyTapped)
+                        }
+
+                        Color.clear
+                            .gridCellUnsizedAxes([.horizontal, .vertical])
+                    }
                 }
                 .padding()
             }
@@ -80,6 +101,8 @@ struct SettingsView: View {
             switch store.case {
             case let .categories(store):
                 CategoriesView(store: store)
+            case let .defaultCurrencyPicker(store):
+                DefaultCurrencyPickerView(store: store)
             }
         }
     }

@@ -1,18 +1,19 @@
 ---
-alwaysApply: true
+description: Feature file organization pattern - apply when creating new TCA features or organizing reducer + view files
+globs: ["Sources/**/*.swift"]
 ---
 
-## Feature File Structure
+# Feature File Structure
 
 Each feature should be organized as a single Swift file with a specific structure:
 
-### File Naming Convention
+## File Naming Convention
 
 - **File name**: Use the feature name (e.g., `TransactionsList.swift`)
 - **Reducer name**: Use the feature name (e.g., `TransactionsList`) with `Reducer` suffix (e.g., `TransactionsListReducer`)
 - **View name**: Use the feature name with `View` suffix (e.g., `TransactionsListView`)
 
-### File Structure
+## File Structure
 
 The file should be organized in this order from top to bottom:
 
@@ -21,7 +22,7 @@ The file should be organized in this order from top to bottom:
 3. **View** (with `@ViewAction` macro)
 4. **Preview** (at the very end)
 
-### Example Structure
+## Example Structure
 
 ```swift
 import ComposableArchitecture

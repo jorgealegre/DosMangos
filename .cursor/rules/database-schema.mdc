@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: Database patterns using SQLiteData - apply when working with database tables, migrations, queries, @FetchAll, @FetchOne, or Schema.swift
+globs: ["**/Schema.swift", "**/Models.swift", "**/Migrations.swift", "**/database.py"]
 ---
 
-## Database Setup & Migrations
+# Database Setup & Migrations
 
-### Database Bootstrap Pattern
+## Database Bootstrap Pattern
 
 All apps follow a similar pattern for database setup:
 
@@ -68,7 +69,7 @@ extension DependencyValues {
 - Create indexes for foreign keys
 - Initialize SyncEngine with all table types
 
-### Table Definitions with @Table
+## Table Definitions with @Table
 
 ```swift
 @Table
@@ -97,9 +98,9 @@ extension Transaction.Draft: Equatable {}
 - Draft types need `Equatable` for use in TCA state
 - Use `UUID` for IDs with `uuid()` SQL function
 
-### Migration Patterns
+## Migration Patterns
 
-#### Basic Table Creation
+### Basic Table Creation
 
 ```swift
 try #sql(
@@ -116,7 +117,7 @@ try #sql(
 ).execute(db)
 ```
 
-#### Foreign Key Relationships
+### Foreign Key Relationships
 
 ```swift
 try #sql(
@@ -130,7 +131,7 @@ try #sql(
 ).execute(db)
 ```
 
-#### Indexes for Performance
+### Indexes for Performance
 
 ```swift
 try #sql(
@@ -149,7 +150,7 @@ try #sql(
 - Always index foreign key columns
 - Use `uuid()` and `datetime('now')` SQL functions
 
-### Sample Data Seeding
+## Sample Data Seeding
 
 ```swift
 #if DEBUG
@@ -184,7 +185,7 @@ extension Database {
 - `seed` block allows mixing entities and drafts
 - Useful for preview and testing
 
-## Database Queries with @FetchAll and @FetchOne (SQLiteData)
+## Database Queries with @FetchAll and @FetchOne
 
 ### Dynamic Queries
 
@@ -228,7 +229,6 @@ case .loadTransactions:
     animation: .default
 )
 var syncUps: [Row]
-
 ```
 
 ### FetchOne for Single Records
@@ -247,7 +247,7 @@ init(syncUp: SyncUp) {
 - Specify animation for smooth updates
 - Access projected value with `$` for loading/reloading
 
-### Database Operations in Effects
+## Database Operations in Effects
 
 ```swift
 case .saveTransaction:

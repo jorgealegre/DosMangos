@@ -1,10 +1,11 @@
 ---
-alwaysApply: true
+description: TCA navigation patterns - apply when implementing sheets, alerts, navigation stacks, or dismissal in Composable Architecture
+globs: ["Sources/**/*.swift"]
 ---
 
-## Navigation Patterns
+# Navigation Patterns
 
-### NavigationStack with TCA
+## NavigationStack with TCA
 
 ```swift
 @Reducer
@@ -31,7 +32,7 @@ ContentView(store: store)
 - `@Presents` for optional presentation
 - Scope store to destination
 
-### Dismissal Patterns
+## Dismissal Patterns
 
 ```swift
 @Dependency(\.dismiss) var dismiss
@@ -47,7 +48,7 @@ case .saveButtonTapped:
 - Call in async effects
 - Automatically dismisses the current presentation
 
-### Alert Navigation
+## Alert Navigation
 
 ```swift
 // Define alert actions

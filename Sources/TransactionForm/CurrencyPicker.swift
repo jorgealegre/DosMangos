@@ -85,10 +85,11 @@ struct CurrencyPicker {
     }
 
     enum Action: ViewAction, BindableAction {
+        @CasePathable
         enum Delegate {
             case currencySelected(currencyCode: String)
         }
-
+        @CasePathable
         enum View {
             case currencyTapped(String)
         }

@@ -2,6 +2,7 @@ import CoreLocation
 import Currency
 import Dependencies
 import Foundation
+import Sharing
 import SQLiteData
 
 @Table
@@ -103,12 +104,13 @@ extension Transaction.Draft {
 extension Transaction.Draft {
     init() {
         @Dependency(\.date.now) var now
+        @Shared(.defaultCurrency) var defaultCurrency
         let nowLocal = now.localDateComponents()
 
         self.init(
             description: "",
             valueMinorUnits: 0,
-            currencyCode: "USD",
+            currencyCode: defaultCurrency,
             convertedValueMinorUnits: nil,  // Will be filled when saved
             convertedCurrencyCode: nil,
             type: .expense,
