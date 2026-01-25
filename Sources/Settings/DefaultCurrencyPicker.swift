@@ -67,6 +67,8 @@ struct DefaultCurrencyPickerReducer: Reducer {
         case conversionCompleted(Result<ConversionResult, Error>)
     }
 
+    private enum CancelID { case fetchRates }
+
     @Dependency(\.defaultDatabase) private var database
     @Dependency(\.exchangeRate) private var exchangeRate
 
@@ -129,7 +131,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
 
                 case .cancelTapped:
                     state.phase = .idle
-                    return .none
+                    return .cancel(id: CancelID.fetchRates)
 
                 case .confirmConversionTapped:
                     guard case let .readyToConvert(targetCurrency, summary) = state.phase else {
@@ -214,6 +216,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                 await send(.ratesFetched(targetCurrency: targetCurrency, .failure(error)))
             }
         }
+        .cancellable(id: CancelID.fetchRates)
     }
 
     /// Performs the actual conversion using bulk updates
