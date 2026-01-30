@@ -189,16 +189,6 @@ struct TransactionCategory: Identifiable, Hashable, Sendable {
     var subcategoryID: Subcategory.ID
 }
 extension TransactionCategory.Draft: Equatable {}
-
-@Table("transactionsCategoriesWithDisplayName")
-struct TransactionCategoriesWithDisplayName {
-    let id: UUID
-    var transactionID: Transaction.ID
-    var subcategoryID: Subcategory.ID
-
-    let displayName: String
-}
-
 // MARK: - Tag
 
 @Table
@@ -427,12 +417,4 @@ extension RecurringTransactionTag?.TableColumns {
     var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
         (self.tagID ?? "").jsonGroupArray(distinct: true, filter: self.tagID.isNot(nil))
     }
-}
-
-@Table("recurringTransactionCategoriesWithDisplayName")
-struct RecurringTransactionCategoriesWithDisplayName {
-    let id: UUID
-    var recurringTransactionID: RecurringTransaction.ID
-    var subcategoryID: Subcategory.ID
-    let displayName: String
 }

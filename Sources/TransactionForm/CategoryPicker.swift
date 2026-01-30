@@ -13,17 +13,16 @@ struct CategoryPicker {
         }
 
         func fetch(_ db: Database) throws -> Value {
-            // Fetch all categories with hierarchical grouping using AllCategories view
-            let allCategoriesRows = try AllCategories
-                .order { ($0.categoryID, $0.subcategoryTitle) }
+            // Fetch all categories with subcategories using inline join
+            let rows = try Category
+                .leftJoin(Subcategory.all) { $0.title.eq($1.categoryID) }
+                .order { ($0.title, $1.title) }
                 .fetchAll(db)
 
-            let allCategories = allCategoriesRows.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
-                let category = Category(title: row.categoryID)
-                if let subcategoryID = row.subcategoryID, let subcategoryTitle = row.subcategoryTitle {
-                    dict[category, default: []].append(
-                        Subcategory(id: subcategoryID, title: subcategoryTitle, categoryID: category.id)
-                    )
+            let allCategories = rows.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
+                let (category, subcategory) = row
+                if let subcategory {
+                    dict[category, default: []].append(subcategory)
                 } else {
                     dict[category, default: []] = dict[category, default: []]
                 }

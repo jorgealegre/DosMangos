@@ -94,12 +94,13 @@ struct TransactionsList: Reducer {
                 .where { $0.convertedCurrencyCode.eq(defaultCurrency) }
                 .where { $0.type.eq(Transaction.TransactionType.expense) }
                 .order { $0.convertedValueMinorUnits.sum().desc() }
-                .join(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
+                .join(TransactionCategory.all) { $0.id.eq($1.transactionID) }
                 .group { $1.subcategoryID }
+                .join(Subcategory.all) { $1.subcategoryID.eq($2.id) }
                 .limit(5)
                 .select {
                     CategoryTotal.Columns(
-                        category: $1.displayName,
+                        category: #sql("\($2.categoryID) || ' › ' || \($2.title)"),
                         total: $0.convertedValueMinorUnits.ifnull(0).sum() ?? 0
                     )
                 }
@@ -384,7 +385,7 @@ struct TransactionsListView: View {
                             } label: {
                                 TransactionView(
                                     transaction: row.transaction,
-                                    category: row.category,
+                                    category: row.categoryDisplayName,
                                     tags: row.tags,
                                     location: row.location
                                 )

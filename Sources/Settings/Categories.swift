@@ -12,16 +12,15 @@ struct CategoriesReducer: Reducer {
         }
 
         func fetch(_ db: Database) throws -> Value {
-            let allCategories = try AllCategories
-                .order { ($0.categoryID, $0.subcategoryTitle) }
+            let rows = try Category
+                .leftJoin(Subcategory.all) { $0.title.eq($1.categoryID) }
+                .order { ($0.title, $1.title) }
                 .fetchAll(db)
 
-            let result = allCategories.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
-                let category = Category(title: row.categoryID)
-                if let subcategoryID = row.subcategoryID, let subcategoryTitle = row.subcategoryTitle {
-                    dict[category, default: []].append(
-                        Subcategory(id: subcategoryID, title: subcategoryTitle, categoryID: category.id)
-                    )
+            let result = rows.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
+                let (category, subcategory) = row
+                if let subcategory {
+                    dict[category, default: []].append(subcategory)
                 } else {
                     dict[category] = []
                 }

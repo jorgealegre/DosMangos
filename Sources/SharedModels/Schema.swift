@@ -72,89 +72,39 @@ func appDatabase() throws -> any DatabaseWriter {
 
 // MARK: - Views
 
-@Table("allCategories")
-struct AllCategories {
-    let categoryID: Category.ID
-    let subcategoryID: Subcategory.ID?
-    let subcategoryTitle: String?
-    let displayName: String
-}
-
 extension Database {
     func createViews() throws {
-
-        try #sql("""
-        CREATE TEMPORARY VIEW "allCategories" AS
-        SELECT
-            "categoryID", 
-            "subcategoryID", 
-            "subcategoryTitle", 
-            CASE
-                WHEN sc.\(Subcategory.columns.title) IS NOT NULL
-                THEN s.\(Category.columns.title) || ' › ' || sc.\(Subcategory.columns.title)
-                ELSE s.\(Category.columns.title)
-            END AS "displayName"
-        FROM \(Category.self) c
-        LEFT JOIN \(Subcategory.self) sc 
-        ON \(Category.columns.primaryKey) = \(Subcategory.columns.categoryID)
-        """)
-        .execute(self)
-
-        // View for transaction categories with display name
-        try #sql("""
-        CREATE TEMPORARY VIEW \(raw: TransactionCategoriesWithDisplayName.tableName) AS
-        SELECT
-            \(TransactionCategory.columns),
-            s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
-                AS \(raw: TransactionCategoriesWithDisplayName.columns.displayName.name)
-        FROM \(raw: TransactionCategory.tableName) tc
-        JOIN \(raw: Subcategory.tableName) s
-        ON tc.\(raw: TransactionCategory.columns.subcategoryID.name) = s.\(raw: Subcategory.columns.id.name)
-        """)
-        .execute(self)
 
         try TransactionsListRow.createTemporaryView(
             as: Transaction
                 .group(by: \.id)
-                .leftJoin(TransactionCategoriesWithDisplayName.all) { $0.id.eq($1.transactionID) }
-                .leftJoin(TransactionLocation.all) { $0.id.eq($2.transactionID) }
+                .leftJoin(TransactionCategory.all) { $0.id.eq($1.transactionID) }
+                .leftJoin(Subcategory.all) { $1.subcategoryID.eq($2.id) }
+                .leftJoin(TransactionLocation.all) { $0.id.eq($3.transactionID) }
                 .withTags
                 .select {
                     TransactionsListRow.Columns(
                         transaction: $0,
-                        category: $1.displayName,
-                        tags: $4.jsonTitles,
-                        location: $2
+                        categoryDisplayName: #sql("\($2.categoryID) || ' › ' || \($2.title)"),
+                        tags: $5.jsonTitles,
+                        location: $3
                     )
                 }
         )
         .execute(self)
 
-        // View for recurring transaction categories with display name
-        try #sql("""
-        CREATE TEMPORARY VIEW \(raw: RecurringTransactionCategoriesWithDisplayName.tableName) AS
-        SELECT
-            \(RecurringTransactionCategory.columns),
-            s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
-                AS \(raw: RecurringTransactionCategoriesWithDisplayName.columns.displayName.name)
-        FROM \(raw: RecurringTransactionCategory.tableName) rtc
-        JOIN \(raw: Subcategory.tableName) s
-        ON rtc.\(raw: RecurringTransactionCategory.columns.subcategoryID.name) = s.\(raw: Subcategory.columns.id.name)
-        """)
-        .execute(self)
-
-        // View for due recurring rows (recurring transactions with category and tags)
         try DueRecurringRow.createTemporaryView(
             as: RecurringTransaction
                 .group(by: \.id)
-                .leftJoin(RecurringTransactionCategoriesWithDisplayName.all) { $0.id.eq($1.recurringTransactionID) }
+                .leftJoin(RecurringTransactionCategory.all) { $0.id.eq($1.recurringTransactionID) }
+                .leftJoin(Subcategory.all) { $1.subcategoryID.eq($2.id) }
                 .withTags
                 .select {
                     DueRecurringRow.Columns(
                         recurringTransaction: $0,
                         subcategoryID: $1.subcategoryID,
-                        category: $1.displayName,
-                        tags: $3.jsonTitles
+                        categoryDisplayName: #sql("\($2.categoryID) || ' › ' || \($2.title)"),
+                        tags: $4.jsonTitles
                     )
                 }
         )
