@@ -619,6 +619,80 @@ extension DatabaseMigrator {
             ON "recurringTransactionsCategories"("subcategoryID")
             """).execute(db)
         }
+
+        self.registerMigration("Remove UNIQUE constraints for CloudKit compatibility") { db in
+            // =================================================================
+            // transactionsTags - Remove UNIQUE constraint
+            // =================================================================
+
+            try #sql("""
+            CREATE TABLE "transactionsTags_new" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
+                "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            INSERT INTO "transactionsTags_new" ("id", "transactionID", "tagID")
+            SELECT "id", "transactionID", "tagID"
+            FROM "transactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "transactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            ALTER TABLE "transactionsTags_new" RENAME TO "transactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactionsTags_transactionID"
+            ON "transactionsTags"("transactionID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactionsTags_tagID"
+            ON "transactionsTags"("tagID")
+            """).execute(db)
+
+            // =================================================================
+            // recurringTransactionsTags - Remove UNIQUE constraint
+            // =================================================================
+
+            try #sql("""
+            CREATE TABLE "recurringTransactionsTags_new" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "recurringTransactionID" TEXT NOT NULL REFERENCES "recurringTransactions"("id") ON DELETE CASCADE,
+                "tagID" TEXT NOT NULL REFERENCES "tags"("title") ON DELETE CASCADE ON UPDATE CASCADE
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            INSERT INTO "recurringTransactionsTags_new" ("id", "recurringTransactionID", "tagID")
+            SELECT "id", "recurringTransactionID", "tagID"
+            FROM "recurringTransactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "recurringTransactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            ALTER TABLE "recurringTransactionsTags_new" RENAME TO "recurringTransactionsTags"
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsTags_recurringTransactionID"
+            ON "recurringTransactionsTags"("recurringTransactionID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsTags_tagID"
+            ON "recurringTransactionsTags"("tagID")
+            """).execute(db)
+        }
     }
 }
 
