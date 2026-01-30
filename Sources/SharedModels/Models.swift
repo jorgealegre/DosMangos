@@ -79,7 +79,7 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
-    var recurringTransactionID: UUID?
+    var recurringTransactionID: RecurringTransaction.ID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -171,31 +171,32 @@ struct Category: Identifiable, Hashable, Sendable {
     @Column(primaryKey: true)
     var title: String
 
-    var parentCategoryID: String?
-
     var id: String { title }
-
-    var displayName: String {
-        if let parentCategoryID {
-            "\(parentCategoryID) › \(title)"
-        } else {
-            title
-        }
-    }
 }
+
+@Table
+struct Subcategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var title: String
+    var categoryID: Category.ID
+}
+extension Subcategory.Draft: Equatable {}
+
 @Table("transactionsCategories")
 struct TransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
-    var transactionID: UUID
-    var categoryID: String
+    var transactionID: Transaction.ID
+    var categoryID: Category.ID?       // mutually exclusive with subcategoryID
+    var subcategoryID: Subcategory.ID? // mutually exclusive with categoryID
 }
 extension TransactionCategory.Draft: Equatable {}
 
 @Table("transactionsCategoriesWithDisplayName")
 struct TransactionCategoriesWithDisplayName {
     let id: UUID
-    var transactionID: UUID
-    var categoryID: String
+    var transactionID: Transaction.ID
+    var categoryID: Category.ID?
+    var subcategoryID: Subcategory.ID?
 
     let displayName: String
 }
@@ -217,8 +218,8 @@ extension Tag?.TableColumns {
 @Table("transactionsTags")
 struct TransactionTag: Identifiable, Hashable, Sendable {
     let id: UUID
-    var transactionID: UUID
-    var tagID: String
+    var transactionID: Transaction.ID
+    var tagID: Tag.ID
 }
 extension TransactionTag.Draft: Equatable {}
 extension Transaction {
@@ -233,7 +234,7 @@ extension Transaction {
 @Table("transaction_locations")
 struct TransactionLocation: Hashable, Sendable {
     @Column(primaryKey: true)
-    let transactionID: UUID
+    let transactionID: Transaction.ID
     var latitude: Double
     var longitude: Double
     var city: String?
@@ -379,16 +380,17 @@ extension RecurringTransaction.Draft {
 @Table("recurringTransactionsCategories")
 struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
-    var recurringTransactionID: UUID
-    var categoryID: String
+    var recurringTransactionID: RecurringTransaction.ID
+    var categoryID: Category.ID?       // mutually exclusive with subcategoryID
+    var subcategoryID: Subcategory.ID? // mutually exclusive with categoryID
 }
 extension RecurringTransactionCategory.Draft: Equatable {}
 
 @Table("recurringTransactionsTags")
 struct RecurringTransactionTag: Identifiable, Hashable, Sendable {
     let id: UUID
-    var recurringTransactionID: UUID
-    var tagID: String
+    var recurringTransactionID: RecurringTransaction.ID
+    var tagID: Tag.ID
 }
 extension RecurringTransactionTag.Draft: Equatable {}
 
@@ -432,7 +434,8 @@ extension RecurringTransactionTag?.TableColumns {
 @Table("recurringTransactionCategoriesWithDisplayName")
 struct RecurringTransactionCategoriesWithDisplayName {
     let id: UUID
-    var recurringTransactionID: UUID
-    var categoryID: String
+    var recurringTransactionID: RecurringTransaction.ID
+    var categoryID: Category.ID?
+    var subcategoryID: Subcategory.ID?
     let displayName: String
 }
