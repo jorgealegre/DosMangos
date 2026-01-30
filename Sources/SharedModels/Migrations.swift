@@ -463,7 +463,7 @@ extension DatabaseMigrator {
             // STEP 3: Create new table structure
             // =================================================================
 
-            // New categories table (top-level/standalone only, title as PK)
+            // New categories table (grouping containers, title as PK)
             try #sql("""
             CREATE TABLE "categories" (
                 "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL
@@ -471,6 +471,7 @@ extension DatabaseMigrator {
             """).execute(db)
 
             // New subcategories table (UUID PK, references categories)
+            // Subcategories are the only assignable items to transactions
             try #sql("""
             CREATE TABLE "subcategories" (
                 "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
@@ -479,23 +480,21 @@ extension DatabaseMigrator {
             ) STRICT
             """).execute(db)
 
-            // New transactionsCategories with two FK columns
+            // New transactionsCategories - only subcategoryID (required)
             try #sql("""
             CREATE TABLE "transactionsCategories" (
                 "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
                 "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
-                "categoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
-                "subcategoryID" TEXT REFERENCES "subcategories"("id") ON DELETE CASCADE
+                "subcategoryID" TEXT NOT NULL REFERENCES "subcategories"("id") ON DELETE CASCADE
             ) STRICT
             """).execute(db)
 
-            // New recurringTransactionsCategories with two FK columns
+            // New recurringTransactionsCategories - only subcategoryID (required)
             try #sql("""
             CREATE TABLE "recurringTransactionsCategories" (
                 "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
                 "recurringTransactionID" TEXT NOT NULL REFERENCES "recurringTransactions"("id") ON DELETE CASCADE,
-                "categoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
-                "subcategoryID" TEXT REFERENCES "subcategories"("id") ON DELETE CASCADE
+                "subcategoryID" TEXT NOT NULL REFERENCES "subcategories"("id") ON DELETE CASCADE
             ) STRICT
             """).execute(db)
 
@@ -516,40 +515,59 @@ extension DatabaseMigrator {
             FROM "temp_child_categories"
             """).execute(db)
 
-            // Restore transactionsCategories - parent category references
+            // Create "Other" subcategories for parent categories that have transactions assigned
+            // but no existing subcategories to migrate to
             try #sql("""
-            INSERT INTO "transactionsCategories" ("id", "transactionID", "categoryID", "subcategoryID")
-            SELECT "id", "transactionID", "categoryID", NULL
-            FROM "temp_transactionsCategories"
-            WHERE "isParent" = 1
+            INSERT INTO "subcategories" ("title", "categoryID")
+            SELECT DISTINCT 'Other', ttc."categoryID"
+            FROM "temp_transactionsCategories" ttc
+            WHERE ttc."isParent" = 1
             """).execute(db)
 
-            // Restore transactionsCategories - subcategory references (need to look up new UUID)
+            // Also for recurring transactions
             try #sql("""
-            INSERT INTO "transactionsCategories" ("id", "transactionID", "categoryID", "subcategoryID")
-            SELECT ttc."id", ttc."transactionID", NULL, s."id"
+            INSERT OR IGNORE INTO "subcategories" ("title", "categoryID")
+            SELECT DISTINCT 'Other', trtc."categoryID"
+            FROM "temp_recurringTransactionsCategories" trtc
+            WHERE trtc."isParent" = 1
+            """).execute(db)
+
+            // Restore transactionsCategories - subcategory references (child categories)
+            try #sql("""
+            INSERT INTO "transactionsCategories" ("id", "transactionID", "subcategoryID")
+            SELECT ttc."id", ttc."transactionID", s."id"
             FROM "temp_transactionsCategories" ttc
             JOIN "temp_child_categories" tcc ON ttc."categoryID" = tcc."title"
             JOIN "subcategories" s ON s."title" = tcc."title" AND s."categoryID" = tcc."parentCategoryID"
             WHERE ttc."isParent" = 0
             """).execute(db)
 
-            // Restore recurringTransactionsCategories - parent category references
+            // Restore transactionsCategories - parent category refs → link to "Other" subcategory
             try #sql("""
-            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "categoryID", "subcategoryID")
-            SELECT "id", "recurringTransactionID", "categoryID", NULL
-            FROM "temp_recurringTransactionsCategories"
-            WHERE "isParent" = 1
+            INSERT INTO "transactionsCategories" ("id", "transactionID", "subcategoryID")
+            SELECT ttc."id", ttc."transactionID", s."id"
+            FROM "temp_transactionsCategories" ttc
+            JOIN "subcategories" s ON s."title" = 'Other' AND s."categoryID" = ttc."categoryID"
+            WHERE ttc."isParent" = 1
             """).execute(db)
 
-            // Restore recurringTransactionsCategories - subcategory references (need to look up new UUID)
+            // Restore recurringTransactionsCategories - subcategory references (child categories)
             try #sql("""
-            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "categoryID", "subcategoryID")
-            SELECT trtc."id", trtc."recurringTransactionID", NULL, s."id"
+            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "subcategoryID")
+            SELECT trtc."id", trtc."recurringTransactionID", s."id"
             FROM "temp_recurringTransactionsCategories" trtc
             JOIN "temp_child_categories" tcc ON trtc."categoryID" = tcc."title"
             JOIN "subcategories" s ON s."title" = tcc."title" AND s."categoryID" = tcc."parentCategoryID"
             WHERE trtc."isParent" = 0
+            """).execute(db)
+
+            // Restore recurringTransactionsCategories - parent category refs → link to "Other" subcategory
+            try #sql("""
+            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "subcategoryID")
+            SELECT trtc."id", trtc."recurringTransactionID", s."id"
+            FROM "temp_recurringTransactionsCategories" trtc
+            JOIN "subcategories" s ON s."title" = 'Other' AND s."categoryID" = trtc."categoryID"
+            WHERE trtc."isParent" = 1
             """).execute(db)
 
             // =================================================================
@@ -587,11 +605,6 @@ extension DatabaseMigrator {
             """).execute(db)
 
             try #sql("""
-            CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_categoryID"
-            ON "transactionsCategories"("categoryID")
-            """).execute(db)
-
-            try #sql("""
             CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_subcategoryID"
             ON "transactionsCategories"("subcategoryID")
             """).execute(db)
@@ -599,11 +612,6 @@ extension DatabaseMigrator {
             try #sql("""
             CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_recurringTransactionID"
             ON "recurringTransactionsCategories"("recurringTransactionID")
-            """).execute(db)
-
-            try #sql("""
-            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_categoryID"
-            ON "recurringTransactionsCategories"("categoryID")
             """).execute(db)
 
             try #sql("""

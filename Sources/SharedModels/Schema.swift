@@ -93,7 +93,7 @@ extension Database {
                 WHEN sc.\(Subcategory.columns.title) IS NOT NULL
                 THEN s.\(Category.columns.title) || ' › ' || sc.\(Subcategory.columns.title)
                 ELSE s.\(Category.columns.title)
-            "displayName"
+            END AS "displayName"
         FROM \(Category.self) c
         LEFT JOIN \(Subcategory.self) sc 
         ON \(Category.columns.primaryKey) = \(Subcategory.columns.categoryID)
@@ -101,20 +101,14 @@ extension Database {
         .execute(self)
 
         // View for transaction categories with display name
-        // Handles both categoryID (references categories.title) and subcategoryID (references subcategories.id)
         try #sql("""
         CREATE TEMPORARY VIEW \(raw: TransactionCategoriesWithDisplayName.tableName) AS
         SELECT
             \(TransactionCategory.columns),
-            CASE
-                WHEN tc.\(raw: TransactionCategory.columns.categoryID.name) IS NOT NULL
-                THEN tc.\(raw: TransactionCategory.columns.categoryID.name)
-                WHEN tc.\(raw: TransactionCategory.columns.subcategoryID.name) IS NOT NULL
-                THEN s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
-                ELSE ''
-            END AS \(raw: TransactionCategoriesWithDisplayName.columns.displayName.name)
+            s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
+                AS \(raw: TransactionCategoriesWithDisplayName.columns.displayName.name)
         FROM \(raw: TransactionCategory.tableName) tc
-        LEFT JOIN \(raw: Subcategory.tableName) s
+        JOIN \(raw: Subcategory.tableName) s
         ON tc.\(raw: TransactionCategory.columns.subcategoryID.name) = s.\(raw: Subcategory.columns.id.name)
         """)
         .execute(self)
@@ -140,16 +134,11 @@ extension Database {
         try #sql("""
         CREATE TEMPORARY VIEW \(raw: RecurringTransactionCategoriesWithDisplayName.tableName) AS
         SELECT
-            \(RecurringTransactionCategory.columns)
-            CASE
-                WHEN rtc.\(raw: RecurringTransactionCategory.columns.categoryID.name) IS NOT NULL
-                THEN rtc.\(raw: RecurringTransactionCategory.columns.categoryID.name)
-                WHEN rtc.\(raw: RecurringTransactionCategory.columns.subcategoryID.name) IS NOT NULL
-                THEN s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
-                ELSE ''
-            END AS \(raw: RecurringTransactionCategoriesWithDisplayName.columns.displayName.name)
+            \(RecurringTransactionCategory.columns),
+            s.\(raw: Subcategory.columns.categoryID.name) || ' › ' || s.\(raw: Subcategory.columns.title.name)
+                AS \(raw: RecurringTransactionCategoriesWithDisplayName.columns.displayName.name)
         FROM \(raw: RecurringTransactionCategory.tableName) rtc
-        LEFT JOIN \(raw: Subcategory.tableName) s
+        JOIN \(raw: Subcategory.tableName) s
         ON rtc.\(raw: RecurringTransactionCategory.columns.subcategoryID.name) = s.\(raw: Subcategory.columns.id.name)
         """)
         .execute(self)
@@ -163,6 +152,7 @@ extension Database {
                 .select {
                     DueRecurringRow.Columns(
                         recurringTransaction: $0,
+                        subcategoryID: $1.subcategoryID,
                         category: $1.displayName,
                         tags: $3.jsonTitles
                     )
@@ -189,41 +179,25 @@ func seedSampleData() throws {
     // Reference data
     let tagIDs = ["weekend", "friends", "guilty_pleasure", "work", "recurring", "health"]
 
-    // Hierarchical categories
-    let parentCategories = ["Home", "Food & Drinks"]
-    let subcategoriesMap: [String: [String]] = [
-        "Home": ["Furniture", "Maintenance", "Utilities"],
-        "Food & Drinks": ["Restaurants", "Groceries"]
+    // Categories (grouping containers)
+    let categories = ["Housing", "Food & Drinks", "Entertainment", "Transport", "Income", "Health"]
+
+    // Subcategories (assignable to transactions)
+    // Order matters - indices used in transaction seed data below
+    let subcategoriesMap: [(category: String, subcategories: [String])] = [
+        ("Housing", ["Rent", "Gardening", "Furniture", "Utilities"]),        // 0-3
+        ("Food & Drinks", ["Dinner", "Coffee", "Groceries"]),                // 4-6
+        ("Entertainment", ["Movies", "Books"]),                              // 7-8
+        ("Transport", ["Fuel", "Taxi"]),                                     // 9-10
+        ("Income", ["Salary", "Side Projects"]),                             // 11-12
+        ("Health", ["Gym", "Pharmacy"]),                                     // 13-14
     ]
-    let standaloneCategories = ["Entertainment", "Transport", "Salary", "Health"]
 
-    // Track category assignments for transactions
-    // Each entry is either: (categoryTitle, nil) for top-level or (subcategoryTitle, subcategoryUUID)
-    enum CategoryRef {
-        case category(title: String)
-        case subcategory(title: String, parentTitle: String, id: UUID)
-    }
-
-    // Build list of all category references for transaction assignment
-    var categoryRefs: [CategoryRef] = []
-
-    // Add parent categories as assignable
-    for parentTitle in parentCategories {
-        categoryRefs.append(.category(title: parentTitle))
-    }
-
-    // Add standalone categories
-    for title in standaloneCategories {
-        categoryRefs.append(.category(title: title))
-    }
-
-    // Add subcategories (need to generate UUIDs ahead of time)
-    var subcategoryUUIDs: [(title: String, parentTitle: String, id: UUID)] = []
-    for (parentTitle, subs) in subcategoriesMap {
+    // Build list of all subcategories with pre-generated UUIDs for transaction assignment
+    var allSubcategories: [(title: String, categoryTitle: String, id: UUID)] = []
+    for (categoryTitle, subs) in subcategoriesMap {
         for subTitle in subs {
-            let subID = uuid()
-            subcategoryUUIDs.append((title: subTitle, parentTitle: parentTitle, id: subID))
-            categoryRefs.append(.subcategory(title: subTitle, parentTitle: parentTitle, id: subID))
+            allSubcategories.append((title: subTitle, categoryTitle: categoryTitle, id: uuid()))
         }
     }
 
@@ -259,15 +233,23 @@ func seedSampleData() throws {
         (19.0760, 72.8777, "Mumbai", "IN"),
     ]
 
+    // Subcategory indices (based on allSubcategories order):
+    // Housing: 0=Rent, 1=Gardening, 2=Furniture, 3=Utilities
+    // Food & Drinks: 4=Dinner, 5=Coffee, 6=Groceries
+    // Entertainment: 7=Movies, 8=Books
+    // Transport: 9=Fuel, 10=Taxi
+    // Income: 11=Salary, 12=Side Projects
+    // Health: 13=Gym, 14=Pharmacy
+
     // Current month (~7 transactions, all within last 5 days to avoid future dates)
-    let currentMonthSeed: [(daysAgo: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-        (0, "Dinner at Alto El Fuego", 80_00, "USD", .expense, 1, [0, 1]),
-        (0, "Coffee", 5_00, "USD", .expense, 1, [4]),
-        (0, "Empanadas", 15000_00, "ARS", .expense, 1, [0]),  // ~$10 USD
-        (1, "Groceries", 125_00, "USD", .expense, 0, [4]),
-        (2, "Gym", 40_00, "USD", .expense, 4, [5, 4]),
-        (3, "Taxi", 19_00, "USD", .expense, 5, []),
-        (5, "Movie night", 17_00, "USD", .expense, 2, [0]),
+    let currentMonthSeed: [(daysAgo: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, subcategoryIndex: Int, tagIndices: [Int])] = [
+        (0, "Dinner at Alto El Fuego", 80_00, "USD", .expense, 4, [0, 1]),   // Dinner
+        (0, "Coffee", 5_00, "USD", .expense, 5, [4]),                         // Coffee
+        (0, "Empanadas", 15000_00, "ARS", .expense, 4, [0]),                  // Dinner
+        (1, "Groceries", 125_00, "USD", .expense, 6, [4]),                    // Groceries
+        (2, "Gym", 40_00, "USD", .expense, 13, [5, 4]),                       // Gym
+        (3, "Taxi", 19_00, "USD", .expense, 10, []),                          // Taxi
+        (5, "Movie night", 17_00, "USD", .expense, 7, [0]),                   // Movies
     ]
 
     // Pre-calculate transaction data outside seed block
@@ -284,7 +266,7 @@ func seedSampleData() throws {
         localMonth: Int,
         localDay: Int,
         locationIndex: Int,
-        categoryRefIndex: Int,
+        subcategoryIndex: Int,
         tagIndices: [Int]
     )] = []
 
@@ -321,17 +303,17 @@ func seedSampleData() throws {
             localMonth: local.month,
             localDay: local.day,
             locationIndex: index % locations.count,
-            categoryRefIndex: seed.categoryIndex,
+            subcategoryIndex: seed.subcategoryIndex,
             tagIndices: seed.tagIndices
         ))
     }
 
     // Previous month (a few)
-    let previousMonthSeed: [(dayOffset: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, categoryIndex: Int, tagIndices: [Int])] = [
-        (2, "Book", 19_00, "USD", .expense, 3, []),
-        (6, "Dinner out", 54_00, "USD", .expense, 1, [0]),
-        (14, "Internet bill", 60_00, "USD", .expense, 0, [4]),
-        (21, "Side project", 420_00, "USD", .income, 6, [3]),
+    let previousMonthSeed: [(dayOffset: Int, description: String, valueMinorUnits: Int, currencyCode: String, type: Transaction.TransactionType, subcategoryIndex: Int, tagIndices: [Int])] = [
+        (2, "Book", 19_00, "USD", .expense, 8, []),            // Books
+        (6, "Dinner out", 54_00, "USD", .expense, 4, [0]),     // Dinner
+        (14, "Internet bill", 60_00, "USD", .expense, 3, [4]), // Utilities
+        (21, "Side project", 420_00, "USD", .income, 12, [3]), // Side Projects
     ]
 
     // Pre-calculate transaction data outside seed block
@@ -348,7 +330,7 @@ func seedSampleData() throws {
         localMonth: Int,
         localDay: Int,
         locationIndex: Int,
-        categoryRefIndex: Int,
+        subcategoryIndex: Int,
         tagIndices: [Int]
     )] = []
 
@@ -384,19 +366,9 @@ func seedSampleData() throws {
             localMonth: local.month,
             localDay: local.day,
             locationIndex: (index + 3) % locations.count,
-            categoryRefIndex: seed.categoryIndex,
+            subcategoryIndex: seed.subcategoryIndex,
             tagIndices: seed.tagIndices
         ))
-    }
-
-    // Helper to create transaction category based on CategoryRef
-    func createTransactionCategory(transactionID: UUID, categoryRef: CategoryRef) -> TransactionCategory.Draft {
-        switch categoryRef {
-        case .category(let title):
-            return TransactionCategory.Draft(transactionID: transactionID, categoryID: title, subcategoryID: nil)
-        case .subcategory(_, _, let id):
-            return TransactionCategory.Draft(transactionID: transactionID, categoryID: nil, subcategoryID: id)
-        }
     }
 
     try database.write { db in
@@ -405,19 +377,14 @@ func seedSampleData() throws {
                 Tag(title: tagID)
             }
 
-            // Create parent categories (top-level)
-            for parentTitle in parentCategories {
-                Category(title: parentTitle)
-            }
-
-            // Create standalone categories (also top-level)
-            for title in standaloneCategories {
+            // Create categories (grouping containers)
+            for title in categories {
                 Category(title: title)
             }
 
             // Create subcategories with pre-generated UUIDs
-            for sub in subcategoryUUIDs {
-                Subcategory(id: sub.id, title: sub.title, categoryID: sub.parentTitle)
+            for sub in allSubcategories {
+                Subcategory(id: sub.id, title: sub.title, categoryID: sub.categoryTitle)
             }
 
             // Insert current month transactions
@@ -446,7 +413,7 @@ func seedSampleData() throws {
                     countryCode: loc.countryCode
                 )
 
-                createTransactionCategory(transactionID: t.id, categoryRef: categoryRefs[t.categoryRefIndex])
+                TransactionCategory.Draft(transactionID: t.id, subcategoryID: allSubcategories[t.subcategoryIndex].id)
                 for tagIndex in t.tagIndices {
                     TransactionTag.Draft(transactionID: t.id, tagID: tagIDs[tagIndex])
                 }
@@ -478,7 +445,7 @@ func seedSampleData() throws {
                     countryCode: loc.countryCode
                 )
 
-                createTransactionCategory(transactionID: t.id, categoryRef: categoryRefs[t.categoryRefIndex])
+                TransactionCategory.Draft(transactionID: t.id, subcategoryID: allSubcategories[t.subcategoryIndex].id)
                 for tagIndex in t.tagIndices {
                     TransactionTag.Draft(transactionID: t.id, tagID: tagIDs[tagIndex])
                 }

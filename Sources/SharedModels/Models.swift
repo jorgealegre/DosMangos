@@ -186,8 +186,7 @@ extension Subcategory.Draft: Equatable {}
 struct TransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
     var transactionID: Transaction.ID
-    var categoryID: Category.ID?       // mutually exclusive with subcategoryID
-    var subcategoryID: Subcategory.ID? // mutually exclusive with categoryID
+    var subcategoryID: Subcategory.ID
 }
 extension TransactionCategory.Draft: Equatable {}
 
@@ -195,8 +194,7 @@ extension TransactionCategory.Draft: Equatable {}
 struct TransactionCategoriesWithDisplayName {
     let id: UUID
     var transactionID: Transaction.ID
-    var categoryID: Category.ID?
-    var subcategoryID: Subcategory.ID?
+    var subcategoryID: Subcategory.ID
 
     let displayName: String
 }
@@ -381,8 +379,7 @@ extension RecurringTransaction.Draft {
 struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
     var recurringTransactionID: RecurringTransaction.ID
-    var categoryID: Category.ID?       // mutually exclusive with subcategoryID
-    var subcategoryID: Subcategory.ID? // mutually exclusive with categoryID
+    var subcategoryID: Subcategory.ID
 }
 extension RecurringTransactionCategory.Draft: Equatable {}
 
@@ -400,7 +397,7 @@ extension RecurringTransactionTag.Draft: Equatable {}
 struct TransactionsListRow: Identifiable, Hashable, Sendable {
     var id: UUID { transaction.id }
     let transaction: Transaction
-    let category: String?
+    let categoryDisplayName: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
     let location: TransactionLocation?
@@ -412,7 +409,8 @@ struct TransactionsListRow: Identifiable, Hashable, Sendable {
 struct DueRecurringRow: Identifiable, Hashable, Sendable {
     var id: UUID { recurringTransaction.id }
     let recurringTransaction: RecurringTransaction
-    let category: String?
+    let subcategoryID: Subcategory.ID?
+    let categoryDisplayName: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
 }
@@ -435,7 +433,6 @@ extension RecurringTransactionTag?.TableColumns {
 struct RecurringTransactionCategoriesWithDisplayName {
     let id: UUID
     var recurringTransactionID: RecurringTransaction.ID
-    var categoryID: Category.ID?
-    var subcategoryID: Subcategory.ID?
+    var subcategoryID: Subcategory.ID
     let displayName: String
 }

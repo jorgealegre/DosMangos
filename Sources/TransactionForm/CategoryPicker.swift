@@ -8,56 +8,51 @@ struct CategoryPicker {
 
     struct CategoriesRequest: FetchKeyRequest, Equatable {
         struct Value: Equatable {
-            var allCategories: OrderedDictionary<Category, [Category]> = [:]
-            var frequentCategories: [Category] = []
+            var allCategories: OrderedDictionary<Category, [Subcategory]> = [:]
+            var frequentSubcategories: [Subcategory] = []
         }
 
         func fetch(_ db: Database) throws -> Value {
-            // Fetch all categories with hierarchical grouping
-            let categories = try Category
-                .order {
-                    (
-                        $0.parentCategoryID ?? $0.title,
-                        $0.parentCategoryID.isNot(nil),
-                        $0.title
-                    )
-                }
+            // Fetch all categories with hierarchical grouping using AllCategories view
+            let allCategoriesRows = try AllCategories
+                .order { ($0.categoryID, $0.subcategoryTitle) }
                 .fetchAll(db)
 
-            var allCategories: OrderedDictionary<Category, [Category]> = [:]
-            var parent: Category?
-            for category in categories {
-                if category.parentCategoryID == nil {
-                    parent = category
-                    allCategories[category] = []
-                } else if let parent {
-                    allCategories[parent]?.append(category)
+            let allCategories = allCategoriesRows.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
+                let category = Category(title: row.categoryID)
+                if let subcategoryID = row.subcategoryID, let subcategoryTitle = row.subcategoryTitle {
+                    dict[category, default: []].append(
+                        Subcategory(id: subcategoryID, title: subcategoryTitle, categoryID: category.id)
+                    )
+                } else {
+                    dict[category, default: []] = dict[category, default: []]
                 }
             }
 
-            let frequentCategories = try #sql(
+            // Fetch frequent subcategories
+            let frequentSubcategories = try #sql(
                 """
-                SELECT \(Category.columns),
+                SELECT \(Subcategory.columns),
                 SUM(CASE
                     WHEN julianday('now') - julianday(transactions.createdAtUTC) <= 30
                     THEN 3
                     ELSE 1
                 END) as weighted_count
-                FROM categories
-                JOIN transactionsCategories ON categories.title = transactionsCategories.categoryID
+                FROM subcategories
+                JOIN transactionsCategories ON subcategories.id = transactionsCategories.subcategoryID
                 JOIN transactions ON transactionsCategories.transactionID = transactions.id
                 WHERE julianday('now') - julianday(transactions.createdAtUTC) <= 90
-                GROUP BY transactionsCategories.categoryID
-                ORDER BY weighted_count DESC, categories.title
+                GROUP BY transactionsCategories.subcategoryID
+                ORDER BY weighted_count DESC, subcategories.title
                 LIMIT 4
                 """,
-                as: Category.self
+                as: Subcategory.self
             )
                 .fetchAll(db)
 
             return Value(
                 allCategories: allCategories,
-                frequentCategories: frequentCategories
+                frequentSubcategories: frequentSubcategories
             )
         }
     }
@@ -68,28 +63,33 @@ struct CategoryPicker {
         var data = CategoriesRequest.Value()
 
         var searchText: String = ""
-        var selectedCategory: Category?
+        var selectedSubcategory: Subcategory?
 
         var newCategoryTitle: String = ""
-        var newSubcategoryTitles: [String: String] = [:]
+        var newSubcategoryTitles: [Category.ID: String] = [:]
 
-        var filteredCategories: OrderedDictionary<Category, [Category]> {
+        /// The category ID to focus on for subcategory creation (set after creating a new category)
+        var focusedCategoryForNewSubcategory: Category.ID?
+
+        var filteredCategories: OrderedDictionary<Category, [Subcategory]> {
             guard !searchText.isEmpty else {
                 return data.allCategories
             }
 
             let searchLower = searchText.lowercased()
-            var filtered: OrderedDictionary<Category, [Category]> = [:]
+            var filtered: OrderedDictionary<Category, [Subcategory]> = [:]
 
-            for (parent, children) in data.allCategories {
-                let parentMatches = parent.title.lowercased().contains(searchLower)
-                let matchingChildren = children.filter { $0.title.lowercased().contains(searchLower) }
+            for (category, subcategories) in data.allCategories {
+                let categoryMatches = category.title.lowercased().contains(searchLower)
+                let matchingSubcategories = subcategories.filter { $0.title.lowercased().contains(searchLower) }
 
-                if parentMatches || !matchingChildren.isEmpty {
-                    if parentMatches {
-                        filtered[parent] = children.filter { $0.title.lowercased().contains(searchLower) }
+                if categoryMatches || !matchingSubcategories.isEmpty {
+                    if categoryMatches {
+                        // Show category and all matching subcategories
+                        filtered[category] = matchingSubcategories.isEmpty ? subcategories : matchingSubcategories
                     } else {
-                        filtered[parent] = matchingChildren
+                        // Only show matching subcategories
+                        filtered[category] = matchingSubcategories
                     }
                 }
             }
@@ -97,37 +97,39 @@ struct CategoryPicker {
             return filtered
         }
 
-        var filteredFrequentCategories: [Category] {
+        var filteredFrequentSubcategories: [Subcategory] {
             guard !searchText.isEmpty else {
-                return data.frequentCategories
+                return data.frequentSubcategories
             }
 
             let searchLower = searchText.lowercased()
-            return data.frequentCategories.filter {
+            return data.frequentSubcategories.filter {
                 $0.title.lowercased().contains(searchLower)
             }
         }
 
-        init(selectedCategory: Category? = nil) {
-            self.selectedCategory = selectedCategory
+        init(selectedSubcategory: Subcategory? = nil) {
+            self.selectedSubcategory = selectedSubcategory
         }
     }
 
     enum Action: ViewAction, BindableAction {
         enum Delegate {
-            case categorySelected(Category)
+            case subcategorySelected(Subcategory)
         }
 
         enum View {
             case task
-            case categoryTapped(Category)
+            case subcategoryTapped(Subcategory)
             case createCategorySubmitted(title: String)
-            case createSubcategorySubmitted(title: String, parentID: String)
+            case createSubcategorySubmitted(title: String, categoryID: Category.ID)
+            case clearFocusedCategory
         }
 
         case binding(BindingAction<State>)
         case delegate(Delegate)
         case view(View)
+        case categoryCreated(Category.ID)
     }
 
     @Dependency(\.defaultDatabase) private var database
@@ -142,54 +144,65 @@ struct CategoryPicker {
             case .delegate:
                 return .none
 
+            case let .categoryCreated(categoryID):
+                // Focus on the subcategory text field for the newly created category
+                state.focusedCategoryForNewSubcategory = categoryID
+                state.searchText = ""
+                state.newCategoryTitle = ""
+                return .none
+
             case let .view(view):
                 switch view {
                 case .task:
                     return .none
 
-                case let .categoryTapped(category):
-                    return .send(.delegate(.categorySelected(category)))
+                case .clearFocusedCategory:
+                    state.focusedCategoryForNewSubcategory = nil
+                    return .none
+
+                case let .subcategoryTapped(subcategory):
+                    return .send(.delegate(.subcategorySelected(subcategory)))
 
                 case let .createCategorySubmitted(title):
                     let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !title.isEmpty else { return .none }
 
-                    return createAndSelectCategory(title: title, parentID: nil)
+                    // Create category only, then focus on subcategory field
+                    return .run { send in
+                        do {
+                            try await database.write { db in
+                                try Category
+                                    .insert { Category.Draft(title: title) }
+                                    .execute(db)
+                            }
+                            await send(.categoryCreated(title))
+                        } catch let error as DatabaseError
+                                    where error.extendedResultCode == .SQLITE_CONSTRAINT_PRIMARYKEY
+                        {
+                            reportIssue(error)
+                        } catch {
+                            reportIssue(error)
+                        }
+                    }
 
-                case let .createSubcategorySubmitted(title, parentID):
+                case let .createSubcategorySubmitted(title, categoryID):
                     let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !title.isEmpty else { return .none }
 
-                    return createAndSelectCategory(title: title, parentID: parentID)
-                }
-            }
-        }
-    }
-
-    private func createAndSelectCategory(
-        title: String,
-        parentID: String?
-    ) -> Effect<Action> {
-        return .run { send in
-            do {
-                let category = try await database.write { db in
-                    try Category
-                        .insert {
-                            Category.Draft(
-                                title: title,
-                                parentCategoryID: parentID
-                            )
+                    return .run { send in
+                        do {
+                            let subcategory = try await database.write { db in
+                                try Subcategory
+                                    .insert { Subcategory.Draft(title: title, categoryID: categoryID) }
+                                    .returning(\.self)
+                                    .fetchOne(db)!
+                            }
+                            await send(.delegate(.subcategorySelected(subcategory)))
+                        } catch {
+                            reportIssue(error)
                         }
-                        .returning(\.self)
-                        .fetchOne(db)!
+                    }
                 }
-                await send(.delegate(.categorySelected(category)))
-            } catch let error as DatabaseError
-                        where error.extendedResultCode == .SQLITE_CONSTRAINT_PRIMARYKEY
-            {
-                reportIssue(error)
-            } catch {
-                reportIssue(error)
             }
         }
     }
@@ -199,19 +212,28 @@ struct CategoryPicker {
 struct CategoryPickerView: View {
     @Bindable var store: StoreOf<CategoryPicker>
 
-    @FocusState private var isSearchBarFocused: Bool
+    @FocusState private var focusedField: FocusField?
+
+    enum FocusField: Hashable {
+        case search
+        case newSubcategory(Category.ID)
+    }
 
     var body: some View {
         List {
             // Frequently Used section
-            if !store.filteredFrequentCategories.isEmpty {
+            if !store.filteredFrequentSubcategories.isEmpty {
                 Section("Frequently Used") {
-                    ForEach(store.filteredFrequentCategories) { category in
+                    ForEach(store.filteredFrequentSubcategories) { subcategory in
                         Button {
-                            send(.categoryTapped(category))
+                            send(.subcategoryTapped(subcategory))
                         } label: {
-                            Label(category.displayName, systemImage: store.selectedCategory == category ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(store.selectedCategory == category ? Color.accentColor : .primary)
+                            let isSelected = store.selectedSubcategory == subcategory
+                            Label(
+                                "\(subcategory.categoryID) › \(subcategory.title)",
+                                systemImage: isSelected ? "checkmark.circle.fill" : "circle"
+                            )
+                            .foregroundStyle(isSelected ? Color.accentColor : .primary)
                         }
                     }
                 }
@@ -223,27 +245,23 @@ struct CategoryPickerView: View {
                     newCategoryTextField
                 }
 
-                ForEach(store.filteredCategories.elements, id: \.key) { parent, children in
+                ForEach(store.filteredCategories.elements, id: \.key) { category, subcategories in
                     Section {
-                        Button {
-                            send(.categoryTapped(parent))
-                        } label: {
-                            Label(parent.title, systemImage: store.selectedCategory == parent ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(store.selectedCategory == parent ? Color.accentColor : .primary)
-                                .bold()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(category.title)
+                            .bold()
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        ForEach(children) { child in
+                        ForEach(subcategories) { subcategory in
                             Button {
-                                send(.categoryTapped(child))
+                                send(.subcategoryTapped(subcategory))
                             } label: {
-                                Label("\t" + child.title, systemImage: store.selectedCategory == child ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(store.selectedCategory == child ? Color.accentColor : .primary)
+                                let isSelected = store.selectedSubcategory == subcategory
+                                Label(subcategory.title, systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
                             }
                         }
 
-                        newSubcategoryTextField(parent: parent)
+                        newSubcategoryTextField(category: category)
                     }
                 }
             } else {
@@ -263,11 +281,17 @@ struct CategoryPickerView: View {
         }
         .listSectionSpacing(.compact)
         .searchable(text: $store.searchText, prompt: "Search categories")
-        .searchFocused($isSearchBarFocused)
+        .searchFocused($focusedField, equals: .search)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.immediately)
         .task { await send(.task).finish() }
-        .onAppear { isSearchBarFocused = true }
+        .onAppear { focusedField = .search }
+        .onChange(of: store.focusedCategoryForNewSubcategory) { _, categoryID in
+            if let categoryID {
+                focusedField = .newSubcategory(categoryID)
+                send(.clearFocusedCategory)
+            }
+        }
     }
 
     private var newCategoryTextField: some View {
@@ -280,25 +304,26 @@ struct CategoryPickerView: View {
             }
     }
 
-    private func newSubcategoryTextField(parent: Category) -> some View {
+    private func newSubcategoryTextField(category: Category) -> some View {
         TextField(
-            "New subcategory for \(parent.title)",
+            "New subcategory for \(category.title)",
             text: Binding(
-                get: { store.newSubcategoryTitles[parent.id] ?? "" },
+                get: { store.newSubcategoryTitles[category.id] ?? "" },
                 set: { newValue in
                     var dict = store.newSubcategoryTitles
-                    dict[parent.id] = newValue
+                    dict[category.id] = newValue
                     store.newSubcategoryTitles = dict
                 }
             )
         )
+        .focused($focusedField, equals: .newSubcategory(category.id))
         .padding(.leading)
         .autocorrectionDisabled()
         .submitLabel(.done)
         .onSubmit {
             send(.createSubcategorySubmitted(
-                title: store.newSubcategoryTitles[parent.id] ?? "",
-                parentID: parent.id
+                title: store.newSubcategoryTitles[category.id] ?? "",
+                categoryID: category.id
             ))
         }
     }
@@ -312,11 +337,10 @@ struct CategoryPickerView: View {
 
     NavigationStack {
         CategoryPickerView(
-            store: Store(initialState: CategoryPicker.State(selectedCategory: Category(title: "Salary", parentCategoryID: nil))) {
+            store: Store(initialState: CategoryPicker.State()) {
                 CategoryPicker()
                     ._printChanges()
             }
         )
     }
 }
-
