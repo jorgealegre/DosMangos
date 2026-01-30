@@ -397,5 +397,220 @@ extension DatabaseMigrator {
             ON "transactions"("recurringTransactionID")
             """).execute(db)
         }
+
+        self.registerMigration("Split categories into categories and subcategories") { db in
+            // =================================================================
+            // STEP 1: Save existing data to temp tables
+            // =================================================================
+
+            // Save parent/standalone categories (those without a parent)
+            try #sql("""
+            CREATE TEMPORARY TABLE "temp_parent_categories" AS
+            SELECT "title"
+            FROM "categories"
+            WHERE "parentCategoryID" IS NULL
+            """).execute(db)
+
+            // Save child categories with their parent reference
+            try #sql("""
+            CREATE TEMPORARY TABLE "temp_child_categories" AS
+            SELECT "title", "parentCategoryID"
+            FROM "categories"
+            WHERE "parentCategoryID" IS NOT NULL
+            """).execute(db)
+
+            // Save transactionsCategories with info about whether it references a parent or child
+            try #sql("""
+            CREATE TEMPORARY TABLE "temp_transactionsCategories" AS
+            SELECT
+                tc."id",
+                tc."transactionID",
+                tc."categoryID",
+                CASE WHEN c."parentCategoryID" IS NULL THEN 1 ELSE 0 END AS "isParent"
+            FROM "transactionsCategories" tc
+            JOIN "categories" c ON tc."categoryID" = c."title"
+            """).execute(db)
+
+            // Save recurringTransactionsCategories similarly
+            try #sql("""
+            CREATE TEMPORARY TABLE "temp_recurringTransactionsCategories" AS
+            SELECT
+                rtc."id",
+                rtc."recurringTransactionID",
+                rtc."categoryID",
+                CASE WHEN c."parentCategoryID" IS NULL THEN 1 ELSE 0 END AS "isParent"
+            FROM "recurringTransactionsCategories" rtc
+            JOIN "categories" c ON rtc."categoryID" = c."title"
+            """).execute(db)
+
+            // =================================================================
+            // STEP 2: Drop old tables (order matters for FK constraints)
+            // =================================================================
+
+            try #sql("""
+            DROP TABLE "transactionsCategories"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "recurringTransactionsCategories"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "categories"
+            """).execute(db)
+
+            // =================================================================
+            // STEP 3: Create new table structure
+            // =================================================================
+
+            // New categories table (top-level/standalone only, title as PK)
+            try #sql("""
+            CREATE TABLE "categories" (
+                "title" TEXT COLLATE NOCASE PRIMARY KEY NOT NULL
+            ) STRICT
+            """).execute(db)
+
+            // New subcategories table (UUID PK, references categories)
+            try #sql("""
+            CREATE TABLE "subcategories" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "title" TEXT COLLATE NOCASE NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "categoryID" TEXT NOT NULL REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE
+            ) STRICT
+            """).execute(db)
+
+            // New transactionsCategories with two FK columns
+            try #sql("""
+            CREATE TABLE "transactionsCategories" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "transactionID" TEXT NOT NULL REFERENCES "transactions"("id") ON DELETE CASCADE,
+                "categoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+                "subcategoryID" TEXT REFERENCES "subcategories"("id") ON DELETE CASCADE
+            ) STRICT
+            """).execute(db)
+
+            // New recurringTransactionsCategories with two FK columns
+            try #sql("""
+            CREATE TABLE "recurringTransactionsCategories" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "recurringTransactionID" TEXT NOT NULL REFERENCES "recurringTransactions"("id") ON DELETE CASCADE,
+                "categoryID" TEXT REFERENCES "categories"("title") ON DELETE CASCADE ON UPDATE CASCADE,
+                "subcategoryID" TEXT REFERENCES "subcategories"("id") ON DELETE CASCADE
+            ) STRICT
+            """).execute(db)
+
+            // =================================================================
+            // STEP 4: Restore data from temp tables
+            // =================================================================
+
+            // Insert parent/standalone categories
+            try #sql("""
+            INSERT INTO "categories" ("title")
+            SELECT "title" FROM "temp_parent_categories"
+            """).execute(db)
+
+            // Insert child categories as subcategories (generates new UUIDs via default)
+            try #sql("""
+            INSERT INTO "subcategories" ("title", "categoryID")
+            SELECT "title", "parentCategoryID"
+            FROM "temp_child_categories"
+            """).execute(db)
+
+            // Restore transactionsCategories - parent category references
+            try #sql("""
+            INSERT INTO "transactionsCategories" ("id", "transactionID", "categoryID", "subcategoryID")
+            SELECT "id", "transactionID", "categoryID", NULL
+            FROM "temp_transactionsCategories"
+            WHERE "isParent" = 1
+            """).execute(db)
+
+            // Restore transactionsCategories - subcategory references (need to look up new UUID)
+            try #sql("""
+            INSERT INTO "transactionsCategories" ("id", "transactionID", "categoryID", "subcategoryID")
+            SELECT ttc."id", ttc."transactionID", NULL, s."id"
+            FROM "temp_transactionsCategories" ttc
+            JOIN "temp_child_categories" tcc ON ttc."categoryID" = tcc."title"
+            JOIN "subcategories" s ON s."title" = tcc."title" AND s."categoryID" = tcc."parentCategoryID"
+            WHERE ttc."isParent" = 0
+            """).execute(db)
+
+            // Restore recurringTransactionsCategories - parent category references
+            try #sql("""
+            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "categoryID", "subcategoryID")
+            SELECT "id", "recurringTransactionID", "categoryID", NULL
+            FROM "temp_recurringTransactionsCategories"
+            WHERE "isParent" = 1
+            """).execute(db)
+
+            // Restore recurringTransactionsCategories - subcategory references (need to look up new UUID)
+            try #sql("""
+            INSERT INTO "recurringTransactionsCategories" ("id", "recurringTransactionID", "categoryID", "subcategoryID")
+            SELECT trtc."id", trtc."recurringTransactionID", NULL, s."id"
+            FROM "temp_recurringTransactionsCategories" trtc
+            JOIN "temp_child_categories" tcc ON trtc."categoryID" = tcc."title"
+            JOIN "subcategories" s ON s."title" = tcc."title" AND s."categoryID" = tcc."parentCategoryID"
+            WHERE trtc."isParent" = 0
+            """).execute(db)
+
+            // =================================================================
+            // STEP 5: Drop temp tables
+            // =================================================================
+
+            try #sql("""
+            DROP TABLE "temp_parent_categories"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "temp_child_categories"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "temp_transactionsCategories"
+            """).execute(db)
+
+            try #sql("""
+            DROP TABLE "temp_recurringTransactionsCategories"
+            """).execute(db)
+
+            // =================================================================
+            // STEP 6: Create indexes
+            // =================================================================
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_subcategories_categoryID"
+            ON "subcategories"("categoryID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_transactionID"
+            ON "transactionsCategories"("transactionID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_categoryID"
+            ON "transactionsCategories"("categoryID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactionsCategories_subcategoryID"
+            ON "transactionsCategories"("subcategoryID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_recurringTransactionID"
+            ON "recurringTransactionsCategories"("recurringTransactionID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_categoryID"
+            ON "recurringTransactionsCategories"("categoryID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsCategories_subcategoryID"
+            ON "recurringTransactionsCategories"("subcategoryID")
+            """).execute(db)
+        }
     }
 }
+
