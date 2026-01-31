@@ -8,28 +8,21 @@ struct CategoriesReducer: Reducer {
 
     struct CategoryRequest: FetchKeyRequest, Equatable {
         struct Value: Equatable {
-            let categories: OrderedDictionary<Category, [Category]>
+            var categories: OrderedDictionary<Category, [Subcategory]> = [:]
         }
 
         func fetch(_ db: Database) throws -> Value {
-            let categories = try Category
-                .order {
-                    (
-                        $0.parentCategoryID ?? $0.title,
-                        $0.parentCategoryID.isNot(nil),
-                        $0.title
-                    )
-                }
+            let rows = try Category
+                .leftJoin(Subcategory.all) { $0.title.eq($1.categoryID) }
+                .order { ($0.title, $1.title) }
                 .fetchAll(db)
 
-            var result: OrderedDictionary<Category, [Category]> = [:]
-            var parent: Category?
-            for category in categories {
-                if category.parentCategoryID == nil {
-                    parent = category
-                    result[category] = []
-                } else if let parent {
-                    result[parent]?.append(category)
+            let result = rows.reduce(into: OrderedDictionary<Category, [Subcategory]>()) { dict, row in
+                let (category, subcategory) = row
+                if let subcategory {
+                    dict[category, default: []].append(subcategory)
+                } else {
+                    dict[category] = []
                 }
             }
             return Value(categories: result)
@@ -39,7 +32,7 @@ struct CategoriesReducer: Reducer {
     @ObservableState
     struct State: Equatable {
         @Fetch(CategoryRequest(), animation: .default)
-        var categories = CategoryRequest.Value(categories: [:])
+        var categories = CategoryRequest.Value()
 
 
         init() {
@@ -50,8 +43,9 @@ struct CategoriesReducer: Reducer {
         enum View {
             case task
             case createCategory(title: String)
-            case createSubcategory(title: String, parentCategoryID: String)
-            case deleteCategory(id: String)
+            case createSubcategory(title: String, categoryID: Category.ID)
+            case deleteCategory(id: Category.ID)
+            case deleteSubcategory(id: Subcategory.ID)
         }
         case view(View)
     }
@@ -84,13 +78,13 @@ struct CategoriesReducer: Reducer {
                         }
                     }
 
-                case let .createSubcategory(title, parentCategoryID):
+                case let .createSubcategory(title, categoryID):
                     // TODO: I might want to keep the text field filled in and show an error message if there's a unique constraint error for example
                     return .run { _ in
                         do {
                             try database.write { db in
-                                try Category.insert {
-                                    Category.Draft(title: title, parentCategoryID: parentCategoryID)
+                                try Subcategory.insert {
+                                    Subcategory.Draft(title: title, categoryID: categoryID)
                                 }
                                 .execute(db)
                             }
@@ -107,6 +101,17 @@ struct CategoriesReducer: Reducer {
                         withErrorReporting {
                             try database.write { db in
                                 try Category.find(id)
+                                    .delete()
+                                    .execute(db)
+                            }
+                        }
+                    }
+
+                case let .deleteSubcategory(id):
+                    return .run { _ in
+                        withErrorReporting {
+                            try database.write { db in
+                                try Subcategory.find(id)
                                     .delete()
                                     .execute(db)
                             }
@@ -137,45 +142,45 @@ struct CategoriesView: View {
             } else {
                 newCategoryTextField
 
-                ForEach(store.categories.categories.elements, id: \.key) { parent, children in
+                ForEach(store.categories.categories.elements, id: \.key) { category, subcategories in
                     Section {
-                        Text(parent.title)
+                        Text(category.title)
                             .bold()
                             .swipeActions {
                                 Button(role: .destructive) {
-                                    send(.deleteCategory(id: parent.id))
+                                    send(.deleteCategory(id: category.id))
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
                             }
-                        ForEach(children) { child in
-                            Text("• " + child.title)
+                        ForEach(subcategories) { subcategory in
+                            Text("• " + subcategory.title)
                                 .padding(.leading)
                                 .swipeActions {
                                     Button(role: .destructive) {
-                                        send(.deleteCategory(id: child.id))
+                                        send(.deleteSubcategory(id: subcategory.id))
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
                         }
-                        TextField("New subcategory for \(parent.title)", text: Binding(
-                            get: { newSubcategoryTitles[parent.id] ?? "" },
-                            set: { newSubcategoryTitles[parent.id] = $0 }
+                        TextField("New subcategory for \(category.title)", text: Binding(
+                            get: { newSubcategoryTitles[category.id] ?? "" },
+                            set: { newSubcategoryTitles[category.id] = $0 }
                         ))
                         .padding(.leading)
                         .autocorrectionDisabled()
                         .submitLabel(.done)
                         .onSubmit {
                             guard
-                                let title = newSubcategoryTitles[parent.id],
+                                let title = newSubcategoryTitles[category.id],
                                 !title.trimmingCharacters(in: .whitespaces).isEmpty
                             else { return }
                             send(.createSubcategory(
                                 title: title.trimmingCharacters(in: .whitespaces),
-                                parentCategoryID: parent.id
+                                categoryID: category.id
                             ))
-                            newSubcategoryTitles[parent.id] = ""
+                            newSubcategoryTitles[category.id] = ""
                         }
                     }
                 }

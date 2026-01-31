@@ -72,7 +72,7 @@ extension BaseTestSuite {
                         localDay: 13,
                         recurringTransactionID: nil
                       ),
-                      category: nil,
+                      categoryDisplayName: nil,
                       tags: [],
                       location: TransactionLocation(
                         transactionID: UUID(00000000-0000-0000-0000-000000000000),
@@ -101,7 +101,7 @@ extension BaseTestSuite {
                           localDay: 13,
                           recurringTransactionID: nil
                         ),
-                        category: nil,
+                        categoryDisplayName: nil,
                         tags: [],
                         location: TransactionLocation(
                           transactionID: UUID(00000000-0000-0000-0000-000000000000),

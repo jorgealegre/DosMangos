@@ -88,18 +88,19 @@ struct TransactionsList: Reducer {
                 }
                 .fetchOne(db)
 
-            // 4. Fetch top expense categories by total spending
+            // 4. Fetch top expense subcategories by total spending
             let topCategories = try Transaction
                 .where { $0.localYear.eq(year) && $0.localMonth.eq(month) }
                 .where { $0.convertedCurrencyCode.eq(defaultCurrency) }
                 .where { $0.type.eq(Transaction.TransactionType.expense) }
                 .order { $0.convertedValueMinorUnits.sum().desc() }
                 .join(TransactionCategory.all) { $0.id.eq($1.transactionID) }
-                .group { $1.categoryID }
+                .group { $1.subcategoryID }
+                .join(Subcategory.all) { $1.subcategoryID.eq($2.id) }
                 .limit(5)
                 .select {
                     CategoryTotal.Columns(
-                        category: $1.categoryID,
+                        category: #sql("\($2.categoryID) || ' › ' || \($2.title)"),
                         total: $0.convertedValueMinorUnits.ifnull(0).sum() ?? 0
                     )
                 }
@@ -189,6 +190,7 @@ struct TransactionsList: Reducer {
         case view(View)
         case destination(PresentationAction<Destination.Action>)
         case defaultCurrencyChanged
+        case openPostForm(Transaction.Draft, RecurringTransaction, Subcategory?, [Tag])
     }
 
     @Dependency(\.calendar) private var calendar
@@ -206,6 +208,15 @@ struct TransactionsList: Reducer {
 
             case .defaultCurrencyChanged:
                 return loadTransactions(state: state)
+
+            case let .openPostForm(draft, rt, subcategory, tags):
+                state.destination = .transactionForm(TransactionFormReducer.State(
+                    transaction: draft,
+                    formMode: .postFromRecurring(rt),
+                    subcategory: subcategory,
+                    tags: tags
+                ))
+                return .none
 
             case let .view(viewAction):
                 switch viewAction {
@@ -261,21 +272,25 @@ struct TransactionsList: Reducer {
                     draft.localMonth = dateComponents.month!
                     draft.localDay = dateComponents.day!
 
-                    // Look up category and tags from the category/tag titles
-                    let category: Category? = dueRow.category.flatMap { title in
-                        // Extract just the title (after " › " if subcategory)
-                        let categoryTitle = title.contains(" › ") ? String(title.split(separator: " › ").last ?? "") : title
-                        return Category(title: categoryTitle, parentCategoryID: nil)
-                    }
                     let tags: [Tag] = dueRow.tags.map { Tag(title: $0) }
 
-                    state.destination = .transactionForm(TransactionFormReducer.State(
-                        transaction: draft,
-                        formMode: .postFromRecurring(rt),
-                        category: category,
-                        tags: tags
-                    ))
-                    return .none
+                    // Load the subcategory if we have an ID
+                    guard let subcategoryID = dueRow.subcategoryID else {
+                        state.destination = .transactionForm(TransactionFormReducer.State(
+                            transaction: draft,
+                            formMode: .postFromRecurring(rt),
+                            subcategory: nil,
+                            tags: tags
+                        ))
+                        return .none
+                    }
+
+                    return .run { [draft] send in
+                        let subcategory = try? await database.read { db in
+                            try Subcategory.find(subcategoryID).fetchOne(db)
+                        }
+                        await send(.openPostForm(draft, rt, subcategory, tags))
+                    }
 
                 case let .skipDueRow(dueRow):
                     let recurringTransaction = dueRow.recurringTransaction
@@ -370,7 +385,7 @@ struct TransactionsListView: View {
                             } label: {
                                 TransactionView(
                                     transaction: row.transaction,
-                                    category: row.category,
+                                    category: row.categoryDisplayName,
                                     tags: row.tags,
                                     location: row.location
                                 )

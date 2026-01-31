@@ -42,7 +42,7 @@ struct TransactionFormReducer: Reducer {
         var focus: Field? = .value
         var transaction: Transaction.Draft
         var isLoadingDetails = false
-        var category: Category?
+        var subcategory: Subcategory?
         var tags: [Tag] = []
 
         // Recurring-specific state (nil preset = not recurring)
@@ -96,12 +96,12 @@ struct TransactionFormReducer: Reducer {
         init(
             transaction: Transaction.Draft,
             formMode: FormMode = .newTransaction,
-            category: Category? = nil,
+            subcategory: Subcategory? = nil,
             tags: [Tag] = []
         ) {
             self.formMode = formMode
             self.transaction = transaction
-            self.category = category
+            self.subcategory = subcategory
             self.tags = tags
 
             switch formMode {
@@ -161,7 +161,7 @@ struct TransactionFormReducer: Reducer {
         case delegate(Delegate)
         case destination(PresentationAction<Destination.Action>)
         case view(View)
-        case detailsLoaded(Category?, [Tag], TransactionLocation?)
+        case detailsLoaded(Subcategory?, [Tag], TransactionLocation?)
     }
 
     @Dependency(\.calendar) private var calendar
@@ -221,8 +221,8 @@ struct TransactionFormReducer: Reducer {
 
             case let .destination(.presented(.categoryPicker(.delegate(delegateAction)))):
                 switch delegateAction {
-                case let .categorySelected(category):
-                    state.category = category
+                case let .subcategorySelected(subcategory):
+                    state.subcategory = subcategory
                     state.destination = nil
                     return .none
                 }
@@ -257,14 +257,14 @@ struct TransactionFormReducer: Reducer {
                     if case let .editRecurring(recurringTransaction) = state.formMode {
                         state.isLoadingDetails = true
                         return .run { send in
-                            let result = try await database.read { db -> (Category?, [Tag]) in
-                                let categoryID = try RecurringTransactionCategory
+                            let result = try await database.read { db -> (Subcategory?, [Tag]) in
+                                let subcategoryID = try RecurringTransactionCategory
                                     .where { $0.recurringTransactionID.eq(recurringTransaction.id) }
-                                    .select { $0.categoryID }
+                                    .select { $0.subcategoryID }
                                     .fetchOne(db)
 
-                                let category = try categoryID.flatMap {
-                                    try Category.find($0).fetchOne(db)
+                                let subcategory = try subcategoryID.flatMap {
+                                    try Subcategory.find($0).fetchOne(db)
                                 }
 
                                 let tagIDs = try RecurringTransactionTag
@@ -275,7 +275,7 @@ struct TransactionFormReducer: Reducer {
                                     try Tag.find($0).fetchOne(db)
                                 }
 
-                                return (category, tags)
+                                return (subcategory, tags)
                             }
 
                             await send(.detailsLoaded(result.0, result.1, nil))
@@ -286,14 +286,14 @@ struct TransactionFormReducer: Reducer {
                     guard let transactionID = state.transaction.id else { return .none }
                     state.isLoadingDetails = true
                     return .run { send in
-                        let result = try await database.read { db -> (Category?, [Tag], TransactionLocation?) in
-                            let categoryID = try TransactionCategory
+                        let result = try await database.read { db -> (Subcategory?, [Tag], TransactionLocation?) in
+                            let subcategoryID = try TransactionCategory
                                 .where { $0.transactionID.eq(transactionID) }
-                                .select { $0.categoryID }
+                                .select { $0.subcategoryID }
                                 .fetchOne(db)
 
-                            let category = try categoryID.flatMap {
-                                try Category.find($0).fetchOne(db)
+                            let subcategory = try subcategoryID.flatMap {
+                                try Subcategory.find($0).fetchOne(db)
                             }
 
                             let tagIDs = try TransactionTag
@@ -307,7 +307,7 @@ struct TransactionFormReducer: Reducer {
                             // Load location by transactionID (shared PK pattern)
                             let location = try TransactionLocation.find(transactionID).fetchOne(db)
 
-                            return (category, tags, location)
+                            return (subcategory, tags, location)
                         }
 
                         await send(.detailsLoaded(result.0, result.1, result.2))
@@ -316,7 +316,7 @@ struct TransactionFormReducer: Reducer {
                 case .categoriesButtonTapped:
                     state.focus = nil
                     state.destination = .categoryPicker(CategoryPicker.State(
-                        selectedCategory: state.category
+                        selectedSubcategory: state.subcategory
                     ))
                     return .none
 
@@ -391,8 +391,8 @@ struct TransactionFormReducer: Reducer {
                     return .none
                 }
 
-            case let .detailsLoaded(category, tags, location):
-                state.category = category
+            case let .detailsLoaded(subcategory, tags, location):
+                state.subcategory = subcategory
                 state.tags = tags
                 state.location = location
                 // TODO: not to sure about this
@@ -479,11 +479,11 @@ struct TransactionFormReducer: Reducer {
                         .where { $0.transactionID.eq(transactionID) }
                         .delete()
                         .execute(db)
-                    if let category = state.category {
+                    if let subcategory = state.subcategory {
                         try TransactionCategory.insert {
                             TransactionCategory.Draft(
                                 transactionID: transactionID,
-                                categoryID: category.id
+                                subcategoryID: subcategory.id
                             )
                         }
                         .execute(db)
@@ -562,11 +562,11 @@ struct TransactionFormReducer: Reducer {
                         .fetchOne(db)!
 
                     // Create category join record
-                    if let category = state.category {
+                    if let subcategory = state.subcategory {
                         try RecurringTransactionCategory.insert {
                             RecurringTransactionCategory.Draft(
                                 recurringTransactionID: recurringTransactionID,
-                                categoryID: category.id
+                                subcategoryID: subcategory.id
                             )
                         }
                         .execute(db)
@@ -620,11 +620,11 @@ struct TransactionFormReducer: Reducer {
                         }
 
                         // Create category join record for the transaction
-                        if let category = state.category {
+                        if let subcategory = state.subcategory {
                             try TransactionCategory.insert {
                                 TransactionCategory.Draft(
                                     transactionID: transactionID,
-                                    categoryID: category.id
+                                    subcategoryID: subcategory.id
                                 )
                             }
                             .execute(db)
@@ -695,11 +695,11 @@ struct TransactionFormReducer: Reducer {
                         .delete()
                         .execute(db)
 
-                    if let category = state.category {
+                    if let subcategory = state.subcategory {
                         try RecurringTransactionCategory.insert {
                             RecurringTransactionCategory.Draft(
                                 recurringTransactionID: recurringTransactionID,
-                                categoryID: category.id
+                                subcategoryID: subcategory.id
                             )
                         }
                         .execute(db)
@@ -782,11 +782,11 @@ struct TransactionFormReducer: Reducer {
                     }
 
                     // Create category join record
-                    if let category = state.category {
+                    if let subcategory = state.subcategory {
                         try TransactionCategory.insert {
                             TransactionCategory.Draft(
                                 transactionID: transactionID,
-                                categoryID: category.id
+                                subcategoryID: subcategory.id
                             )
                         }
                         .execute(db)
@@ -1098,8 +1098,8 @@ struct TransactionFormView: View {
 
                     Spacer()
 
-                    if let category = store.category {
-                        Text(category.title)
+                    if let subcategory = store.subcategory {
+                        Text("\(subcategory.categoryID) › \(subcategory.title)")
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .foregroundStyle(.secondary)
