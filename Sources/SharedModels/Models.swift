@@ -79,7 +79,7 @@ struct Transaction: Identifiable, Hashable, Sendable {
         }
     }
 
-    var recurringTransactionID: UUID?
+    var recurringTransactionID: RecurringTransaction.ID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -171,35 +171,24 @@ struct Category: Identifiable, Hashable, Sendable {
     @Column(primaryKey: true)
     var title: String
 
-    var parentCategoryID: String?
-
     var id: String { title }
-
-    var displayName: String {
-        if let parentCategoryID {
-            "\(parentCategoryID) › \(title)"
-        } else {
-            title
-        }
-    }
 }
+
+@Table
+struct Subcategory: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var title: String
+    var categoryID: Category.ID
+}
+extension Subcategory.Draft: Equatable {}
+
 @Table("transactionsCategories")
 struct TransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
-    var transactionID: UUID
-    var categoryID: String
+    var transactionID: Transaction.ID
+    var subcategoryID: Subcategory.ID
 }
 extension TransactionCategory.Draft: Equatable {}
-
-@Table("transactionsCategoriesWithDisplayName")
-struct TransactionCategoriesWithDisplayName {
-    let id: UUID
-    var transactionID: UUID
-    var categoryID: String
-
-    let displayName: String
-}
-
 // MARK: - Tag
 
 @Table
@@ -217,8 +206,8 @@ extension Tag?.TableColumns {
 @Table("transactionsTags")
 struct TransactionTag: Identifiable, Hashable, Sendable {
     let id: UUID
-    var transactionID: UUID
-    var tagID: String
+    var transactionID: Transaction.ID
+    var tagID: Tag.ID
 }
 extension TransactionTag.Draft: Equatable {}
 extension Transaction {
@@ -233,7 +222,7 @@ extension Transaction {
 @Table("transaction_locations")
 struct TransactionLocation: Hashable, Sendable {
     @Column(primaryKey: true)
-    let transactionID: UUID
+    let transactionID: Transaction.ID
     var latitude: Double
     var longitude: Double
     var city: String?
@@ -379,16 +368,16 @@ extension RecurringTransaction.Draft {
 @Table("recurringTransactionsCategories")
 struct RecurringTransactionCategory: Identifiable, Hashable, Sendable {
     let id: UUID
-    var recurringTransactionID: UUID
-    var categoryID: String
+    var recurringTransactionID: RecurringTransaction.ID
+    var subcategoryID: Subcategory.ID
 }
 extension RecurringTransactionCategory.Draft: Equatable {}
 
 @Table("recurringTransactionsTags")
 struct RecurringTransactionTag: Identifiable, Hashable, Sendable {
     let id: UUID
-    var recurringTransactionID: UUID
-    var tagID: String
+    var recurringTransactionID: RecurringTransaction.ID
+    var tagID: Tag.ID
 }
 extension RecurringTransactionTag.Draft: Equatable {}
 
@@ -398,7 +387,7 @@ extension RecurringTransactionTag.Draft: Equatable {}
 struct TransactionsListRow: Identifiable, Hashable, Sendable {
     var id: UUID { transaction.id }
     let transaction: Transaction
-    let category: String?
+    let categoryDisplayName: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
     let location: TransactionLocation?
@@ -410,7 +399,8 @@ struct TransactionsListRow: Identifiable, Hashable, Sendable {
 struct DueRecurringRow: Identifiable, Hashable, Sendable {
     var id: UUID { recurringTransaction.id }
     let recurringTransaction: RecurringTransaction
-    let category: String?
+    let subcategoryID: Subcategory.ID?
+    let categoryDisplayName: String?
     @Column(as: [String].JSONRepresentation.self)
     let tags: [String]
 }
@@ -427,12 +417,4 @@ extension RecurringTransactionTag?.TableColumns {
     var jsonTitles: some QueryExpression<[String].JSONRepresentation> {
         (self.tagID ?? "").jsonGroupArray(distinct: true, filter: self.tagID.isNot(nil))
     }
-}
-
-@Table("recurringTransactionCategoriesWithDisplayName")
-struct RecurringTransactionCategoriesWithDisplayName {
-    let id: UUID
-    var recurringTransactionID: UUID
-    var categoryID: String
-    let displayName: String
 }
