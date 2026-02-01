@@ -57,7 +57,7 @@ extension BaseTestSuite {
                   rows: [
                     [0]: TransactionsListRow(
                       transaction: Transaction(
-                        id: UUID(00000000-0000-0000-0000-000000000000),
+                        id: UUID(00000000-0000-0000-0000-000000000001),
                         description: "Rent",
                         valueMinorUnits: 12300,
                         currencyCode: "USD",
@@ -73,7 +73,7 @@ extension BaseTestSuite {
                       categoryDisplayName: nil,
                       tags: [],
                       location: TransactionLocation(
-                        transactionID: UUID(00000000-0000-0000-0000-000000000000),
+                        transactionID: UUID(00000000-0000-0000-0000-000000000001),
                         latitude: -34.6037,
                         longitude: -58.3816,
                         city: "Córdoba",
@@ -86,7 +86,7 @@ extension BaseTestSuite {
                     13: [
                       [0]: TransactionsListRow(
                         transaction: Transaction(
-                          id: UUID(00000000-0000-0000-0000-000000000000),
+                          id: UUID(00000000-0000-0000-0000-000000000001),
                           description: "Rent",
                           valueMinorUnits: 12300,
                           currencyCode: "USD",
@@ -102,7 +102,7 @@ extension BaseTestSuite {
                         categoryDisplayName: nil,
                         tags: [],
                         location: TransactionLocation(
-                          transactionID: UUID(00000000-0000-0000-0000-000000000000),
+                          transactionID: UUID(00000000-0000-0000-0000-000000000001),
                           latitude: -34.6037,
                           longitude: -58.3816,
                           city: "Córdoba",

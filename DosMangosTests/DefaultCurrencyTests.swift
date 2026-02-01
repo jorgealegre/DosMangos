@@ -120,10 +120,6 @@ extension BaseTestSuite {
             // Create transactions in different currencies
             @Dependency(\.date.now) var now
             try await database.write { db in
-                try db.seed {
-                    UserSettings.Draft(defaultCurrency: "USD")
-                }
-
                 try Transaction.insert {
                     Transaction.Draft(
                         description: "Rent",

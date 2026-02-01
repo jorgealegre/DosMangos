@@ -39,13 +39,6 @@ import Testing
 
         try $0.bootstrapDatabase()
 
-        // Set the default currency
-        try $0.defaultDatabase.write { db in
-            try db.seed {
-                UserSettings.Draft(defaultCurrency: "USD")
-            }
-        }
-
 //        try $0.defaultDatabase.seedSampleData()
 //        try await $0.defaultSyncEngine.sendChanges()
     },

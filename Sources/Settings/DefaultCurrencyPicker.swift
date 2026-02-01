@@ -118,13 +118,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     } else {
                         state.phase = .completed(conversionResult)
                     }
-                    return .run { _ in
-                        try await database.write { db in
-                            try UserSettings
-                                .update { $0.defaultCurrency = conversionResult.newCurrency }
-                                .execute(db)
-                        }
-                    }
+                    return .none
                 case let .failure(error):
                     state.phase = .failed(error.localizedDescription)
                     return .none
@@ -293,6 +287,10 @@ struct DefaultCurrencyPickerReducer: Reducer {
                             .fetchOne(db) ?? 0
                         convertedWithRateCount += count
                     }
+
+                    try UserSettings
+                        .update { $0.defaultCurrency = targetCurrency }
+                        .execute(db)
 
                     // Count transactions that remain without conversion (nil converted values)
                     let skippedCount = try Transaction
