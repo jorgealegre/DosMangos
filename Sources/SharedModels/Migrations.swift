@@ -1,3 +1,4 @@
+import Foundation
 import SQLiteData
 
 extension DatabaseMigrator {
@@ -692,6 +693,26 @@ extension DatabaseMigrator {
             CREATE INDEX IF NOT EXISTS "idx_recurringTransactionsTags_tagID"
             ON "recurringTransactionsTags"("tagID")
             """).execute(db)
+        }
+
+        self.registerMigration("Create userSettings table") { db in
+            try #sql("""
+            CREATE TABLE "userSettings" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "defaultCurrency" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT 'USD'
+            ) STRICT
+            """).execute(db)
+
+            // Migrate from UserDefaults if a value exists, otherwise use default
+            let existingCurrency = UserDefaults.standard.string(forKey: "default_currency") ?? "USD"
+
+            try #sql("""
+            INSERT INTO "userSettings" ("defaultCurrency")
+            VALUES (\(bind: existingCurrency))
+            """).execute(db)
+
+            // Clean up UserDefaults
+            UserDefaults.standard.removeObject(forKey: "default_currency")
         }
     }
 }

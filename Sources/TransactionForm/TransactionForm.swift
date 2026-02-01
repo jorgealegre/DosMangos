@@ -3,7 +3,7 @@ import CoreLocationClient
 import Currency
 import Foundation
 import MapKit
-import Sharing
+import SQLiteData
 import SwiftUI
 
 @Reducer
@@ -60,7 +60,7 @@ struct TransactionFormReducer: Reducer {
         /// The current location of the user, for automatically filling in the location.
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
         /// The user's default currency for converted values.
-        @Shared(.defaultCurrency) var defaultCurrency: String
+        @FetchOne var userSettings: UserSettings?
 
         @Presents var destination: Destination.State?
 
@@ -408,8 +408,8 @@ struct TransactionFormReducer: Reducer {
     // MARK: - Save Helpers
 
     private func saveRegularTransaction(_ state: inout State) -> Effect<Action> {
-        let defaultCurrency = state.defaultCurrency
-        return .run { [state = state] send in
+        let defaultCurrency = state.userSettings?.defaultCurrency ?? "USD"
+        return .run { [state = state, defaultCurrency] send in
             var updatedTransaction = state.transaction
 
             if updatedTransaction.currencyCode != defaultCurrency {

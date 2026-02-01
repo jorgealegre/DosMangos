@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import CoreLocationClient
 import Sharing
+import SQLiteData
 import SwiftUI
 
 @Reducer
@@ -19,11 +20,14 @@ struct AppReducer: Reducer {
         // Just by declaring this property here, a load will start
         @SharedReader(.currentLocation) var currentLocation: GeocodedLocation?
 
+        @FetchOne
+        var userSettings: UserSettings?
+
         var appDelegate = AppDelegateReducer.State()
         var transactionsList: TransactionsList.State
+        var recurringTransactionsList = RecurringTransactionsList.State()
         var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
-        var recurringTransactionsList = RecurringTransactionsList.State()
 
         init() {
             @Dependency(\.date.now) var now
@@ -103,9 +107,11 @@ struct AppReducer: Reducer {
                     return .none
 
                 case .newTransactionButtonTapped:
+                    guard let defaultCurrency = state.userSettings?.defaultCurrency else { return .none }
+
                     state.destination = .transactionForm(
                         TransactionFormReducer.State(
-                            transaction: Transaction.Draft()
+                            transaction: Transaction.Draft(currencyCode: defaultCurrency)
                         )
                     )
                     return .none

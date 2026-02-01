@@ -45,12 +45,11 @@ extension BaseTestSuite {
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .idle
             }
 
-            // User taps done
-            await store.send(\.view.doneTapped)
+            // Wait for database write effect to complete
+            await store.finish()
 
             #expect(store.state.defaultCurrency == "EUR")
         }
@@ -94,13 +93,15 @@ extension BaseTestSuite {
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 0,
                     newCurrency: "EUR"
                 ))
             }
+
+            // Wait for database write effect to complete
+            await store.finish()
 
             // Verify the transaction now has converted values set
             let transactions = try await database.read { db in
@@ -119,6 +120,10 @@ extension BaseTestSuite {
             // Create transactions in different currencies
             @Dependency(\.date.now) var now
             try await database.write { db in
+                try db.seed {
+                    UserSettings.Draft(defaultCurrency: "USD")
+                }
+
                 try Transaction.insert {
                     Transaction.Draft(
                         description: "Rent",
@@ -187,13 +192,15 @@ extension BaseTestSuite {
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,
                     newCurrency: "EUR"
                 ))
             }
+
+            // Wait for database write effect to complete
+            await store.finish()
 
             // Verify transactions were converted
             let transactions = try await database.read { db in
@@ -285,13 +292,15 @@ extension BaseTestSuite {
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 1,
                     newCurrency: "EUR"
                 ))
             }
+
+            // Wait for database write effect to complete
+            await store.finish()
 
             // Verify only USD transaction was converted
             let transactions = try await database.read { db in
@@ -474,13 +483,15 @@ extension BaseTestSuite {
             }
 
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 3,
                     skippedCount: 0,
                     newCurrency: "EUR"
                 ))
             }
+
+            // Wait for database write effect to complete
+            await store.finish()
 
             // Verify each transaction used the correct rate
             let transactions = try await database.read { db in
@@ -565,13 +576,15 @@ extension BaseTestSuite {
 
             // Both transactions get updated (count = 2)
             await store.receive(\.conversionCompleted) {
-                $0.$defaultCurrency.withLock { $0 = "EUR" }
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,
                     newCurrency: "EUR"
                 ))
             }
+
+            // Wait for database write effect to complete
+            await store.finish()
 
             // Verify EUR transaction has converted values set (same as original)
             let transactions = try await database.read { db in

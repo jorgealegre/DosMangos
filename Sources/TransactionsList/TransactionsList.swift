@@ -2,7 +2,6 @@ import ComposableArchitecture
 import Currency
 import IdentifiedCollections
 import IssueReporting
-import Sharing
 import SQLiteData
 import SwiftUI
 
@@ -13,7 +12,6 @@ struct TransactionsList: Reducer {
 
     struct DataRequest: FetchKeyRequest {
         var date: Date
-        var defaultCurrency: String
 
         @Selection
         struct CategoryTotal: Equatable, Identifiable {
@@ -50,6 +48,9 @@ struct TransactionsList: Reducer {
             let year = components.year!
             let month = components.month!
 
+            // Fetch default currency from database
+            let defaultCurrency = try UserSettings.fetchOne(db)?.defaultCurrency ?? "USD"
+
             // 1. Fetch transactions for the month
             let rows = try TransactionsListRow
                 .where { $0.transaction.localYear.eq(year) && $0.transaction.localMonth.eq(month) }
@@ -69,7 +70,6 @@ struct TransactionsList: Reducer {
 
             // 3. Fetch monthly summary (aggregates)
             // Only include transactions that have been converted to the default currency
-            let defaultCurrency = self.defaultCurrency
             let summaryRow = try Transaction
                 .where {
                     $0.localYear.eq(year)
@@ -157,17 +157,14 @@ struct TransactionsList: Reducer {
 
         var date: Date
 
-        @Shared(.defaultCurrency) var defaultCurrency: String
-
         @Fetch
         var data = DataRequest.Value()
 
         init(date: Date) {
             self.date = date
-            @Shared(.defaultCurrency) var defaultCurrency
             self._data = Fetch(
                 wrappedValue: DataRequest.Value(),
-                DataRequest(date: date, defaultCurrency: defaultCurrency),
+                DataRequest(date: date),
                 animation: .default
             )
         }
@@ -183,13 +180,11 @@ struct TransactionsList: Reducer {
             case dismissTransactionDetailButtonTapped
             case postDueRow(DueRecurringRow)
             case skipDueRow(DueRecurringRow)
-            case task
         }
 
         case binding(BindingAction<State>)
         case view(View)
         case destination(PresentationAction<Destination.Action>)
-        case defaultCurrencyChanged
         case openPostForm(Transaction.Draft, RecurringTransaction, Subcategory?, [Tag])
     }
 
@@ -205,9 +200,6 @@ struct TransactionsList: Reducer {
 
             case .destination:
                 return .none
-
-            case .defaultCurrencyChanged:
-                return loadTransactions(state: state)
 
             case let .openPostForm(draft, rt, subcategory, tags):
                 state.destination = .transactionForm(TransactionFormReducer.State(
@@ -240,14 +232,6 @@ struct TransactionsList: Reducer {
                     state.date = calendar.date(byAdding: .month, value: -1, to: state.date)!
                     return loadTransactions(state: state)
 
-                case .task:
-                    let defaultCurrency = state.$defaultCurrency
-                    return .run { send in
-                        for await _ in defaultCurrency.publisher.values {
-                            await send(.defaultCurrencyChanged)
-                        }
-                    }
-
                 case let .transactionTapped(transaction):
                     state.destination = .transactionForm(TransactionFormReducer.State(
                         transaction: Transaction.Draft(transaction),
@@ -261,7 +245,7 @@ struct TransactionsList: Reducer {
 
                 case let .postDueRow(dueRow):
                     let rt = dueRow.recurringTransaction
-                    var draft = Transaction.Draft()
+                    var draft = Transaction.Draft(currencyCode: rt.currencyCode)
                     draft.description = rt.description
                     draft.valueMinorUnits = rt.valueMinorUnits
                     draft.currencyCode = rt.currencyCode
@@ -320,7 +304,7 @@ struct TransactionsList: Reducer {
 
     private func loadTransactions(state: State) -> Effect<Action> {
         let fetch = state.$data
-        let request = DataRequest(date: state.date, defaultCurrency: state.defaultCurrency)
+        let request = DataRequest(date: state.date)
         return .run { _ in
             try await fetch.load(request, animation: .default)
         }
@@ -407,7 +391,6 @@ struct TransactionsListView: View {
                     }
                 }
             }
-            .task { await send(.task).finish() }
             .navigationTitle(store.date.formatted(Date.FormatStyle().month(.wide)))
             .listStyle(.grouped)
             .listSectionSeparator(.hidden)

@@ -23,6 +23,9 @@ struct RecurringTransactionsList: Reducer {
         )
         var recurringTransactions: [RecurringTransaction]
 
+        @FetchOne
+        var userSettings: UserSettings?
+
         @Presents var destination: Destination.State?
 
         var groupedByStatus: [RecurringTransactionStatus: [RecurringTransaction]] {
@@ -50,7 +53,8 @@ struct RecurringTransactionsList: Reducer {
                 return .none
 
             case .view(.addButtonTapped):
-                let draft = Transaction.Draft()
+                guard let defaultCurrency = state.userSettings?.defaultCurrency else { return .none }
+                let draft = Transaction.Draft(currencyCode: defaultCurrency)
                 state.destination = .transactionForm(
                     TransactionFormReducer.State(
                         transaction: draft,
@@ -61,10 +65,9 @@ struct RecurringTransactionsList: Reducer {
 
             case let .view(.transactionTapped(recurringTransaction)):
                 // Create a draft from the recurring transaction
-                var draft = Transaction.Draft()
+                var draft = Transaction.Draft(currencyCode: recurringTransaction.currencyCode)
                 draft.description = recurringTransaction.description
                 draft.valueMinorUnits = recurringTransaction.valueMinorUnits
-                draft.currencyCode = recurringTransaction.currencyCode
                 draft.type = recurringTransaction.type
 
                 state.destination = .transactionForm(

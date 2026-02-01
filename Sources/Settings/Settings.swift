@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Sharing
+import SQLiteData
 import SwiftUI
 
 @Reducer
@@ -7,7 +7,7 @@ struct SettingsReducer: Reducer {
     @ObservableState
     struct State: Equatable {
         var path = StackState<Path.State>()
-        @Shared(.defaultCurrency) var defaultCurrency: String
+        @FetchOne var userSettings: UserSettings?
 
         init() {}
     }
@@ -85,7 +85,7 @@ struct SettingsView: View {
                         SettingsToolView(
                             icon: "dollarsign.circle.fill",
                             title: "Default Currency",
-                            subtitle: "Currently: \(store.defaultCurrency)"
+                            subtitle: "Currently: \(store.userSettings?.defaultCurrency ?? "USD")"
                         ) {
                             send(.defaultCurrencyTapped)
                         }

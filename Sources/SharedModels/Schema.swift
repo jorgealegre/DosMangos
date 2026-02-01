@@ -16,6 +16,7 @@ extension DependencyValues {
 //            tables: Transaction.self,
 //            TransactionLocation.self,
 //            privateTables:
+//            UserSettings.self,
 //            Category.self,
 //            Subcategory.self,
 //            TransactionCategory.self,

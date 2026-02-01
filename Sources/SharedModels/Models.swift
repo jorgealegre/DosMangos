@@ -2,8 +2,17 @@ import CoreLocation
 import Currency
 import Dependencies
 import Foundation
-import Sharing
 import SQLiteData
+
+// MARK: - User Settings
+
+@Table("userSettings")
+struct UserSettings: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var defaultCurrency: String
+}
+
+// MARK: - Transaction
 
 @Table
 struct Transaction: Identifiable, Hashable, Sendable {
@@ -102,15 +111,14 @@ extension Transaction.Draft {
 }
 
 extension Transaction.Draft {
-    init() {
+    init(currencyCode: String) {
         @Dependency(\.date.now) var now
-        @Shared(.defaultCurrency) var defaultCurrency
         let nowLocal = now.localDateComponents()
 
         self.init(
             description: "",
             valueMinorUnits: 0,
-            currencyCode: defaultCurrency,
+            currencyCode: currencyCode,
             convertedValueMinorUnits: nil,  // Will be filled when saved
             convertedCurrencyCode: nil,
             type: .expense,

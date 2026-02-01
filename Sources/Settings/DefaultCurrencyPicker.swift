@@ -1,6 +1,5 @@
 import ComposableArchitecture
 import Currency
-import Sharing
 import SQLiteData
 import SwiftUI
 
@@ -46,9 +45,13 @@ struct DefaultCurrencyPickerReducer: Reducer {
 
     @ObservableState
     struct State: Equatable {
-        @Shared(.defaultCurrency) var defaultCurrency: String
+        @FetchOne var userSettings: UserSettings?
         var phase: Phase = .idle
         @Presents var destination: Destination.State?
+
+        var defaultCurrency: String {
+            userSettings?.defaultCurrency ?? "USD"
+        }
 
         init() {}
     }
@@ -110,16 +113,22 @@ struct DefaultCurrencyPickerReducer: Reducer {
             case let .conversionCompleted(result):
                 switch result {
                 case let .success(conversionResult):
-                    state.$defaultCurrency.withLock { $0 = conversionResult.newCurrency }
                     if conversionResult.convertedCount == 0 {
                         state.phase = .idle
                     } else {
                         state.phase = .completed(conversionResult)
                     }
+                    return .run { _ in
+                        try await database.write { db in
+                            try UserSettings
+                                .update { $0.defaultCurrency = conversionResult.newCurrency }
+                                .execute(db)
+                        }
+                    }
                 case let .failure(error):
                     state.phase = .failed(error.localizedDescription)
+                    return .none
                 }
-                return .none
 
             case let .view(view):
                 switch view {
