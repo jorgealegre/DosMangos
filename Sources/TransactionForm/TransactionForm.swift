@@ -367,7 +367,7 @@ struct TransactionFormReducer: Reducer {
                     case .newTransaction where state.isRecurring:
                         return saveRecurringTransaction(&state)
                     case .postFromRecurring(let recurringTransaction):
-                        return postFromRecurringTransaction(&state, template: recurringTransaction)
+                        return saveRegularTransaction(&state, recurringTemplate: recurringTransaction)
                     default:
                         return saveRegularTransaction(&state)
                     }
@@ -407,23 +407,33 @@ struct TransactionFormReducer: Reducer {
 
     // MARK: - Save Helpers
 
-    private func saveRegularTransaction(_ state: inout State) -> Effect<Action> {
-        let defaultCurrency = state.userSettings?.defaultCurrency ?? "USD"
+    private func saveRegularTransaction(_ state: inout State, recurringTemplate: RecurringTransaction? = nil) -> Effect<Action> {
+        // TODO: add error handling
+        guard let defaultCurrency = state.userSettings?.defaultCurrency else { return .none }
+
         return .run { [state = state, defaultCurrency] send in
             var updatedTransaction = state.transaction
 
+            // Set recurring transaction ID if posting from a recurring template
+            if let template = recurringTemplate {
+                updatedTransaction.recurringTransactionID = template.id
+            }
+
+            // Convert currency to default currency
             if updatedTransaction.currencyCode != defaultCurrency {
                 do {
+                    // TODO: we should probably fetch the rate as soon as a different currency is picked
                     let rate = try await exchangeRate.getRate(
-                        updatedTransaction.currencyCode,
-                        defaultCurrency,
-                        updatedTransaction.localDate
+                        from: updatedTransaction.currencyCode,
+                        to: defaultCurrency,
+                        date: updatedTransaction.localDate
                     )
                     updatedTransaction.convertedValueMinorUnits = Int(
                         Double(updatedTransaction.valueMinorUnits) * rate
                     )
                     updatedTransaction.convertedCurrencyCode = defaultCurrency
                 } catch {
+                    // TODO: build a system that continuously tries to update these values
                     updatedTransaction.convertedValueMinorUnits = nil
                     updatedTransaction.convertedCurrencyCode = nil
                 }
@@ -439,7 +449,7 @@ struct TransactionFormReducer: Reducer {
                         .returning(\.id)
                         .fetchOne(db)!
 
-                    // Handle location (shared PK pattern: location.transactionID = transaction.id)
+                    // Handle location
                     if state.isLocationEnabled {
                         // Determine what location data to use
                         let locationData: TransactionLocation?
@@ -498,6 +508,25 @@ struct TransactionFormReducer: Reducer {
                         }
                     }
                     .execute(db)
+
+                    // Update recurring template if posting from recurring
+                    if let template = recurringTemplate {
+                        let rule = RecurrenceRule.from(recurringTransaction: template)
+                        let nextDueDate = rule.nextOccurrence(after: template.nextDueDate)
+                        let nextDueLocal = nextDueDate.localDateComponents()
+
+                        try RecurringTransaction
+                            .where { $0.id.eq(template.id) }
+                            .update {
+                                $0.nextDueLocalYear = nextDueLocal.year
+                                $0.nextDueLocalMonth = nextDueLocal.month
+                                $0.nextDueLocalDay = nextDueLocal.day
+                                $0.postedCount = template.postedCount + 1
+                            }
+                            .execute(db)
+
+                        // TODO: Check end conditions and update status if needed
+                    }
                 }
             }
             await dismiss()
@@ -726,101 +755,6 @@ struct TransactionFormReducer: Reducer {
         }
     }
 
-    private func postFromRecurringTransaction(_ state: inout State, template: RecurringTransaction) -> Effect<Action> {
-        @Dependency(\.date.now) var now
-
-        let dateComponents = calendar.dateComponents([.year, .month, .day], from: state.transaction.localDate)
-
-        var txDraft = Transaction.Draft(
-            description: state.transaction.description,
-            valueMinorUnits: state.transaction.valueMinorUnits,
-            currencyCode: state.transaction.currencyCode,
-            convertedValueMinorUnits: state.transaction.valueMinorUnits,
-            convertedCurrencyCode: state.transaction.currencyCode,
-            type: state.transaction.type,
-            createdAtUTC: now,
-            localYear: dateComponents.year!,
-            localMonth: dateComponents.month!,
-            localDay: dateComponents.day!
-        )
-        txDraft.recurringTransactionID = template.id
-
-        return .run { [state = state, txDraft = txDraft, templateID = template.id] send in
-            withErrorReporting {
-                try database.write { db in
-                    // Create the transaction first
-                    let transactionID = try Transaction.insert { txDraft }
-                        .returning(\.id)
-                        .fetchOne(db)!
-
-                    // Create location if enabled (shared PK pattern)
-                    if state.isLocationEnabled {
-                        let locationData: TransactionLocation?
-                        if let pickedLocation = state.pickedLocation {
-                            locationData = TransactionLocation(
-                                transactionID: transactionID,
-                                latitude: pickedLocation.latitude,
-                                longitude: pickedLocation.longitude,
-                                city: pickedLocation.city,
-                                countryCode: pickedLocation.countryCode
-                            )
-                        } else if let currentLocation = state.currentLocation {
-                            locationData = TransactionLocation(
-                                transactionID: transactionID,
-                                latitude: currentLocation.location.coordinate.latitude,
-                                longitude: currentLocation.location.coordinate.longitude,
-                                city: currentLocation.city,
-                                countryCode: currentLocation.countryCode
-                            )
-                        } else {
-                            locationData = nil
-                        }
-
-                        if let locationData {
-                            try TransactionLocation.insert { locationData }.execute(db)
-                        }
-                    }
-
-                    // Create category join record
-                    if let subcategory = state.subcategory {
-                        try TransactionCategory.insert {
-                            TransactionCategory.Draft(
-                                transactionID: transactionID,
-                                subcategoryID: subcategory.id
-                            )
-                        }
-                        .execute(db)
-                    }
-
-                    // Create tag join records
-                    try TransactionTag.insert {
-                        state.tags.map { tag in
-                            TransactionTag.Draft(transactionID: transactionID, tagID: tag.id)
-                        }
-                    }
-                    .execute(db)
-
-                    // Update the recurring template
-                    let rule = RecurrenceRule.from(recurringTransaction: template)
-                    let nextDueDate = rule.nextOccurrence(after: template.nextDueDate)
-                    let nextDueLocal = nextDueDate.localDateComponents()
-
-                    try RecurringTransaction
-                        .where { $0.id.eq(templateID) }
-                        .update {
-                            $0.nextDueLocalYear = nextDueLocal.year
-                            $0.nextDueLocalMonth = nextDueLocal.month
-                            $0.nextDueLocalDay = nextDueLocal.day
-                            $0.postedCount = template.postedCount + 1
-                        }
-                        .execute(db)
-
-                    // TODO: Check end conditions and update status if needed
-                }
-            }
-            await dismiss()
-        }
-    }
 }
 
 extension TransactionFormReducer.Destination.State: Equatable {}
