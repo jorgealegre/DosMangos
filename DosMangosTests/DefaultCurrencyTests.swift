@@ -88,7 +88,7 @@ extension BaseTestSuite {
             }
 
             // All transactions already in EUR, no rates needed - conversion happens automatically
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
@@ -347,7 +347,7 @@ extension BaseTestSuite {
                 $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .readyToConvert(
                     targetCurrency: "EUR",
                     summary: DefaultCurrencyPickerReducer.ConversionSummary(
