@@ -55,6 +55,8 @@ struct AppReducer: Reducer {
     }
 
     @Dependency(\.locationManager) private var locationManager
+    @Dependency(\.defaultDatabase) private var database
+    @Dependency(\.exchangeRate) private var exchangeRate
 
     var body: some ReducerOf<Self> {
         Scope(state: \.appDelegate, action: \.appDelegate) {
@@ -117,22 +119,10 @@ struct AppReducer: Reducer {
                     return .none
 
                 case .task:
-                    return .run { _ in
-                        guard await locationManager.locationServicesEnabled() else { return }
-                        let authorizationStatus = await locationManager.authorizationStatus()
-                        switch authorizationStatus {
-                        case .notDetermined:
-                            await locationManager.requestWhenInUseAuthorization()
-                        case .denied:
-                            return
-                        case .restricted:
-                            return
-                        case .authorizedWhenInUse, .authorizedAlways:
-                            return
-                        @unknown default:
-                            return
-                        }
-                    }
+                    return .merge(
+                        requestLocationPermissionIfNeeded(),
+                        convertPendingTransactions()
+                    )
 
                 case .shakeDetected:
                     #if DEBUG || TESTFLIGHT
@@ -144,7 +134,103 @@ struct AppReducer: Reducer {
         }
         .ifLet(\.$destination, action: \.destination)
     }
+
+    // MARK: - Private Effects
+
+    private func requestLocationPermissionIfNeeded() -> Effect<Action> {
+        .run { _ in
+            guard await locationManager.locationServicesEnabled() else { return }
+            let status = await locationManager.authorizationStatus()
+            if status == .notDetermined {
+                await locationManager.requestWhenInUseAuthorization()
+            }
+        }
+    }
+
+    @Selection
+    struct PendingRate: Hashable {
+        let currency: String
+        let year: Int
+        let month: Int
+        let day: Int
+    }
+
+    private func convertPendingTransactions() -> Effect<Action> {
+        .run { _ in
+            await withErrorReporting {
+                // 1. Get default currency
+                guard let defaultCurrency = try await database.read({ db in
+                    try UserSettings.fetchOne(db)?.defaultCurrency
+                }) else { return }
+
+                // 2. Get unique (currency, year, month, day) combinations for pending transactions
+                let pendingRates: [PendingRate] = try await database.read { db in
+                    try Transaction
+                        .where { $0.convertedValueMinorUnits.is(nil) }
+                        .where { $0.currencyCode.neq(defaultCurrency) }
+                        .distinct()
+                        .select {
+                            PendingRate.Columns(
+                                currency: $0.currencyCode,
+                                year: $0.localYear,
+                                month: $0.localMonth,
+                                day: $0.localDay
+                            )
+                        }
+                        .fetchAll(db)
+                }
+                guard !pendingRates.isEmpty else { return }
+
+                // 3. Fetch rates in parallel (one per unique currency+date)
+                let rates: [(PendingRate, Double)] = await withTaskGroup(of: (PendingRate, Double)?.self) { group in
+                    for pending in pendingRates {
+                        group.addTask {
+                            let date = Date.localDate(
+                                year: pending.year,
+                                month: pending.month,
+                                day: pending.day
+                            )!
+                            guard let rate = try? await self.exchangeRate.getRate(
+                                from: pending.currency,
+                                to: defaultCurrency,
+                                date: date
+                            ) else { return nil }
+                            return (pending, rate)
+                        }
+                    }
+
+                    var result: [(PendingRate, Double)] = []
+                    for await item in group {
+                        if let item { result.append(item) }
+                    }
+                    return result
+                }
+
+                guard !rates.isEmpty else { return }
+
+                // 4. Bulk update each (currency, date) group in a single transaction
+                try await database.write { db in
+                    for (pending, rate) in rates {
+                        try Transaction
+                            .where {
+                                $0.convertedValueMinorUnits.is(nil) &&
+                                $0.currencyCode.eq(pending.currency) &&
+                                $0.localYear.eq(pending.year) &&
+                                $0.localMonth.eq(pending.month) &&
+                                $0.localDay.eq(pending.day)
+                            }
+                            .update {
+                                $0.convertedValueMinorUnits = #sql("CAST(\($0.valueMinorUnits) * \(bind: rate) AS INTEGER)")
+                                $0.convertedCurrencyCode = defaultCurrency
+                            }
+                            .execute(db)
+                    }
+                }
+            }
+        }
+    }
 }
+
 extension AppReducer.Destination.State: Equatable {}
 
 @ViewAction(for: AppReducer.self)
