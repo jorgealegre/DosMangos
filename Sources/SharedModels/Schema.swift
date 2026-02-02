@@ -11,22 +11,22 @@ func uuid() -> UUID {
 extension DependencyValues {
     mutating func bootstrapDatabase() throws {
         defaultDatabase = try appDatabase()
-//        defaultSyncEngine = try SyncEngine(
-//            for: defaultDatabase,
-//            tables: Transaction.self,
-//            TransactionLocation.self,
-//            privateTables:
-//            UserSettings.self,
-//            Category.self,
-//            Subcategory.self,
-//            TransactionCategory.self,
-//            Tag.self,
-//            TransactionTag.self,
-//            RecurringTransaction.self,
-//            RecurringTransactionCategory.self,
-//            RecurringTransactionTag.self
-//            // ExchangeRate.self is ignored because it's just a local cache
-//        )
+        defaultSyncEngine = try SyncEngine(
+            for: defaultDatabase,
+//            tables:
+            privateTables: UserSettings.self,
+            Transaction.self,
+            TransactionLocation.self,
+            Category.self,
+            Subcategory.self,
+            TransactionCategory.self,
+            Tag.self,
+            TransactionTag.self,
+            RecurringTransaction.self,
+            RecurringTransactionCategory.self,
+            RecurringTransactionTag.self
+            // ExchangeRate.self is ignored because it's just a local cache
+        )
     }
 }
 
