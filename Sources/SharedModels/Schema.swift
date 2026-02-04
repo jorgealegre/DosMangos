@@ -1,5 +1,6 @@
 import Dependencies
 import OSLog
+import Sharing
 import SQLiteData
 
 @DatabaseFunction("uuid")
@@ -11,6 +12,7 @@ func uuid() -> UUID {
 extension DependencyValues {
     mutating func bootstrapDatabase() throws {
         defaultDatabase = try appDatabase()
+
         defaultSyncEngine = try SyncEngine(
             for: defaultDatabase,
 //            tables:
@@ -24,7 +26,7 @@ extension DependencyValues {
             TransactionTag.self,
             RecurringTransaction.self,
             RecurringTransactionCategory.self,
-            RecurringTransactionTag.self
+            RecurringTransactionTag.self,
             // ExchangeRate.self is ignored because it's just a local cache
         )
     }

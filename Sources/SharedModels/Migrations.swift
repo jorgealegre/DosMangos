@@ -714,6 +714,39 @@ extension DatabaseMigrator {
             // Clean up UserDefaults
             UserDefaults.standard.removeObject(forKey: "default_currency")
         }
+
+        self.registerMigration("Consolidate userSettings to fixed ID") { db in
+            // Previous migration used random UUIDs, causing CloudKit sync to create
+            // duplicate rows (one per device). Fix by consolidating to a single row
+            // with a fixed ID so all devices share the same CloudKit record.
+
+            let fixedID = "00000000-0000-0000-0000-000000000000"
+
+            // Check if the fixed ID row already exists (e.g., synced from another device)
+            let hasFixedIDRow = try #sql("""
+            SELECT 1 FROM "userSettings" WHERE "id" = \(bind: fixedID)
+            """, as: Int.self).fetchOne(db) != nil
+
+            if hasFixedIDRow {
+                // Fixed ID row exists (from sync), just clean up any legacy rows
+                try #sql("""
+                DELETE FROM "userSettings" WHERE "id" != \(bind: fixedID)
+                """).execute(db)
+            } else {
+                // Need to consolidate: get currency, delete all, insert with fixed ID
+                let existingCurrency = try #sql("""
+                SELECT "defaultCurrency" FROM "userSettings" LIMIT 1
+                """, as: String.self).fetchOne(db) ?? "USD"
+
+                try #sql("""
+                DELETE FROM "userSettings"
+                """).execute(db)
+
+                try #sql("""
+                INSERT INTO "userSettings" ("id", "defaultCurrency")
+                VALUES (\(bind: fixedID), \(bind: existingCurrency))
+                """).execute(db)
+            }
+        }
     }
 }
-
