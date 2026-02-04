@@ -197,9 +197,18 @@ struct DebugMenuView: View {
             }
             defer { sourceURL.stopAccessingSecurityScopedResource() }
 
-            // Import from the selected file into the app's database
-            let source = try DatabaseQueue(path: sourceURL.path)
+            // Copy file to temp directory first (SQLite needs write access for journal files)
+            let fileManager = FileManager.default
+            let tempURL = fileManager.temporaryDirectory.appendingPathComponent(sourceURL.lastPathComponent)
+            try? fileManager.removeItem(at: tempURL)
+            try fileManager.copyItem(at: sourceURL, to: tempURL)
+
+            // Import from the copied file into the app's database
+            let source = try DatabaseQueue(path: tempURL.path)
             try source.backup(to: database)
+
+            // Clean up temp file
+            try? fileManager.removeItem(at: tempURL)
 
             dismiss()
         }
