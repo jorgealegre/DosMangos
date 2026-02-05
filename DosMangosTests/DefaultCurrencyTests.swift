@@ -92,7 +92,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 0,
@@ -167,7 +167,7 @@ extension BaseTestSuite {
             }
 
             // Rates fetched - both USD and ARS have rates
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .readyToConvert(
                     targetCurrency: "EUR",
                     summary: DefaultCurrencyPickerReducer.ConversionSummary(
@@ -187,7 +187,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,
@@ -270,7 +270,7 @@ extension BaseTestSuite {
             }
 
             // One rate succeeded, one failed
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .readyToConvert(
                     targetCurrency: "EUR",
                     summary: DefaultCurrencyPickerReducer.ConversionSummary(
@@ -287,7 +287,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 1,
@@ -458,7 +458,7 @@ extension BaseTestSuite {
                 $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .readyToConvert(
                     targetCurrency: "EUR",
                     summary: DefaultCurrencyPickerReducer.ConversionSummary(
@@ -478,7 +478,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 3,
                     skippedCount: 0,
@@ -554,7 +554,7 @@ extension BaseTestSuite {
             }
 
             // 1 USD transaction needs rate, 1 EUR transaction is same-currency
-            await store.receive(\.ratesFetched) {
+            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
                 $0.phase = .readyToConvert(
                     targetCurrency: "EUR",
                     summary: DefaultCurrencyPickerReducer.ConversionSummary(
@@ -571,7 +571,7 @@ extension BaseTestSuite {
             }
 
             // Both transactions get updated (count = 2)
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,

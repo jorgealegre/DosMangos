@@ -203,7 +203,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                 let sameCurrencyCount = try await database.read { db in
                     try Transaction
                         .where { $0.currencyCode.eq(targetCurrency) }
-                        .select { $0.id.count() }
+                        .count()
                         .fetchOne(db) ?? 0
                 }
 
@@ -238,7 +238,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
 
                     let sameCurrencyCount = try Transaction
                         .where { $0.currencyCode.eq(targetCurrency) }
-                        .select { $0.id.count() }
+                        .count()
                         .fetchOne(db) ?? 0
 
                     // 2. Clear converted values for all different-currency transactions first
