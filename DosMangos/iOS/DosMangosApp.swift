@@ -10,31 +10,46 @@ struct DosMangosApp: App {
 
     @Dependency(\.context) var context
 
+    @State private var bootstrapError: Error?
+
     init() {
         if context == .live {
-            try! prepareDependencies {
-                try $0.bootstrapDatabase()
-
-                #if DEBUG || TESTFLIGHT
-                // Apply debug date override if set
-                @Shared(.debugDateOverride) var debugDate
-                if let debugDate {
-                    $0.date = DateGenerator { debugDate }
-                }
-                #endif
-            }
-
             // Need to touch the location client so that it starts up in the main thread.
             _ = LocationManagerClient.live
+
+            do {
+                try prepareDependencies {
+
+                    try $0.bootstrapDatabase()
+
+                    #if DEBUG || TESTFLIGHT
+                    // Apply debug date override if set
+                    @Shared(.debugDateOverride) var debugDate
+                    if let debugDate {
+                        $0.date = DateGenerator { debugDate }
+                    }
+                    #endif
+                }
+            } catch {
+                _bootstrapError = State(initialValue: error)
+            }
         }
     }
 
     var body: some Scene {
         WindowGroup {
             if context == .live {
-                AppView(
-                    store: delegate.store
-                )
+                AppView(store: delegate.store)
+                    #if DEBUG || TESTFLIGHT
+                    .alert("Startup Error", isPresented: .constant(bootstrapError != nil)) {
+                        Button("Copy to Clipboard") {
+                            UIPasteboard.general.string = String(describing: bootstrapError!)
+                        }
+                        Button("OK", role: .cancel) {}
+                    } message: {
+                        Text(String(describing: bootstrapError!))
+                    }
+                    #endif
             }
         }
     }
