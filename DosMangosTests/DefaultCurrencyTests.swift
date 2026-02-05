@@ -10,7 +10,6 @@ import Testing
 
 extension BaseTestSuite {
     @MainActor
-    @Suite(.dependencies)
     struct DefaultCurrencyTests {
         @Dependency(\.defaultDatabase) var database
 
