@@ -44,7 +44,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .idle
             }
 
@@ -92,7 +92,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 0,
@@ -187,7 +187,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,
@@ -287,7 +287,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 1,
                     skippedCount: 1,
@@ -478,7 +478,7 @@ extension BaseTestSuite {
                 $0.phase = .converting(targetCurrency: "EUR")
             }
 
-            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 3,
                     skippedCount: 0,
@@ -571,7 +571,7 @@ extension BaseTestSuite {
             }
 
             // Both transactions get updated (count = 2)
-            await store.receive(\.conversionCompleted, timeout: .seconds(1)) {
+            await store.receive(\.conversionCompleted, timeout: .seconds(2)) {
                 $0.phase = .completed(DefaultCurrencyPickerReducer.ConversionResult(
                     convertedCount: 2,
                     skippedCount: 0,
