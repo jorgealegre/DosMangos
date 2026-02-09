@@ -19,7 +19,6 @@ struct DosMangosApp: App {
 
             do {
                 try prepareDependencies {
-
                     try $0.bootstrapDatabase()
 
                     #if DEBUG || TESTFLIGHT
@@ -41,14 +40,12 @@ struct DosMangosApp: App {
             if context == .live {
                 AppView(store: delegate.store)
                     #if DEBUG || TESTFLIGHT
-                    .alert("Startup Error", isPresented: .constant(bootstrapError != nil)) {
+                    .alert(item: $bootstrapError, title: { Text($0.localizedDescription) }, actions: { error in
                         Button("Copy to Clipboard") {
-                            UIPasteboard.general.string = String(describing: bootstrapError!)
+                            UIPasteboard.general.string = String(error.localizedDescription)
                         }
                         Button("OK", role: .cancel) {}
-                    } message: {
-                        Text(String(describing: bootstrapError!))
-                    }
+                    })
                     #endif
             }
         }
