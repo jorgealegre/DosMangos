@@ -30,7 +30,6 @@
 
 /* Begin PBXFileReference section */
 		CF0689412F19E24B0082DE08 /* DosMangosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DosMangosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		CF19906B2F03628100FD49FF /* swift-dos-mangos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "swift-dos-mangos"; sourceTree = "<group>"; };
 		CF5CA85E2905BC6100156961 /* DosMangos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DosMangos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -84,7 +83,6 @@
 		CF5CA8552905BC6100156961 = {
 			isa = PBXGroup;
 			children = (
-				CF19906B2F03628100FD49FF /* swift-dos-mangos */,
 				CFEC98102EF7905100449A78 /* Sources */,
 				CF207A732EF61E2200851104 /* DosMangos */,
 				CF0689422F19E24B0082DE08 /* DosMangosTests */,
