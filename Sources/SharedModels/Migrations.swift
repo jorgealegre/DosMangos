@@ -523,14 +523,26 @@ extension DatabaseMigrator {
             SELECT DISTINCT 'Other', ttc."categoryID"
             FROM "temp_transactionsCategories" ttc
             WHERE ttc."isParent" = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "subcategories" s
+                WHERE s."title" = 'Other'
+                  AND s."categoryID" = ttc."categoryID"
+              )
             """).execute(db)
 
             // Also for recurring transactions
             try #sql("""
-            INSERT OR IGNORE INTO "subcategories" ("title", "categoryID")
+            INSERT INTO "subcategories" ("title", "categoryID")
             SELECT DISTINCT 'Other', trtc."categoryID"
             FROM "temp_recurringTransactionsCategories" trtc
             WHERE trtc."isParent" = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "subcategories" s
+                WHERE s."title" = 'Other'
+                  AND s."categoryID" = trtc."categoryID"
+              )
             """).execute(db)
 
             // Restore transactionsCategories - subcategory references (child categories)
