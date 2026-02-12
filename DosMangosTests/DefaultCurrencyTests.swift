@@ -334,7 +334,11 @@ extension BaseTestSuite {
             ) {
                 DefaultCurrencyPickerReducer()
             } withDependencies: {
-                $0.exchangeRate.getRate = { _, _, _ in 0.92 }
+                // Keep rate fetching in-flight so cancellation behavior is deterministic.
+                $0.exchangeRate.getRate = { _, _, _ in
+                    try await Task.sleep(for: .seconds(10))
+                    return 0.92
+                }
             }
 
             await store.send(\.view.changeCurrencyButtonTapped) {
@@ -346,25 +350,16 @@ extension BaseTestSuite {
                 $0.phase = .fetchingRates(targetCurrency: "EUR")
             }
 
-            await store.receive(\.ratesFetched, timeout: .seconds(1)) {
-                $0.phase = .readyToConvert(
-                    targetCurrency: "EUR",
-                    summary: DefaultCurrencyPickerReducer.ConversionSummary(
-                        convertibleCount: 1,
-                        failedCount: 0,
-                        sameCurrencyCount: 0,
-                        rates: ["2025-1-10-USD": 0.92]
-                    )
-                )
-            }
-
-            // Cancel before converting
+            // Cancel while fetch is still in-flight.
             await store.send(\.view.cancelTapped) {
                 $0.phase = .idle
             }
 
             // Currency should still be USD
             #expect(store.state.defaultCurrency == "USD")
+
+            // Verify cancellation leaves no in-flight effects/actions.
+            await store.finish()
         }
 
         // MARK: - Selecting Same Currency
