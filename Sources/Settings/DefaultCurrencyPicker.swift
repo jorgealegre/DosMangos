@@ -156,7 +156,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
 
     /// Fetches all exchange rates needed for conversion and returns a summary
     private func fetchRatesAndPrepare(targetCurrency: String) -> Effect<Action> {
-        .run { send in
+        return .run { send in
             do {
                 // 1. Read all required DB inputs in a single read transaction.
                 // This reduces queue contention under heavily parallel test execution.
@@ -198,7 +198,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     }
 
                     for await (key, count, rate) in group {
-                        try Task.checkCancellation()
+                        guard !Task.isCancelled else { break }
                         if let rate {
                             rates[key] = rate
                             convertibleCount += count
