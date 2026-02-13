@@ -158,13 +158,21 @@ struct DefaultCurrencyPickerReducer: Reducer {
     private func fetchRatesAndPrepare(targetCurrency: String) -> Effect<Action> {
         .run { send in
             do {
-                // 1. Get unique (date, currency) pairs needing rates
-                let pairs = try await database.read { db in
-                    try Transaction
+                // 1. Read all required DB inputs in a single read transaction.
+                // This reduces queue contention under heavily parallel test execution.
+                let (pairs, sameCurrencyCount) = try await database.read { db in
+                    let pairs = try Transaction
                         .where { $0.currencyCode.neq(targetCurrency) }
                         .group { ($0.localYear, $0.localMonth, $0.localDay, $0.currencyCode) }
                         .select { ($0.localYear, $0.localMonth, $0.localDay, $0.currencyCode, $0.id.count()) }
                         .fetchAll(db)
+
+                    let sameCurrencyCount = try Transaction
+                        .where { $0.currencyCode.eq(targetCurrency) }
+                        .count()
+                        .fetchOne(db) ?? 0
+
+                    return (pairs, sameCurrencyCount)
                 }
 
                 // 2. Fetch rates in parallel, continuing on failures
@@ -190,6 +198,7 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     }
 
                     for await (key, count, rate) in group {
+                        try Task.checkCancellation()
                         if let rate {
                             rates[key] = rate
                             convertibleCount += count
@@ -199,14 +208,6 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     }
                 }
 
-                // 3. Count same-currency transactions
-                let sameCurrencyCount = try await database.read { db in
-                    try Transaction
-                        .where { $0.currencyCode.eq(targetCurrency) }
-                        .count()
-                        .fetchOne(db) ?? 0
-                }
-
                 let summary = ConversionSummary(
                     convertibleCount: convertibleCount,
                     failedCount: failedCount,
@@ -214,8 +215,10 @@ struct DefaultCurrencyPickerReducer: Reducer {
                     rates: rates
                 )
 
+                try Task.checkCancellation()
                 await send(.ratesFetched(targetCurrency: targetCurrency, .success(summary)))
             } catch {
+                guard !(error is CancellationError) else { return }
                 await send(.ratesFetched(targetCurrency: targetCurrency, .failure(error)))
             }
         }
