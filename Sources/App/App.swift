@@ -13,6 +13,14 @@ struct AppReducer: Reducer {
         case debugMenu
     }
 
+    enum Tab: Equatable {
+        case transactions
+        case recurring
+        case groups
+        case map
+        case settings
+    }
+
     @ObservableState
     struct State: Equatable {
         @Presents var destination: Destination.State?
@@ -23,8 +31,10 @@ struct AppReducer: Reducer {
         @FetchOne
         var userSettings: UserSettings?
 
+        var selectedTab: Tab = .transactions
         var appDelegate = AppDelegateReducer.State()
         var transactionsList: TransactionsList.State
+        var groups = GroupsReducer.State()
         var recurringTransactionsList = RecurringTransactionsList.State()
         var transactionsMap = TransactionsMap.State()
         var settings = SettingsReducer.State()
@@ -35,7 +45,7 @@ struct AppReducer: Reducer {
         }
     }
 
-    enum Action: ViewAction {
+    enum Action: BindableAction, ViewAction {
         @CasePathable
         enum View {
             case newTransactionButtonTapped
@@ -44,8 +54,10 @@ struct AppReducer: Reducer {
             case shakeDetected
         }
 
+        case binding(BindingAction<State>)
         case appDelegate(AppDelegateReducer.Action)
         case transactionsList(TransactionsList.Action)
+        case groups(GroupsReducer.Action)
         case transactionsMap(TransactionsMap.Action)
         case settings(SettingsReducer.Action)
         case recurringTransactionsList(RecurringTransactionsList.Action)
@@ -57,6 +69,7 @@ struct AppReducer: Reducer {
     @Dependency(\.locationManager) private var locationManager
     @Dependency(\.defaultDatabase) private var database
     @Dependency(\.exchangeRate) private var exchangeRate
+    @Dependency(\.groupClient) private var groupClient
 
     var body: some ReducerOf<Self> {
         Scope(state: \.appDelegate, action: \.appDelegate) {
@@ -71,6 +84,10 @@ struct AppReducer: Reducer {
             TransactionsMap()
         }
 
+        Scope(state: \.groups, action: \.groups) {
+            GroupsReducer()
+        }
+
         Scope(state: \.settings, action: \.settings) {
             SettingsReducer()
         }
@@ -79,9 +96,17 @@ struct AppReducer: Reducer {
             RecurringTransactionsList()
         }
 
+        BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding:
+                return .none
+
             case .appDelegate(.didFinishLaunching):
+                return .none
+
+            case .appDelegate(.sceneDelegate(.didAcceptShare)):
+                state.selectedTab = .groups
                 return .none
 
             case .appDelegate:
@@ -94,6 +119,9 @@ struct AppReducer: Reducer {
                 return .none
 
             case .transactionsMap:
+                return .none
+
+            case .groups:
                 return .none
 
             case .settings:
@@ -121,7 +149,8 @@ struct AppReducer: Reducer {
                 case .task:
                     return .merge(
                         requestLocationPermissionIfNeeded(),
-                        convertPendingTransactions()
+                        convertPendingTransactions(),
+                        ensureParticipantID()
                     )
 
                 case .shakeDetected:
@@ -136,6 +165,12 @@ struct AppReducer: Reducer {
     }
 
     // MARK: - Private Effects
+
+    private func ensureParticipantID() -> Effect<Action> {
+        .run { _ in
+            try? await groupClient.ensureParticipantID()
+        }
+    }
 
     private func requestLocationPermissionIfNeeded() -> Effect<Action> {
         .run { _ in
@@ -163,7 +198,21 @@ struct AppReducer: Reducer {
                     try UserSettings.fetchOne(db)?.defaultCurrency
                 }) else { return }
 
-                // 2. Get unique (currency, year, month, day) combinations for pending transactions
+                // 2. Fill in converted values for transactions already in the default currency
+                try await database.write { db in
+                    try Transaction
+                        .where {
+                            $0.convertedValueMinorUnits.is(nil) &&
+                            $0.currencyCode.eq(defaultCurrency)
+                        }
+                        .update {
+                            $0.convertedValueMinorUnits = #sql("\($0.valueMinorUnits)")
+                            $0.convertedCurrencyCode = defaultCurrency
+                        }
+                        .execute(db)
+                }
+
+                // 3. Get unique (currency, year, month, day) combinations for pending transactions
                 let pendingRates: [PendingRate] = try await database.read { db in
                     try Transaction
                         .where { $0.convertedValueMinorUnits.is(nil) }
@@ -238,7 +287,7 @@ struct AppView: View {
     @Bindable var store: StoreOf<AppReducer>
 
     var body: some View {
-        TabView {
+        TabView(selection: $store.selectedTab) {
             ZStack(alignment: .bottom) {
                 TransactionsListView(
                     store: store.scope(
@@ -249,6 +298,7 @@ struct AppView: View {
 
                 addTransactionButton
             }
+            .tag(AppReducer.Tab.transactions)
             .tabItem {
                 Label("Transactions", systemImage: "list.bullet.rectangle.portrait")
             }
@@ -259,9 +309,21 @@ struct AppView: View {
                     action: \.recurringTransactionsList
                 )
             )
-                .tabItem {
-                    Label("Recurring", systemImage: "repeat.circle")
-                }
+            .tag(AppReducer.Tab.recurring)
+            .tabItem {
+                Label("Recurring", systemImage: "repeat.circle")
+            }
+
+            GroupsView(
+                store: store.scope(
+                    state: \.groups,
+                    action: \.groups
+                )
+            )
+            .tag(AppReducer.Tab.groups)
+            .tabItem {
+                Label("Groups", systemImage: "person.3.fill")
+            }
 
             TransactionsMapView(
                 store: store.scope(
@@ -269,6 +331,7 @@ struct AppView: View {
                     action: \.transactionsMap
                 )
             )
+            .tag(AppReducer.Tab.map)
             .tabItem {
                 Label("Map", systemImage: "map.fill")
             }
@@ -279,6 +342,7 @@ struct AppView: View {
                     action: \.settings
                 )
             )
+            .tag(AppReducer.Tab.settings)
             .tabItem {
                 Label("Settings", systemImage: "gearshape.fill")
             }

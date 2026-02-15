@@ -12,13 +12,18 @@ func uuid() -> UUID {
 extension DependencyValues {
     mutating func bootstrapDatabase() throws {
         defaultDatabase = try appDatabase()
-
         defaultSyncEngine = try SyncEngine(
             for: defaultDatabase,
-//            tables:
-            privateTables: UserSettings.self,
+            tables:
+            TransactionGroup.self,
+            GroupMember.self,
+            GroupTransaction.self,
+            GroupTransactionLocation.self,
+            GroupTransactionSplit.self,
+            privateTables:
             Transaction.self,
             TransactionLocation.self,
+            UserSettings.self,
             Category.self,
             Subcategory.self,
             TransactionCategory.self,
@@ -27,7 +32,7 @@ extension DependencyValues {
             RecurringTransaction.self,
             RecurringTransactionCategory.self,
             RecurringTransactionTag.self,
-            // ExchangeRate.self is ignored because it's just a local cache
+            // ExchangeRate.self and local_settings are ignored because they are local-only cache/state
         )
     }
 }
@@ -49,6 +54,7 @@ func appDatabase() throws -> any DatabaseWriter {
 
         db.add(function: $uuid)
         try db.createViews()
+        try db.createTemporaryTriggers()
     }
     let database = try SQLiteData.defaultDatabase(configuration: configuration)
     logger.debug(
@@ -65,10 +71,6 @@ func appDatabase() throws -> any DatabaseWriter {
     migrator.registerAllMigrations()
 
     try migrator.migrate(database)
-
-    try database.write { db in
-        // TODO: triggers
-    }
 
     return database
 }
@@ -110,6 +112,349 @@ extension Database {
                         tags: $4.jsonTitles
                     )
                 }
+        )
+        .execute(self)
+    }
+
+    func createTemporaryTriggers() throws {
+        let hasGroupSplitsTable = try #sql("""
+        SELECT 1
+        FROM "sqlite_master"
+        WHERE "type" = 'table'
+          AND "name" = 'group_transaction_splits'
+        """, as: Int.self).fetchOne(self) != nil
+        guard hasGroupSplitsTable else { return }
+
+        // MARK: - Validation (BEFORE INSERT / UPDATE on group_transaction_splits)
+
+        try GroupTransactionSplit.createTemporaryTrigger(
+            "validate_group_split_member_insert",
+            before: .insert { new in
+                #sql("""
+                SELECT RAISE(ABORT, 'Invalid memberID: member does not exist')
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM \(GroupMember.self) WHERE \(GroupMember.id) = \(new.memberID)
+                )
+                """)
+                #sql("""
+                SELECT RAISE(ABORT, 'Invalid split: member does not belong to transaction group')
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM \(GroupMember.self) gm
+                    JOIN \(GroupTransaction.self) gt ON gt."id" = \(new.groupTransactionID)
+                    WHERE gm."id" = \(new.memberID)
+                      AND gm."groupID" = gt."groupID"
+                )
+                """)
+            } when: { _ in
+                !SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        try GroupTransactionSplit.createTemporaryTrigger(
+            "validate_group_split_member_update",
+            before: .update { _, new in
+                #sql("""
+                SELECT RAISE(ABORT, 'Invalid memberID: member does not exist')
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM \(GroupMember.self) WHERE \(GroupMember.id) = \(new.memberID)
+                )
+                """)
+                #sql("""
+                SELECT RAISE(ABORT, 'Invalid split: member does not belong to transaction group')
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM \(GroupMember.self) gm
+                    JOIN \(GroupTransaction.self) gt ON gt."id" = \(new.groupTransactionID)
+                    WHERE gm."id" = \(new.memberID)
+                      AND gm."groupID" = gt."groupID"
+                )
+                """)
+            } when: { _, _ in
+                !SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        // MARK: - Sync: group_transaction_splits → transactions (AFTER INSERT / UPDATE / DELETE)
+
+        try GroupTransactionSplit.createTemporaryTrigger(
+            after: .insert { new in
+                #sql("""
+                INSERT INTO \(Transaction.self) (
+                    "id", "description", "valueMinorUnits", "currencyCode",
+                    "convertedValueMinorUnits", "convertedCurrencyCode",
+                    "type", "createdAtUTC", "localYear", "localMonth", "localDay",
+                    "groupTransactionSplitID"
+                )
+                SELECT
+                    \(new.id),
+                    gt."description",
+                    \(new.owedAmountMinorUnits),
+                    gt."currencyCode",
+                    CASE
+                        WHEN gt."currencyCode" = dc."currency" THEN \(new.owedAmountMinorUnits)
+                        ELSE NULL
+                    END,
+                    CASE
+                        WHEN gt."currencyCode" = dc."currency" THEN dc."currency"
+                        ELSE NULL
+                    END,
+                    0,
+                    gt."createdAtUTC",
+                    gt."localYear",
+                    gt."localMonth",
+                    gt."localDay",
+                    \(new.id)
+                FROM \(GroupTransaction.self) gt
+                JOIN \(GroupMember.self) gm ON gm."id" = \(new.memberID)
+                JOIN \(LocalSetting.self) ls ON ls."key" = 'currentUserParticipantID'
+                CROSS JOIN (
+                    SELECT COALESCE(
+                        (SELECT \(UserSettings.defaultCurrency) FROM \(UserSettings.self) LIMIT 1),
+                        'USD'
+                    ) AS "currency"
+                ) dc
+                WHERE gt."id" = \(new.groupTransactionID)
+                    AND gm."cloudKitParticipantID" = ls."value"
+                ON CONFLICT("id") DO UPDATE SET
+                    "description" = excluded."description",
+                    "valueMinorUnits" = excluded."valueMinorUnits",
+                    "currencyCode" = excluded."currencyCode",
+                    "type" = excluded."type",
+                    "createdAtUTC" = excluded."createdAtUTC",
+                    "localYear" = excluded."localYear",
+                    "localMonth" = excluded."localMonth",
+                    "localDay" = excluded."localDay",
+                    "groupTransactionSplitID" = excluded."groupTransactionSplitID",
+                    "convertedValueMinorUnits" = CASE
+                        WHEN \(Transaction.valueMinorUnits) != excluded."valueMinorUnits"
+                          OR \(Transaction.currencyCode) != excluded."currencyCode"
+                        THEN excluded."convertedValueMinorUnits"
+                        ELSE COALESCE(\(Transaction.convertedValueMinorUnits), excluded."convertedValueMinorUnits")
+                    END,
+                    "convertedCurrencyCode" = CASE
+                        WHEN \(Transaction.valueMinorUnits) != excluded."valueMinorUnits"
+                          OR \(Transaction.currencyCode) != excluded."currencyCode"
+                        THEN excluded."convertedCurrencyCode"
+                        ELSE COALESCE(\(Transaction.convertedCurrencyCode), excluded."convertedCurrencyCode")
+                    END
+                """)
+                #sql("""
+                INSERT INTO \(TransactionLocation.self) (
+                    "transactionID", "latitude", "longitude", "city", "countryCode"
+                )
+                SELECT
+                    \(new.id),
+                    gtl."latitude",
+                    gtl."longitude",
+                    gtl."city",
+                    gtl."countryCode"
+                FROM \(GroupTransactionLocation.self) gtl
+                WHERE gtl."groupTransactionID" = \(new.groupTransactionID)
+                ON CONFLICT("transactionID") DO UPDATE SET
+                    "latitude" = excluded."latitude",
+                    "longitude" = excluded."longitude",
+                    "city" = excluded."city",
+                    "countryCode" = excluded."countryCode"
+                """)
+            } when: { _ in
+                SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        try GroupTransactionSplit.createTemporaryTrigger(
+            after: .update { _, new in
+                #sql("""
+                UPDATE \(Transaction.self)
+                SET
+                    "description" = (
+                        SELECT gt."description"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "valueMinorUnits" = \(new.owedAmountMinorUnits),
+                    "currencyCode" = (
+                        SELECT gt."currencyCode"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "createdAtUTC" = (
+                        SELECT gt."createdAtUTC"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "localYear" = (
+                        SELECT gt."localYear"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "localMonth" = (
+                        SELECT gt."localMonth"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "localDay" = (
+                        SELECT gt."localDay"
+                        FROM \(GroupTransaction.self) gt
+                        WHERE gt."id" = \(new.groupTransactionID)
+                    ),
+                    "convertedValueMinorUnits" = CASE
+                        WHEN \(Transaction.valueMinorUnits) != \(new.owedAmountMinorUnits)
+                          OR \(Transaction.currencyCode) != (
+                            SELECT gt."currencyCode"
+                            FROM \(GroupTransaction.self) gt
+                            WHERE gt."id" = \(new.groupTransactionID)
+                          )
+                        THEN CASE
+                            WHEN (
+                                SELECT gt."currencyCode"
+                                FROM \(GroupTransaction.self) gt
+                                WHERE gt."id" = \(new.groupTransactionID)
+                            ) = COALESCE(
+                                (SELECT \(UserSettings.defaultCurrency) FROM \(UserSettings.self) LIMIT 1),
+                                'USD'
+                            )
+                            THEN \(new.owedAmountMinorUnits)
+                            ELSE NULL
+                        END
+                        ELSE \(Transaction.convertedValueMinorUnits)
+                    END,
+                    "convertedCurrencyCode" = CASE
+                        WHEN \(Transaction.valueMinorUnits) != \(new.owedAmountMinorUnits)
+                          OR \(Transaction.currencyCode) != (
+                            SELECT gt."currencyCode"
+                            FROM \(GroupTransaction.self) gt
+                            WHERE gt."id" = \(new.groupTransactionID)
+                          )
+                        THEN CASE
+                            WHEN (
+                                SELECT gt."currencyCode"
+                                FROM \(GroupTransaction.self) gt
+                                WHERE gt."id" = \(new.groupTransactionID)
+                            ) = COALESCE(
+                                (SELECT \(UserSettings.defaultCurrency) FROM \(UserSettings.self) LIMIT 1),
+                                'USD'
+                            )
+                            THEN COALESCE(
+                                (SELECT \(UserSettings.defaultCurrency) FROM \(UserSettings.self) LIMIT 1),
+                                'USD'
+                            )
+                            ELSE NULL
+                        END
+                        ELSE \(Transaction.convertedCurrencyCode)
+                    END
+                WHERE \(Transaction.id) = \(new.id)
+                """)
+                #sql("""
+                INSERT INTO \(TransactionLocation.self) (
+                    "transactionID", "latitude", "longitude", "city", "countryCode"
+                )
+                SELECT
+                    \(new.id),
+                    gtl."latitude",
+                    gtl."longitude",
+                    gtl."city",
+                    gtl."countryCode"
+                FROM \(GroupTransactionLocation.self) gtl
+                WHERE gtl."groupTransactionID" = \(new.groupTransactionID)
+                ON CONFLICT("transactionID") DO UPDATE SET
+                    "latitude" = excluded."latitude",
+                    "longitude" = excluded."longitude",
+                    "city" = excluded."city",
+                    "countryCode" = excluded."countryCode"
+                """)
+            } when: { _, _ in
+                SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        try GroupTransactionSplit.createTemporaryTrigger(
+            after: .delete { old in
+                TransactionLocation
+                    .where { $0.transactionID.eq(old.id) }
+                    .delete()
+                Transaction
+                    .where { $0.id.eq(old.id) }
+                    .delete()
+            } when: { _ in
+                SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        // MARK: - Sync: group_transaction_locations → transaction_locations (AFTER INSERT / UPDATE / DELETE)
+
+        try GroupTransactionLocation.createTemporaryTrigger(
+            after: .insert { new in
+                #sql("""
+                INSERT INTO \(TransactionLocation.self) (
+                    "transactionID", "latitude", "longitude", "city", "countryCode"
+                )
+                SELECT
+                    gts."id",
+                    \(new.latitude),
+                    \(new.longitude),
+                    \(new.city),
+                    \(new.countryCode)
+                FROM \(GroupTransactionSplit.self) gts
+                WHERE gts."groupTransactionID" = \(new.groupTransactionID)
+                    AND EXISTS (
+                        SELECT 1
+                        FROM \(Transaction.self) t
+                        WHERE t."id" = gts."id"
+                    )
+                ON CONFLICT("transactionID") DO UPDATE SET
+                    "latitude" = excluded."latitude",
+                    "longitude" = excluded."longitude",
+                    "city" = excluded."city",
+                    "countryCode" = excluded."countryCode"
+                """)
+            } when: { _ in
+                SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        try GroupTransactionLocation.createTemporaryTrigger(
+            after: .update { _, new in
+                TransactionLocation
+                    .where {
+                        $0.transactionID.in(
+                            GroupTransactionSplit
+                                .where { $0.groupTransactionID.eq(new.groupTransactionID) }
+                                .select(\.id)
+                        )
+                    }
+                    .update {
+                        $0.latitude = new.latitude
+                        $0.longitude = new.longitude
+                        $0.city = new.city
+                        $0.countryCode = new.countryCode
+                    }
+            } when: { _, _ in
+                SyncEngine.$isSynchronizing
+            }
+        )
+        .execute(self)
+
+        try GroupTransactionLocation.createTemporaryTrigger(
+            after: .delete { old in
+                TransactionLocation
+                    .where {
+                        $0.transactionID.in(
+                            GroupTransactionSplit
+                                .where { $0.groupTransactionID.eq(old.groupTransactionID) }
+                                .select(\.id)
+                        )
+                    }
+                    .delete()
+            } when: { _ in
+                SyncEngine.$isSynchronizing
+            }
         )
         .execute(self)
     }

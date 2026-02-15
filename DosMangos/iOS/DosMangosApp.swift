@@ -1,6 +1,8 @@
 import ComposableArchitecture
+import CloudKit
 import CoreLocationClient
 import Dependencies
+import SQLiteData
 import Sharing
 import SwiftUI
 
@@ -91,7 +93,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, ObservableObject {
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     @Dependency(\.context) var context
-//    @Dependency(\.defaultSyncEngine) var syncEngine
+    @Dependency(\.defaultSyncEngine) var syncEngine
     var window: UIWindow?
     weak var store: StoreOf<AppReducer>?
 
@@ -103,32 +105,26 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard context != .test else { return }
         // Get store reference from static property
         self.store = AppDelegate.shared?.store
+
+        guard let cloudKitShareMetadata = connectionOptions.cloudKitShareMetadata
+        else { return }
+        Task {
+            try await syncEngine.acceptShare(metadata: cloudKitShareMetadata)
+            await store?.send(.appDelegate(.sceneDelegate(.didAcceptShare)))
+        }
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         store?.send(.appDelegate(.sceneDelegate(.willEnterForeground)))
     }
 
-//    func windowScene(
-//        _ windowScene: UIWindowScene,
-//        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
-//    ) {
-//        Task {
-//            try await syncEngine.acceptShare(metadata: cloudKitShareMetadata)
-//        }
-//    }
-//
-//    func scene(
-//        _ scene: UIScene,
-//        willConnectTo session: UISceneSession,
-//        options connectionOptions: UIScene.ConnectionOptions
-//    ) {
-//        guard let cloudKitShareMetadata = connectionOptions.cloudKitShareMetadata
-//        else {
-//            return
-//        }
-//        Task {
-//            try await syncEngine.acceptShare(metadata: cloudKitShareMetadata)
-//        }
-//    }
+    func windowScene(
+        _ windowScene: UIWindowScene,
+        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
+    ) {
+        Task {
+            try await syncEngine.acceptShare(metadata: cloudKitShareMetadata)
+            await store?.send(.appDelegate(.sceneDelegate(.didAcceptShare)))
+        }
+    }
 }

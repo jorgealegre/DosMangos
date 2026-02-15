@@ -760,5 +760,113 @@ extension DatabaseMigrator {
                 """).execute(db)
             }
         }
+
+        self.registerMigration("Create groups and local mirror infrastructure") { db in
+            try #sql("""
+            CREATE TABLE "groups" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "name" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "defaultCurrencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT 'USD',
+                "simplifyDebts" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 1,
+                "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now'))
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            CREATE TABLE "group_members" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "groupID" TEXT NOT NULL REFERENCES "groups"("id") ON DELETE CASCADE,
+                "name" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "cloudKitParticipantID" TEXT
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            CREATE TABLE "group_transactions" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "groupID" TEXT NOT NULL REFERENCES "groups"("id") ON DELETE CASCADE,
+                "description" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "valueMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "currencyCode" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+                "convertedValueMinorUnits" INTEGER,
+                "convertedCurrencyCode" TEXT,
+                "type" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "splitType" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "createdAtUTC" TEXT NOT NULL DEFAULT (datetime('now')),
+                "localYear" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "localMonth" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "localDay" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            CREATE TABLE "group_transaction_locations" (
+                "groupTransactionID" TEXT PRIMARY KEY NOT NULL
+                    REFERENCES "group_transactions"("id") ON DELETE CASCADE,
+                "latitude" REAL NOT NULL,
+                "longitude" REAL NOT NULL,
+                "city" TEXT,
+                "countryCode" TEXT
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            CREATE TABLE "group_transaction_splits" (
+                "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+                "groupTransactionID" TEXT NOT NULL
+                    REFERENCES "group_transactions"("id") ON DELETE CASCADE,
+                "memberID" TEXT NOT NULL,
+                "paidAmountMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "owedAmountMinorUnits" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+                "owedPercentage" REAL
+            ) STRICT
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_members_groupID"
+            ON "group_members"("groupID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_members_cloudKitParticipantID"
+            ON "group_members"("cloudKitParticipantID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_transactions_groupID"
+            ON "group_transactions"("groupID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_transactions_localYMD_createdAtUTC"
+            ON "group_transactions"("localYear", "localMonth", "localDay", "createdAtUTC")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_transaction_splits_groupTransactionID"
+            ON "group_transaction_splits"("groupTransactionID")
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_group_transaction_splits_memberID"
+            ON "group_transaction_splits"("memberID")
+            """).execute(db)
+            try #sql("""
+            ALTER TABLE "transactions"
+            ADD COLUMN "groupTransactionSplitID" TEXT
+            """).execute(db)
+
+            try #sql("""
+            CREATE INDEX IF NOT EXISTS "idx_transactions_groupTransactionSplitID"
+            ON "transactions"("groupTransactionSplitID")
+            """).execute(db)
+            try #sql("""
+            CREATE TABLE "local_settings" (
+                "key" TEXT PRIMARY KEY NOT NULL,
+                "value" TEXT NOT NULL
+            ) STRICT
+            """).execute(db)
+        }
     }
 }

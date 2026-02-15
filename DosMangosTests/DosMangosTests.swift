@@ -22,6 +22,7 @@ extension BaseTestSuite {
                 AppReducer()
             } withDependencies: {
                 $0.exchangeRate.prefetchRatesForToday = { }
+                $0.groupClient.ensureParticipantID = { }
             }
 
             await store.send(\.appDelegate.didFinishLaunching)
@@ -68,7 +69,8 @@ extension BaseTestSuite {
                         localYear: 2009,
                         localMonth: 2,
                         localDay: 13,
-                        recurringTransactionID: nil
+                        recurringTransactionID: nil,
+                        groupTransactionSplitID: nil
                       ),
                       categoryDisplayName: nil,
                       tags: [],
@@ -97,7 +99,8 @@ extension BaseTestSuite {
                           localYear: 2009,
                           localMonth: 2,
                           localDay: 13,
-                          recurringTransactionID: nil
+                          recurringTransactionID: nil,
+                          groupTransactionSplitID: nil
                         ),
                         categoryDisplayName: nil,
                         tags: [],

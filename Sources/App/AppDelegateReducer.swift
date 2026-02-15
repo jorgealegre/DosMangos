@@ -13,6 +13,7 @@ struct AppDelegateReducer: Reducer {
         @CasePathable
         enum SceneDelegate {
             case willEnterForeground
+            case didAcceptShare
         }
     }
 
@@ -25,6 +26,9 @@ struct AppDelegateReducer: Reducer {
 
         case .sceneDelegate(.willEnterForeground):
             return prefetchExchangeRates()
+
+        case .sceneDelegate(.didAcceptShare):
+            return .none
         }
     }
 
