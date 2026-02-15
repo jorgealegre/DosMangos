@@ -12,6 +12,13 @@ struct UserSettings: Identifiable, Hashable, Sendable {
     var defaultCurrency: String
 }
 
+@Table("local_settings")
+struct LocalSetting: Hashable, Sendable {
+    @Column(primaryKey: true)
+    var key: String
+    var value: String
+}
+
 // MARK: - Transaction
 
 @Table
@@ -89,6 +96,7 @@ struct Transaction: Identifiable, Hashable, Sendable {
     }
 
     var recurringTransactionID: RecurringTransaction.ID?
+    var groupTransactionSplitID: GroupTransactionSplit.ID?
 }
 extension Transaction.Draft: Equatable {}
 extension Transaction.Draft {
@@ -258,6 +266,7 @@ extension TransactionLocation.Draft {
         return locale.localizedString(forRegionCode: countryCode)
     }
 }
+
 extension TransactionLocation.Draft {
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
